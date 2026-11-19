@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "name": "槽位越界",
+  "mysticId": "default",
+  "enemyCount": 3,
+  "formation": [
+    { "slot": 0, "name": "阿尔托莉雅", "role": "Saber" },
+    { "slot": 1, "name": "玛修·基列莱特", "role": "Shielder" },
+    { "slot": 2, "name": "", "role": "" },
+    { "slot": 3, "name": "", "role": "" },
+    { "slot": 4, "name": "", "role": "" },
+    { "slot": 5, "name": "", "role": "" }
+  ],
+  "strategy": {
+    "allowNp": true,
+    "servantOrder": ["阿尔托莉雅", "玛修·基列莱特"],
+    "cards": "buster",
+    "colorPriority": ["buster", "arts", "quick"],
+    "strategyOrder": ["servant", "cards", "crit"]
+  },
+  "waves": [
+    {
+      "turnCount": 1,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "越界技能",
+              "detail": "",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 9
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -275,3 +275,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 
 - 用户明确确认“精确 16:9 且不低于 1280×720”。
 - ADR-0005 从 `proposed` 改为 `accepted`；实现保持 15 项自检与 36 条既有回放不变。
+
+
+## 31. 作业模型与编译器（票据 04，2026-11-20）
+
+- 新增 `executor/domain/`：`compile_job(text)` 把作业 v1 编译成“面 → 回合 → 动作”计划，保留全部回合、换人/目标槽位、宝具卡序与攻击卡序。
+- 新增 `schemas/job-v1.schema.json`，覆盖 `HugoFgoJob` 字段、枚举与槽位范围；不引入第三方校验依赖。
+- 新增 CLI：`python -m executor.domain <作业> [--json]`，合法打印摘要，非法打印 `path + 面/回合` 诊断并退出 2。
+- 新增 fixture：多回合合法作业、槽位越界、未知动作；`unittest` 11 项全过。
+- 两个现有作业均可编译；`npm run replay` 36/36。未修改 `jobs/`、`examples/`、前端与 `scripts/farm_ember.py`。
