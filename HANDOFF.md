@@ -284,3 +284,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 新增 CLI：`python -m executor.domain <作业> [--json]`，合法打印摘要，非法打印 `path + 面/回合` 诊断并退出 2。
 - 新增 fixture：多回合合法作业、槽位越界、未知动作；`unittest` 11 项全过。
 - 两个现有作业均可编译；`npm run replay` 36/36。未修改 `jobs/`、`examples/`、前端与 `scripts/farm_ember.py`。
+
+
+## 32. 作业编译器评审修复（票据 04，2026-11-20）
+
+- 新增 `executor/domain/schema.py`：用标准库读取并执行 `schemas/job-v1.schema.json` 的子集（`$ref`、类型、必填、枚举、范围、对象/数组、条件分支），不再让编译器另写一套结构规则。
+- Schema 结构错误与业务语义错误分层：Schema 负责版本、字段、类型、枚举与槽位范围；编译器负责回合数一致、空槽位引用、换人槽位相同等语义。
+- 补上 `version: true`、空 `strategy`、数字从者名的回归测试；13 项测试与回放 36/36 通过。

@@ -129,6 +129,28 @@ class CompileJobTest(unittest.TestCase):
         self.assertIn('$.enemyCount', paths)
         self.assertIn('$.version', paths)
 
+    def test_schema_rejects_boolean_version_and_empty_strategy(self):
+        job = self.valid_job()
+        job['version'] = True
+        job['strategy'] = {}
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        paths = {diagnostic.path for diagnostic in result.diagnostics}
+        self.assertIn('$.version', paths)
+        self.assertIn('$.strategy.allowNp', paths)
+        self.assertIn('$.strategy.servantOrder', paths)
+
+    def test_formation_name_must_be_string(self):
+        job = self.valid_job()
+        job['formation'][0]['name'] = 123
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(['$.formation[0].name'], [diagnostic.path for diagnostic in result.diagnostics])
+
     def test_cli_reports_diagnostics_and_exits_2(self):
         result = subprocess.run(
             [sys.executable, '-B', '-m', 'executor.domain',
