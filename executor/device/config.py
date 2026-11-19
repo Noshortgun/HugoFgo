@@ -19,6 +19,10 @@ class Region(str, Enum):
         return {'CN': '国服', 'JP': '日服', 'TW': '台服'}[self.value]
 
     @classmethod
+    def options(cls) -> str:
+        return '、'.join(f'{region.value}（{region.label}）' for region in cls)
+
+    @classmethod
     def parse(cls, value: 'Region | str') -> 'Region':
         if isinstance(value, cls):
             return value
@@ -26,8 +30,7 @@ class Region(str, Enum):
         for region in cls:
             if text.upper() == region.value or text == region.label:
                 return region
-        options = '、'.join(f'{region.value}（{region.label}）' for region in cls)
-        raise DeviceError(f'未知区服 {value!r}；可选 {options}')
+        raise DeviceError(f'未知区服 {value!r}；可选 {cls.options()}')
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,8 @@ class DeviceMetrics:
 
 @dataclass(frozen=True)
 class DeviceConfig:
+    """设备配置。region 必填；None 仅用于构造时给出可操作错误，不是有效配置。"""
+
     serial: str
     region: Region | str | None = None
     adb_path: str | None = None
@@ -53,8 +58,7 @@ class DeviceConfig:
             raise DeviceError('设备配置缺少 serial：请填写 adb devices 第一列的序列号（如 emulator-5554）')
         object.__setattr__(self, 'serial', serial)
         if self.region is None:
-            options = '、'.join(f'{region.value}（{region.label}）' for region in Region)
-            raise DeviceError(f'设备配置缺少区服：请选择 {options}')
+            raise DeviceError(f'设备配置缺少区服：请选择 {Region.options()}')
         object.__setattr__(self, 'region', Region.parse(self.region))
 
         adb_path = str(self.adb_path).strip() if self.adb_path else None

@@ -10,6 +10,8 @@ from executor.device.png import png_size
 
 
 class FakeDevice:
+    """回放适配器。未提供 config 时区服按 CN 记录，仅用于离线回放；实机必须显式配置区服。"""
+
     def __init__(self, frames: Sequence[Frame] | None = None, *, frame_dir: str | Path | None = None,
                  config: DeviceConfig | None = None):
         if frames is not None and frame_dir is not None:
@@ -36,7 +38,8 @@ class FakeDevice:
         else:
             raise DeviceError('FakeDevice 需要至少一帧截图，或在配置中给出 width/height')
 
-        validate_resolution(width, height, subject=f'设备 {config.serial}' if config else None)
+        source = f'设备 {config.serial}' if config else (f'帧目录 {frame_dir}' if frame_dir else '回放帧')
+        validate_resolution(width, height, subject=source)
         self.width = width
         self.height = height
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import subprocess
 import sys
@@ -236,6 +237,7 @@ def check_discovery() -> None:
             ('????????????', 'no permissions', None),
             ('emulator-5556', 'authorizing', None),
             ('192.168.0.2:5555', 'rescue', None),
+            ('localhost:5555', 'host', None),
         ], 'daemon/server 提示行不能被当成设备，合法状态不能被丢弃'
         assert runner.calls == [[str(adb), 'devices', '-l']]
 
@@ -407,7 +409,7 @@ def check_fake_sequence() -> None:
         '配置分辨率', '1280×720', error_type=DeviceError,
     )
     square = Frame(image=make_png(1600, 1000), width=1600, height=1000, captured_at=4.0)
-    expect_error(lambda: FakeDevice([square]), '不支持的分辨率', '16:9', error_type=DeviceError)
+    expect_error(lambda: FakeDevice([square]), '回放帧', '不支持的分辨率', '16:9', error_type=DeviceError)
 
     empty = FakeDevice(config=make_config(serial='tap-only', width=1280, height=720))
     assert empty.metrics().serial == 'tap-only'
@@ -449,6 +451,11 @@ def check_fake_dir() -> None:
         Path(directory, 'broken.png').write_bytes(b'not a png')
         expect_error(lambda: FakeDevice(frame_dir=directory), 'broken.png', error_type=DeviceError)
 
+    with tempfile.TemporaryDirectory() as directory:
+        Path(directory, 'nonsquare.png').write_bytes(make_png(1600, 1000))
+        expect_error(lambda: FakeDevice(frame_dir=directory), '帧目录', '不支持的分辨率', '16:9',
+                     error_type=DeviceError)
+
 
 def require_unoptimized() -> None:
     if sys.flags.optimize:
@@ -457,12 +464,12 @@ def require_unoptimized() -> None:
 
 def check_optimized_guard() -> None:
     root = Path(__file__).resolve().parents[2]
-    snippet = 'from executor.device.__main__ import require_unoptimized; require_unoptimized()'
     result = subprocess.run(
-        [sys.executable, '-O', '-c', snippet],
+        [sys.executable, '-O', '-m', 'executor.device', '--self-test'],
         cwd=root, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
+        env={**os.environ, 'HUGOFGO_SELF_TEST_CHILD': '1'},
     )
-    assert result.returncode != 0, 'python -O 下守卫必须失败'
+    assert result.returncode == 1, 'python -O 下完整自检必须显式失败，不能空跑通过'
     assert 'python -O' in result.stderr, f'守卫失败必须给出 -O 原因：{result.stderr}'
 
 
@@ -481,8 +488,9 @@ CHECKS = [
     ('fake 帧序', check_fake_sequence),
     ('fake 动作记录', check_fake_actions),
     ('fake 帧目录', check_fake_dir),
-    ('python -O 防护', check_optimized_guard),
 ]
+if not os.environ.get('HUGOFGO_SELF_TEST_CHILD'):
+    CHECKS.append(('python -O 防护', check_optimized_guard))
 
 
 def self_test() -> int:

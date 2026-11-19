@@ -17,7 +17,7 @@ from executor.device.png import png_size
 Runner = Callable[..., subprocess.CompletedProcess]
 _SIZE = re.compile(r'(\d+)x(\d+)')
 _DEVICE_LINE = re.compile(
-    r'^(\S+)\s+(device|offline|unauthorized|authorizing|connecting|recovery|rescue|sideload|bootloader|'
+    r'^(\S+)\s+(device|offline|unauthorized|authorizing|connecting|recovery|rescue|sideload|bootloader|host|'
     r'unknown|no permissions)\b'
 )
 

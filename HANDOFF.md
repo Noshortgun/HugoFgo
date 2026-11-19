@@ -259,3 +259,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `adb devices` 白名单移除 `host`，保留 authorizing/connecting/rescue 等真实设备状态。
 - `python -O` 守卫抽成 `require_unoptimized()`；自检用独立子进程调用它，不递归，仍能发现守卫被删或提示丢失。
 - `python -m executor.device --self-test` 15/15；`npm run replay` 36/36；构建与 compileall 通过。
+
+
+## 29. 设备网关第六轮收敛（票据 03，2026-11-20）
+
+- ADR-0005 标为 `proposed`（待用户确认），不把实现者决策写成已确认；需求 F4.4 回链该 ADR。
+- ADR-0003 与架构 2.2 明确区服必填；`DeviceConfig` 缺区服直接给出 CN/JP/TW 选项。`FakeDevice` 无 config 时默认 CN 仅限离线回放，已写入类文档。
+- `FakeDevice` 分辨率错误带来源：设备 serial、帧目录路径或 `回放帧`；新增帧目录非 16:9 用例。
+- `adb devices` 恢复 `host` 状态，避免静默漏掉 adb 真实连接状态。
+- `python -O` 防护测试改回完整 CLI，子进程带 `HUGOFGO_SELF_TEST_CHILD` 跳过递归用例；提示按 UTF-8 读取并必须包含 `python -O`，防止其他崩溃假通过。
+- 自检 15/15；回放 36/36；构建与 compileall 通过。
