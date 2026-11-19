@@ -1,0 +1,81 @@
+{
+  "device": {
+    "emulator": "LDPlayer 14",
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "quest": "每日任务 · 搜集种火<剑·骑篇> 上级（中途撤退）",
+  "apCost": 15,
+  "mysticCode": "魔术礼装·迦勒底战斗服（Order Change）",
+  "note": [
+    "队伍 IV 的御主装备已从「新春装束」改为「迦勒底战斗服」。",
+    "换人：梅林下场、玛修上场，已保存换人前后的战斗画面。",
+    "切换目标：把目标从右侧敌人切到左侧敌人。",
+    "令咒：打开菜单与使用确认后取消，未消耗令咒（剩余 3 划）。",
+    "战斗最后通过「战斗菜单 → 撤退」结束，未获得战利品。"
+  ],
+  "keyFrames": [
+    {
+      "source": "04f-mystic-seventh.png",
+      "file": "key/01-mystic-combat.png",
+      "state": "御主装备：魔术礼装·迦勒底战斗服（换人服）"
+    },
+    {
+      "source": "06b-team-combat.png",
+      "file": "key/02-team-equipped.png",
+      "state": "队伍确认：已装备迦勒底战斗服"
+    },
+    {
+      "source": "07b-battle-combat.png",
+      "file": "key/03-battle-combat.png",
+      "state": "战斗画面：换人服"
+    },
+    {
+      "source": "08-master-skills.png",
+      "file": "key/04-master-skills.png",
+      "state": "御主技能面板：全体强化 / Gandr / Order Change"
+    },
+    {
+      "source": "09b-order-change-select.png",
+      "file": "key/05-order-change-select.png",
+      "state": "换人选择：首发与候补"
+    },
+    {
+      "source": "10-swap-out-selected.png",
+      "file": "key/06-swap-out-selected.png",
+      "state": "已选首发成员"
+    },
+    {
+      "source": "11-swap-in-selected.png",
+      "file": "key/07-swap-in-selected.png",
+      "state": "已选候补成员"
+    },
+    {
+      "source": "12-swap-result.png",
+      "file": "key/08-swap-result.png",
+      "state": "换人完成：玛修上场"
+    },
+    {
+      "source": "13-target-switched.png",
+      "file": "key/09-target-switched.png",
+      "state": "切换攻击目标：目标转到左侧敌人"
+    },
+    {
+      "source": "17-command-spell.png",
+      "file": "key/10-command-spell.png",
+      "state": "令咒菜单：宝具解放 / 灵基修复"
+    },
+    {
+      "source": "18-command-spell-target.png",
+      "file": "key/11-command-spell-confirm.png",
+      "state": "令咒使用确认（已取消，未消耗）"
+    },
+    {
+      "source": "15-retreat-confirm.png",
+      "file": "key/12-retreat-confirm.png",
+      "state": "撤退确认（战斗最终撤退）"
+    }
+  ]
+}

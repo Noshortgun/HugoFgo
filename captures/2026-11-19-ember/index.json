@@ -1,0 +1,274 @@
+{
+  "device": {
+    "emulator": "LDPlayer 14",
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "quest": "每日任务 · 搜集种火<剑·骑篇> 上级",
+  "apCost": 15,
+  "turns": 7,
+  "team": "助战梅林 + 摩根 + 奥伯龙 + 后排",
+  "capturedAt": "2026-11-19",
+  "notes": [
+    "典型种火周回：三面战斗、技能、选卡、宝具、战斗结果、战利品。",
+    "本组消耗 AP 15，属于用户明确要求的真实副本采集。",
+    "key/ 为按状态重命名的 15 张关键帧；根目录保留完整过程截图。"
+  ],
+  "keyFrames": [
+    {
+      "source": "02c-back.png",
+      "file": "key/01-daily-quest-list.png",
+      "state": "每日任务列表：搜集种火<剑·骑篇> 上级 AP 15"
+    },
+    {
+      "source": "03-ember-quest.png",
+      "file": "key/02-support-select.png",
+      "state": "助战选择"
+    },
+    {
+      "source": "04-team-confirm.png",
+      "file": "key/03-team-confirm.png",
+      "state": "队伍确认（助战 + 5 名从者）"
+    },
+    {
+      "source": "06b-battle-wave1.png",
+      "file": "key/04-battle-wave1.png",
+      "state": "第一面战斗"
+    },
+    {
+      "source": "07-skill.png",
+      "file": "key/05-skill.png",
+      "state": "技能发动"
+    },
+    {
+      "source": "08-card-select.png",
+      "file": "key/06-card-select.png",
+      "state": "指令卡选择"
+    },
+    {
+      "source": "13b-wave2-start.png",
+      "file": "key/07-battle-wave2.png",
+      "state": "第二面战斗"
+    },
+    {
+      "source": "17b-wave3-start.png",
+      "file": "key/08-battle-wave3.png",
+      "state": "第三面/最终波"
+    },
+    {
+      "source": "18-merlin-skill3.png",
+      "file": "key/09-skill-target.png",
+      "state": "技能目标选择"
+    },
+    {
+      "source": "20-np-card-select.png",
+      "file": "key/10-np-card-select.png",
+      "state": "宝具卡选择"
+    },
+    {
+      "source": "27-morgan-np-selected.png",
+      "file": "key/11-np-selected.png",
+      "state": "宝具卡选中"
+    },
+    {
+      "source": "30-victory.png",
+      "file": "key/12-battle-result-bond.png",
+      "state": "战斗结果（羁绊）"
+    },
+    {
+      "source": "31b-rewards.png",
+      "file": "key/13-battle-result-exp.png",
+      "state": "战斗结果（经验）"
+    },
+    {
+      "source": "32-drops.png",
+      "file": "key/14-drops.png",
+      "state": "战利品：QP + 种火"
+    },
+    {
+      "source": "33b-return.png",
+      "file": "key/15-return.png",
+      "state": "返回每日任务列表"
+    }
+  ],
+  "frames": [
+    {
+      "file": "01-gate.png",
+      "state": "迦勒底之门"
+    },
+    {
+      "file": "02-daily-quest.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "02b-back.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "02c-back.png",
+      "state": "每日任务列表"
+    },
+    {
+      "file": "03-ember-quest.png",
+      "state": "助战选择"
+    },
+    {
+      "file": "04-team-confirm.png",
+      "state": "队伍确认"
+    },
+    {
+      "file": "05-quest-start.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "06-battle-wave1.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "06b-battle-wave1.png",
+      "state": "第一面战斗"
+    },
+    {
+      "file": "07-skill.png",
+      "state": "技能发动"
+    },
+    {
+      "file": "08-card-select.png",
+      "state": "指令卡选择"
+    },
+    {
+      "file": "09-cards-selected.png",
+      "state": "三卡已选"
+    },
+    {
+      "file": "10-wave1-attack.png",
+      "state": "第一面攻击"
+    },
+    {
+      "file": "11-wave1-turn2.png",
+      "state": "第一面第二回合"
+    },
+    {
+      "file": "12-wave1-cards.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "13-wave2-start.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "13b-wave2-start.png",
+      "state": "第二面战斗"
+    },
+    {
+      "file": "14-wave2-cards.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "15-wave2-result.png",
+      "state": "第二面攻击结果"
+    },
+    {
+      "file": "16-wave2-turn2.png",
+      "state": "第二面第二回合"
+    },
+    {
+      "file": "17-wave3-start.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "17b-wave3-start.png",
+      "state": "最终波战斗"
+    },
+    {
+      "file": "18-merlin-skill3.png",
+      "state": "技能目标选择"
+    },
+    {
+      "file": "19-skill-applied.png",
+      "state": "技能生效"
+    },
+    {
+      "file": "20-np-card-select.png",
+      "state": "宝具卡选择"
+    },
+    {
+      "file": "21-wave3-cards-selected.png",
+      "state": "最终波三卡已选"
+    },
+    {
+      "file": "22-wave3-attack.png",
+      "state": "最终波攻击"
+    },
+    {
+      "file": "23-wave3-turn2.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "24-wave3-turn2-cards.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "25-wave3-result.png",
+      "state": "最终波剩余敌人"
+    },
+    {
+      "file": "26-np-card-select.png",
+      "state": "宝具卡再次选择"
+    },
+    {
+      "file": "27-morgan-np-selected.png",
+      "state": "摩根宝具选中"
+    },
+    {
+      "file": "28-np-ready.png",
+      "state": "宝具待发"
+    },
+    {
+      "file": "29-np-animation.png",
+      "state": "宝具后敌方全灭"
+    },
+    {
+      "file": "30-victory.png",
+      "state": "战斗结果：羁绊"
+    },
+    {
+      "file": "31-rewards.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "31b-rewards.png",
+      "state": "战斗结果：经验"
+    },
+    {
+      "file": "32-drops.png",
+      "state": "战利品：QP 与种火"
+    },
+    {
+      "file": "33-return.png",
+      "state": "过程截图"
+    },
+    {
+      "file": "33b-return.png",
+      "state": "返回每日任务列表"
+    },
+    {
+      "file": "34-grand-support-confirm.png",
+      "state": "助战编队确认：选择冠位从者（实机故障帧）"
+    },
+    {
+      "file": "35-support-loading.png",
+      "state": "冠位从者已选择，直接进入关卡加载（实机故障帧）"
+    },
+    {
+      "file": "36-attack-animation.png",
+      "state": "第三面攻击动画，指令卡尚未出现（实机故障帧）"
+    },
+    {
+      "file": "37-ap-recovery.png",
+      "state": "最后一轮误点连续出击后 AP 不足，体力恢复页（未使用道具）"
+    }
+  ]
+}

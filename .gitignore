@@ -1,0 +1,32 @@
+node_modules/
+dist/
+src-tauri/target/
+cv/.venv/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+
+# 运行产物：每次运行的日志与失败截图不入库
+logs/
+
+# 图库与原始元数据：可由 npm run resources:update 重新生成，不入库
+data/assets/
+data/atlas-nice-cn.json
+data/atlas-basic-cn.json
+data/atlas-equip-cn.json
+data/atlas-mystic-cn.json
+
+# 截图素材：关键帧与被回放引用的故障截图入库，过程调试图不入库
+captures/**/*.png
+!captures/*/key/*.png
+!captures/2026-11-19/07-battle-loading.png
+!captures/2026-11-19-ember/01-gate.png
+!captures/2026-11-19-ember/05-quest-start.png
+!captures/2026-11-19-ember/34-grand-support-confirm.png
+!captures/2026-11-19-ember/35-support-loading.png
+!captures/2026-11-19-ember/36-attack-animation.png
+!captures/2026-11-19-ember/37-ap-recovery.png
+
+# 游戏内图像素材：不随公开仓库分发
+public/assets/

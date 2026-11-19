@@ -1,0 +1,187 @@
+{
+  "device": {
+    "emulator": "LDPlayer 14",
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240,
+    "model": "25060RK16C"
+  },
+  "quest": "迦勒底之门 · 弓兵测试关卡（AP 0，可重复，无掉落）",
+  "capturedAt": "2026-11-19",
+  "notes": [
+    "全部画面为 1280x720 满屏截图，无黑边。",
+    "测试关卡无奖励结算界面；26 为敌方 HP 归零，27 为任务进度，28 已返回关卡列表。",
+    "仅用于视觉识别原型，未消耗 AP，未使用圣晶石。"
+  ],
+  "frames": [
+    {
+      "file": "01-main.png",
+      "state": "主界面",
+      "key": true,
+      "bytes": 1628296
+    },
+    {
+      "file": "02-chaldea-gate.png",
+      "state": "迦勒底之门",
+      "key": true,
+      "bytes": 1553956
+    },
+    {
+      "file": "03-trial-quest.png",
+      "state": "测试关卡确认弹窗",
+      "key": true,
+      "bytes": 1331669
+    },
+    {
+      "file": "04-support-select.png",
+      "state": "助战选择",
+      "key": true,
+      "bytes": 1195905
+    },
+    {
+      "file": "05-support-selected.png",
+      "state": "队伍确认（单骑出击）",
+      "key": true,
+      "bytes": 734955
+    },
+    {
+      "file": "06-battle-start.png",
+      "state": "战斗加载/小贴士",
+      "key": false,
+      "bytes": 327013
+    },
+    {
+      "file": "07-battle-loading.png",
+      "state": "战斗开始",
+      "key": true,
+      "bytes": 1367743
+    },
+    {
+      "file": "08-battle.png",
+      "state": "战斗中（技能可用）",
+      "key": true,
+      "bytes": 1368854
+    },
+    {
+      "file": "09-skill-target.png",
+      "state": "技能发动",
+      "key": true,
+      "bytes": 1334596
+    },
+    {
+      "file": "10-after-skill.png",
+      "state": "技能后战斗画面",
+      "key": false,
+      "bytes": 1385969
+    },
+    {
+      "file": "11-card-select.png",
+      "state": "指令卡选择（宝具卡可见）",
+      "key": true,
+      "bytes": 1432429
+    },
+    {
+      "file": "12-card1-selected.png",
+      "state": "选择第一张卡",
+      "key": false,
+      "bytes": 1518527
+    },
+    {
+      "file": "13-cards-selected.png",
+      "state": "三张卡已选",
+      "key": true,
+      "bytes": 1267221
+    },
+    {
+      "file": "14-attack.png",
+      "state": "攻击演出",
+      "key": false,
+      "bytes": 1444082
+    },
+    {
+      "file": "15-turn-result.png",
+      "state": "第一回合结果",
+      "key": true,
+      "bytes": 1215318
+    },
+    {
+      "file": "16-next-turn.png",
+      "state": "下一回合",
+      "key": false,
+      "bytes": 1377207
+    },
+    {
+      "file": "17-card-select2.png",
+      "state": "第二回合选卡",
+      "key": false,
+      "bytes": 1429023
+    },
+    {
+      "file": "18-np-selected.png",
+      "state": "宝具卡选中",
+      "key": true,
+      "bytes": 1527356
+    },
+    {
+      "file": "19-cards2-selected.png",
+      "state": "第二回合三卡已选",
+      "key": false,
+      "bytes": 1216515
+    },
+    {
+      "file": "20-turn2-result.png",
+      "state": "宝具演出",
+      "key": true,
+      "bytes": 1063918
+    },
+    {
+      "file": "21-np-result.png",
+      "state": "宝具伤害",
+      "key": true,
+      "bytes": 736124
+    },
+    {
+      "file": "22-turn3.png",
+      "state": "宝具后战斗画面",
+      "key": false,
+      "bytes": 1307393
+    },
+    {
+      "file": "23-turn4.png",
+      "state": "下一回合",
+      "key": false,
+      "bytes": 1374388
+    },
+    {
+      "file": "24-card-select3.png",
+      "state": "第三回合选卡",
+      "key": false,
+      "bytes": 1388147
+    },
+    {
+      "file": "25-cards3-selected.png",
+      "state": "第三回合三卡已选",
+      "key": false,
+      "bytes": 1207828
+    },
+    {
+      "file": "26-battle-end-attempt.png",
+      "state": "敌方 HP 归零/过量伤害",
+      "key": true,
+      "bytes": 1634697
+    },
+    {
+      "file": "27-victory.png",
+      "state": "任务进度提示",
+      "key": true,
+      "bytes": 61973
+    },
+    {
+      "file": "28-victory2.png",
+      "state": "战斗结束返回关卡列表",
+      "key": true,
+      "bytes": 1550053
+    }
+  ]
+}

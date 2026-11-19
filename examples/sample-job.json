@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "name": "换人 + 固定卡序 测试样本",
+  "mysticId": "order-change",
+  "enemyCount": 3,
+  "formation": [
+    { "slot": 0, "name": "阿尔托莉雅", "role": "Saber" },
+    { "slot": 1, "name": "玛修·基列莱特", "role": "Shielder" },
+    { "slot": 2, "name": "吉尔伽美什", "role": "Archer" },
+    { "slot": 3, "name": "卫宫", "role": "Archer" },
+    { "slot": 4, "name": "库·丘林", "role": "Lancer" },
+    { "slot": 5, "name": "美杜莎", "role": "Rider" }
+  ],
+  "strategy": {
+    "allowNp": true,
+    "servantOrder": ["卫宫", "玛修·基列莱特", "吉尔伽美什"],
+    "cards": "buster",
+    "colorPriority": ["buster", "arts", "quick"],
+    "strategyOrder": ["servant", "cards", "crit"]
+  },
+  "waves": [
+    {
+      "turnCount": 2,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "阿尔托莉雅 · 3 技能",
+              "detail": "目标：玛修·基列莱特",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 0,
+              "playerTargetSlot": 1,
+              "secondarySelection": { "type": "criticalStarConsumption", "index": 1, "value": 10, "label": "消耗 10 暴击星" }
+            },
+            {
+              "kind": "orderChange",
+              "title": "换人 · 阿尔托莉雅 → 卫宫",
+              "detail": "阿尔托莉雅 下场，卫宫 上场",
+              "icon": "skill_00306",
+              "skill": 0,
+              "swapOutSlot": 0,
+              "swapInSlot": 3
+            },
+            {
+              "kind": "skill",
+              "title": "卫宫 · 1 技能",
+              "detail": "己方全体",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 3
+            },
+            {
+              "kind": "attack",
+              "title": "卫宫 · 宝具",
+              "detail": "宝具释放卡序：自动",
+              "icon": "skill_00400",
+              "memberSlot": 3
+            }
+          ],
+          "npPositions": { "3": "auto" },
+          "attack": {
+            "mode": "prefer",
+            "cards": [
+              { "slot": 3, "type": "arts" },
+              { "slot": 1, "type": "buster" },
+              { "slot": 2, "type": "buster" }
+            ]
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "卫宫 · 2 技能",
+              "detail": "目标：卫宫",
+              "icon": "skill_00403",
+              "skill": 1,
+              "memberSlot": 3,
+              "playerTargetSlot": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [],
+          "attack": {
+            "mode": "verify",
+            "cards": [
+              { "slot": 3, "type": "buster" },
+              { "slot": 3, "type": "buster" },
+              { "slot": 1, "type": "arts" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 3,
+      "turns": [{ "actions": [] }]
+    }
+  ],
+  "provenance": {
+    "source": "chaldea",
+    "teamId": 80984,
+    "note": "测试用途：原始记录只用于对照，运行时不读取，导出也不会写回",
+    "raw": { "cards": [[3, "buster"], [3, "buster"], [1, "arts"]] }
+  }
+}

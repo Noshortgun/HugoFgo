@@ -1,0 +1,414 @@
+{
+  "version": 1,
+  "name": "希耶尔 · Chaldea #73291",
+  "mysticId": "atlas-210",
+  "enemyCount": 3,
+  "formation": [
+    {
+      "slot": 0,
+      "name": "太空伊什塔尔",
+      "role": "Avenger",
+      "grandRequired": true
+    },
+    {
+      "slot": 1,
+      "name": "谜之代行者C.I.E.L",
+      "role": "Moon Cancer",
+      "support": true,
+      "supportRequired": true,
+      "grandRequired": true
+    },
+    {
+      "slot": 2,
+      "name": "吉娜可·加里吉利",
+      "role": "Moon Cancer"
+    },
+    {
+      "slot": 3,
+      "name": "斯卡哈·斯卡蒂",
+      "role": "Ruler"
+    },
+    {
+      "slot": 4,
+      "name": ""
+    },
+    {
+      "slot": 5,
+      "name": ""
+    }
+  ],
+  "strategy": {
+    "allowNp": true,
+    "servantOrder": [
+      "太空伊什塔尔",
+      "谜之代行者C.I.E.L",
+      "吉娜可·加里吉利"
+    ],
+    "cards": "buster",
+    "colorPriority": [
+      "buster",
+      "arts",
+      "quick"
+    ],
+    "strategyOrder": [
+      "servant",
+      "cards",
+      "crit"
+    ]
+  },
+  "waves": [
+    {
+      "turnCount": 1,
+      "target": 1,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "太空伊什塔尔 · 1 技能",
+              "detail": "目标：太空伊什塔尔",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 0,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "太空伊什塔尔 · 3 技能",
+              "detail": "目标：太空伊什塔尔",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 0,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "太空伊什塔尔 · 2 技能",
+              "detail": "目标：太空伊什塔尔",
+              "icon": "skill_00403",
+              "skill": 1,
+              "memberSlot": 0,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "吉娜可·加里吉利 · 1 技能",
+              "detail": "目标：太空伊什塔尔",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 2,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "吉娜可·加里吉利 · 3 技能",
+              "detail": "目标：太空伊什塔尔",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 2,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "orderChange",
+              "title": "换人 · 吉娜可·加里吉利 → 斯卡哈·斯卡蒂",
+              "detail": "吉娜可·加里吉利 下场，斯卡哈·斯卡蒂 上场",
+              "icon": "skill_00306",
+              "skill": 2,
+              "swapOutSlot": 2,
+              "swapInSlot": 3
+            },
+            {
+              "kind": "skill",
+              "title": "谜之代行者C.I.E.L · 1 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "谜之代行者C.I.E.L · 2 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00403",
+              "skill": 1,
+              "memberSlot": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "谜之代行者C.I.E.L · 3 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "斯卡哈·斯卡蒂 · 1 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 3,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "斯卡哈·斯卡蒂 · 2 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00403",
+              "skill": 1,
+              "memberSlot": 3,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "斯卡哈·斯卡蒂 · 3 技能",
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 3,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "master",
+              "title": "御主礼装 · 技能 1",
+              "detail": "御主礼装技能",
+              "icon": "skill_00400",
+              "skill": 0
+            },
+            {
+              "kind": "attack",
+              "title": "太空伊什塔尔 · 宝具",
+              "detail": "宝具释放卡序：1 · 已变更宝具卡色（buster）",
+              "icon": "skill_00400",
+              "memberSlot": 0
+            },
+            {
+              "kind": "attack",
+              "title": "谜之代行者C.I.E.L · 宝具",
+              "detail": "宝具释放卡序：2",
+              "icon": "skill_00400",
+              "memberSlot": 1
+            }
+          ],
+          "npPositions": {
+            "0": 1,
+            "1": 2
+          }
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 1,
+      "turns": [
+        {
+          "actions": []
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 1,
+      "turns": [
+        {
+          "actions": []
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "source": "chaldea",
+    "teamId": 73291,
+    "questId": 94148917,
+    "note": "测试用途：原始记录仅作对照，HugoFgo 运行时不读取，导出不会写回",
+    "actions": [
+      {
+        "type": "skill",
+        "svt": 0,
+        "skill": 0,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 0,
+        "skill": 2,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 0,
+        "skill": 1,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 2,
+        "skill": 0,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 2,
+        "skill": 2,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "skill": 2,
+        "options": {
+          "playerTarget": 0,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 1,
+        "skill": 0,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 1,
+        "skill": 1,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 1,
+        "skill": 2,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 2,
+        "skill": 0,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 2,
+        "skill": 1,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "svt": 2,
+        "skill": 2,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "skill",
+        "skill": 0,
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 900,
+          "threshold": 1000
+        }
+      },
+      {
+        "type": "attack",
+        "attacks": [
+          {
+            "svt": 0,
+            "card": -1,
+            "isTD": true,
+            "critical": false,
+            "cardType": "buster"
+          },
+          {
+            "svt": 1,
+            "card": -1,
+            "isTD": true,
+            "critical": false,
+            "cardType": "buster"
+          },
+          {
+            "svt": 1,
+            "card": 4,
+            "isTD": false,
+            "critical": true,
+            "cardType": "buster"
+          }
+        ],
+        "options": {
+          "playerTarget": 1,
+          "enemyTarget": 0,
+          "random": 970,
+          "threshold": 1000
+        }
+      }
+    ],
+    "delegate": {
+      "tdTypeChanges": [
+        2
+      ],
+      "replaceMemberIndexes": [
+        [
+          2,
+          0
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "name": "娄希、娄希、奥伯龙",
+  "mysticId": "default",
+  "enemyCount": 3,
+  "formation": [
+    {
+      "slot": 0,
+      "name": "娄希",
+      "role": "Berserker",
+      "svtId": 705000,
+      "limitCount": 4,
+      "npId": 705001,
+      "support": true,
+      "supportRequired": true,
+      "ce": "迦勒底午茶时光",
+      "ceId": 9403520
+    },
+    {
+      "slot": 1,
+      "name": "娄希",
+      "role": "Berserker",
+      "svtId": 705000,
+      "limitCount": 4,
+      "npId": 705001,
+      "ce": "获赠的尊贵十字之盾面",
+      "ceId": 9309050
+    },
+    {
+      "slot": 2,
+      "name": "奥伯龙",
+      "role": "Pretender",
+      "svtId": 2800100,
+      "limitCount": 4,
+      "npId": 2800101,
+      "ce": "星之王冠",
+      "ceId": 9300010
+    },
+    {
+      "slot": 3,
+      "name": "",
+      "role": ""
+    },
+    {
+      "slot": 4,
+      "name": "",
+      "role": ""
+    },
+    {
+      "slot": 5,
+      "name": "",
+      "role": ""
+    }
+  ],
+  "strategy": {
+    "allowNp": true,
+    "servantOrder": [
+      "娄希",
+      "娄希",
+      "奥伯龙"
+    ],
+    "servantOrderSlots": [
+      1,
+      0,
+      2
+    ],
+    "cards": "buster",
+    "colorPriority": [
+      "buster",
+      "arts",
+      "quick"
+    ],
+    "strategyOrder": [
+      "servant",
+      "cards",
+      "crit"
+    ]
+  },
+  "waves": [
+    {
+      "turnCount": 1,
+      "target": 2,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "target",
+              "title": "切换敌方目标",
+              "detail": "敌方 2",
+              "icon": "skill_00400",
+              "fromTarget": 3,
+              "toTarget": 2
+            },
+            {
+              "kind": "skill",
+              "title": "娄希 · 破灭的难题 B",
+              "detail": "目标：自身",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "娄希 · 天体轨道调整 B",
+              "detail": "己方全体",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 1
+            },
+            {
+              "kind": "attack",
+              "title": "娄希 · 极星天球壳循环",
+              "detail": "宝具释放卡序：自动",
+              "icon": "skill_00400",
+              "memberSlot": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "娄希 · 破灭的难题 B",
+              "detail": "目标：自身",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 0,
+              "playerTargetSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "娄希 · 天体轨道调整 B",
+              "detail": "己方全体",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 0
+            },
+            {
+              "kind": "skill",
+              "title": "奥伯龙 · 夜之帷幕 EX",
+              "detail": "己方全体",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 2
+            },
+            {
+              "kind": "attack",
+              "title": "娄希 · 极星天球壳循环",
+              "detail": "宝具释放卡序：2",
+              "icon": "skill_00400",
+              "memberSlot": 0
+            }
+          ],
+          "npPositions": {
+            "0": 2
+          }
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "skill",
+              "title": "奥伯龙 · 晨之云雀 EX",
+              "detail": "目标：娄希",
+              "icon": "skill_00403",
+              "skill": 1,
+              "memberSlot": 2,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "skill",
+              "title": "奥伯龙 · 梦之终结 EX",
+              "detail": "目标：娄希",
+              "icon": "skill_00700",
+              "skill": 2,
+              "memberSlot": 2,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "master",
+              "title": "魔术礼装·迦勒底 · 2 技能",
+              "detail": "目标：娄希",
+              "icon": "mc_00300",
+              "skill": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "attack",
+              "title": "娄希 · 极星天球壳循环",
+              "detail": "宝具释放卡序：自动",
+              "icon": "skill_00400",
+              "memberSlot": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

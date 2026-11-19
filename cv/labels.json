@@ -1,0 +1,17 @@
+{
+  "01-daily-quest-list.png": "other",
+  "02-support-select.png": "other",
+  "03-team-confirm.png": "other",
+  "04-battle-wave1.png": "battle",
+  "05-skill.png": "battle",
+  "06-card-select.png": "card",
+  "07-battle-wave2.png": "battle",
+  "08-battle-wave3.png": "battle",
+  "09-skill-target.png": "battle",
+  "10-np-card-select.png": "card",
+  "11-np-selected.png": "card",
+  "12-battle-result-bond.png": "result",
+  "13-battle-result-exp.png": "result",
+  "14-drops.png": "result",
+  "15-return.png": "other"
+}
