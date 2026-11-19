@@ -96,6 +96,10 @@ python -m executor.device --list
 - [ ] `python -m executor.device --self-test` 退出码 0。
 - [ ] `npm run replay` 36/36。
 
+## Out of scope
+
+- F4.1 的设备列表 UI（型号、分辨率、连接状态）由壳的设备查询负责；本票据的 `--list` 只用于手动验收，不承担 UI 列表。
+
 ## References
 
 - ADR-0001：执行器为 Python 子进程，自带设备层。
