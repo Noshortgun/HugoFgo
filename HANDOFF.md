@@ -269,3 +269,9 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `adb devices` 恢复 `host` 状态，避免静默漏掉 adb 真实连接状态。
 - `python -O` 防护测试改回完整 CLI，子进程带 `HUGOFGO_SELF_TEST_CHILD` 跳过递归用例；提示按 UTF-8 读取并必须包含 `python -O`，防止其他崩溃假通过。
 - 自检 15/15；回放 36/36；构建与 compileall 通过。
+
+
+## 30. 确认设备分辨率支持集（票据 03，2026-11-20）
+
+- 用户明确确认“精确 16:9 且不低于 1280×720”。
+- ADR-0005 从 `proposed` 改为 `accepted`；实现保持 15 项自检与 36 条既有回放不变。
