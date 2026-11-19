@@ -202,3 +202,76 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 全项目改名 FateFlow → HugoFgo：品牌字符串、`HugoFgoJob` 类型、`HUGOFGO_*` 环境变量、`hugofgo.*` 本地存储键、Cargo/包名、Tauri 标识符、脚本与示例作业文件名。
 - 公开仓库素材策略：`public/assets/` 游戏立绘不随仓库分发（README 免责声明说明版权与用途）；截图保留用于回放。
 - 已知影响：本地存储键改名会让收藏从者与常用礼装偏好重置一次；旧的 `FATEFLOW_*` 环境变量不再被读取。
+
+
+## 23. 设备网关（票据 03，2026-11-19）
+
+- 新增 `executor/` 包与 `executor/device/`：`Device` 协议（只有 `metrics` / `frame` / `tap` / `swipe`）、`DeviceError`、`DeviceConfig`（serial、区服、adb 路径、可选分辨率覆盖）、`AdbDevice`（adb 发现顺序、`get-state`、`wm size/density`、`screencap` PNG 校验、1280×720 坐标换算与钳制）、`FakeDevice`（帧列表或帧目录按序返回，动作只记录不执行）。
+- 自检：`python -m executor.device --self-test` 共 11 项，不依赖真机（adbd 调用由脚本化 runner 回放）。`--list` 需要真机，已在本机 adb 上只读验证。
+- 区服只作为设备配置存在，识别规则留给票据 13。读不到分辨率、截图与设备分辨率不一致、无效 PNG、adb 非零退出与设备离线都抛带 serial / 命令 / stderr 的 `DeviceError`，不盲点。
+- 未修改 `scripts/farm_ember.py`、`src-tauri/src/device.rs` 与旧回放；`npm run replay` 仍 36/36。
+
+
+## 24. 设备网关评审修复（票据 03，2026-11-19）
+
+- adb 调用统一加常数超时 `ADB_TIMEOUT = 30s`（`devices -l`、`get-state`、`wm size/density`、截图、tap/swipe），捕获 `subprocess.TimeoutExpired` 后抛带 serial、命令与超时值的 `DeviceError`；`wm density` 失败不再被静默吞掉。
+- `wm density` 优先 `Override density:`，函数改名 `parse_density`；`wm size` 提示与截图分辨率不一致的提示改为在 `DeviceConfig` 设置 width/height，不再声称 CLI 有 `--width/--height`。`ADB_MISSING` 区分设备运行（`adb_path` / `HUGOFGO_ADB`）与 `--list`（`--adb`）两种场景。
+- 设备层配置、区服解析、`FakeDevice` 构造错误统一为 `DeviceError`，调用方只需捕获一种异常；合法输入行为不变。
+- `FakeDevice.actions` 同时记录 1280×720 基准坐标（`x/y/x1…`，调用者语义）与换算后的设备像素（`device_x/device_y/device_x1…`），仍不调用外部进程。
+- `list_devices` 改名 `devices` 并从 `executor/device/__init__.py` 导出，作为架构 2.2 的设备发现入口；`docs/architecture.md` 2.2 接口行同步为 `devices()` + `Device` 四操作。
+- adb 失败消息收敛到一个内部帮助函数，`devices` 与 `AdbDevice._run` 共用。
+- `python -m executor.device --self-test` 由 11 项扩到 14 项（新增密度解析、调用超时、设备发现入口）；`npm run replay` 仍 36/36，`python -m compileall -q executor` 通过。
+
+
+## 25. 设备网关收尾修复（票据 03，2026-11-20）
+
+- 区服枚举 `Region` 归位到票据指定的 `executor/device/config.py`；`base.py` 通过 `TYPE_CHECKING` 引用，避免与 `DeviceError` 形成循环依赖。
+- 包入口收紧为稳定接口：`AdbDevice`、`Device`、`DeviceConfig`、`DeviceError`、`DeviceMetrics`、`FakeDevice`、`Frame`、`Region`、`devices`；坐标换算内部工具不再从包入口暴露。
+- `adb devices -l` 解析改为先定位 `List of devices attached` 表头，忽略 daemon 启动提示；无表头时也过滤 `*` 提示行，避免把提示当设备。
+- `FakeDevice` 同时收到帧与显式分辨率配置时校验一致性，不一致抛带两种分辨率的 `DeviceError`。
+- 自检仍为 14 项，新增上述回归断言；`npm run replay` 36/36 不变。
+
+
+## 26. 设备网关第三轮收敛（票据 03，2026-11-20）
+
+- 分辨率支持明确为 16:9 横屏（容差 1%）；`DeviceConfig`、`AdbDevice.metrics()`、`FakeDevice` 与坐标换算都会拒绝 2340×1080、1080×2400 等宽高比，避免布局换算后盲点。
+- `DeviceMetrics` 移到 `config.py`，运行时 `typing.get_type_hints()` 可解析 `Region`；`base.py` 只保留协议、错误、帧、分辨率校验与坐标换算。
+- `adb devices -l` 改为按 serial + 已知设备状态解析，忽略 daemon/server 提示；覆盖 `no permissions` 与无表头场景。
+- `python -m executor.device --self-test` 增至 15 项；`python -O` 下显式失败，避免 assert 被剥离后假通过。
+- 包入口与测试断言改为顺序无关；`docs/agents/triage-labels.md` 记录 `done` 为本仓库额外终态。
+- `npm run replay` 36/36，`npm run build` 与 `compileall` 通过。
+
+
+## 27. 设备网关第四轮收敛（票据 03，2026-11-20）
+
+- 分辨率支持集写进 `docs/requirements.md` F4.4 与 `docs/architecture.md` 2.2：16:9 横屏、相对误差 ≤1%，且不低于 1280×720；错误提示改为让用户把模拟器改成该范围，并带 serial。
+- 宽高比容差改为相对误差；1366×768、1920×1088（带系统栏）可通过，2340×1080、960×540 被拒绝。
+- `adb devices` 状态白名单补齐 `authorizing`、`connecting`、`rescue`、`host`、`unknown` 等合法状态。
+- `python -O` 自检防护改为子进程带 `HUGOFGO_SELF_TEST_CHILD`，即使守卫被删也只会导致外层断言失败，不会递归。
+- 自检 15 项全过；`npm run replay` 36/36。
+
+
+## 28. 设备网关第五轮收敛（票据 03，2026-11-20）
+
+- 分辨率定为精确 16:9 且不低于 1280×720；1366×768、1920×1088、2340×1080 等一律拒绝。决策写入 `docs/adr/0005-supported-resolutions.md`，需求第 6 节与 spec 的 Out of Scope 同步改为“非精确 16:9 或低于 1280×720 的专门适配”。
+- `DeviceConfig.region` 改为必填；缺失时报“设备配置缺少区服”并列出 CN/JP/TW，不再静默默认国服。
+- 分辨率错误按来源区分“设备 serial”与“设备配置 serial”；包入口与 fake 路径都走同一校验。
+- `adb devices` 白名单移除 `host`，保留 authorizing/connecting/rescue 等真实设备状态。
+- `python -O` 守卫抽成 `require_unoptimized()`；自检用独立子进程调用它，不递归，仍能发现守卫被删或提示丢失。
+- `python -m executor.device --self-test` 15/15；`npm run replay` 36/36；构建与 compileall 通过。
+
+
+## 29. 设备网关第六轮收敛（票据 03，2026-11-20）
+
+- ADR-0005 标为 `proposed`（待用户确认），不把实现者决策写成已确认；需求 F4.4 回链该 ADR。
+- ADR-0003 与架构 2.2 明确区服必填；`DeviceConfig` 缺区服直接给出 CN/JP/TW 选项。`FakeDevice` 无 config 时默认 CN 仅限离线回放，已写入类文档。
+- `FakeDevice` 分辨率错误带来源：设备 serial、帧目录路径或 `回放帧`；新增帧目录非 16:9 用例。
+- `adb devices` 恢复 `host` 状态，避免静默漏掉 adb 真实连接状态。
+- `python -O` 防护测试改回完整 CLI，子进程带 `HUGOFGO_SELF_TEST_CHILD` 跳过递归用例；提示按 UTF-8 读取并必须包含 `python -O`，防止其他崩溃假通过。
+- 自检 15/15；回放 36/36；构建与 compileall 通过。
+
+
+## 30. 确认设备分辨率支持集（票据 03，2026-11-20）
+
+- 用户明确确认“精确 16:9 且不低于 1280×720”。
+- ADR-0005 从 `proposed` 改为 `accepted`；实现保持 15 项自检与 36 条既有回放不变。

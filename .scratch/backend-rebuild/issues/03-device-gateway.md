@@ -1,6 +1,6 @@
 # 03: 新建设备网关
 
-**Status:** ready-for-agent
+**Status:** done（2026-11-20；设备网关、adb/fake 适配器、15 项自检与评审修复完成）
 **Blocked by:** 01、02（均已完成）
 
 ## Context
@@ -95,6 +95,10 @@ python -m executor.device --list
 - [ ] `FakeDevice` 不调用外部进程，且能记录全部动作。
 - [ ] `python -m executor.device --self-test` 退出码 0。
 - [ ] `npm run replay` 36/36。
+
+## Out of scope
+
+- F4.1 的设备列表 UI（型号、分辨率、连接状态）由壳的设备查询负责；本票据的 `--list` 只用于手动验收，不承担 UI 列表。
 
 ## References
 
