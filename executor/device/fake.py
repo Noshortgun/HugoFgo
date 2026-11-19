@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from executor.device.base import DeviceError, DeviceMetrics, Frame, to_device_point
-from executor.device.config import DeviceConfig, Region
+from executor.device.base import DeviceError, Frame, to_device_point, validate_resolution
+from executor.device.config import DeviceConfig, DeviceMetrics, Region
 from executor.device.png import png_size
 
 
@@ -36,6 +36,7 @@ class FakeDevice:
         else:
             raise DeviceError('FakeDevice 需要至少一帧截图，或在配置中给出 width/height')
 
+        validate_resolution(width, height)
         self.width = width
         self.height = height
 

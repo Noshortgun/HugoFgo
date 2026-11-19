@@ -13,14 +13,14 @@ import sys
 import tempfile
 import zlib
 from pathlib import Path
+from typing import get_type_hints
 from unittest import mock
 
 import executor.device as gateway
 from executor.device import adb as adb_module
-from executor.device import base as base_module
 from executor.device.adb import ADB_TIMEOUT, AdbDevice, devices, parse_density, resolve_adb_path
 from executor.device.base import Device, DeviceError, Frame, to_device_point
-from executor.device.config import DeviceConfig, Region
+from executor.device.config import DeviceConfig, DeviceMetrics, Region
 from executor.device.fake import FakeDevice
 from executor.device.png import png_size
 
@@ -75,8 +75,7 @@ def expect_error(action, *needles: str, error_type=Exception):
 
 
 def check_region() -> None:
-    assert Region.__module__ == 'executor.device.config', '区服枚举必须位于票据指定的 config.py'
-    assert not hasattr(base_module, 'Region'), 'base.py 只保留协议、错误、数据结构与坐标换算'
+    assert get_type_hints(DeviceMetrics)['region'] is Region
     assert Region.parse('CN') is Region.CN
     assert Region.parse('cn') is Region.CN
     assert Region.parse('国服') is Region.CN
@@ -102,6 +101,7 @@ def check_config() -> None:
     expect_error(lambda: DeviceConfig(serial='x', width=0, height=720), 'width', error_type=DeviceError)
     expect_error(lambda: DeviceConfig(serial='x', region='EU'), 'EU', error_type=DeviceError)
     expect_error(lambda: DeviceConfig(serial='x', width='abc', height=720), 'width', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', width=2340, height=1080), '16:9', error_type=DeviceError)
 
     assert not issubclass(DeviceError, ValueError), '调用方只需捕获 DeviceError，配置错误不应再走 ValueError'
 
@@ -202,27 +202,31 @@ def check_adb_timeouts() -> None:
 
 def check_discovery() -> None:
     assert gateway.devices is devices, '设备发现只保留一个实现，并从包入口导出'
-    assert gateway.__all__ == [
+    assert set(gateway.__all__) == {
         'AdbDevice', 'Device', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
         'FakeDevice', 'Frame', 'Region', 'devices',
-    ], '包入口只暴露设备网关的稳定接口'
+    }, '包入口只暴露设备网关的稳定接口'
     assert not hasattr(gateway, 'to_device_point'), '坐标换算属于适配器内部实现，不应从包入口暴露'
     with tempfile.TemporaryDirectory() as directory:
         adb = Path(directory) / 'adb.exe'
         adb.write_bytes(b'')
 
         runner = ScriptedRunner(adb_ok(b'* daemon not running; starting now at tcp:5037\n'
-                                       b'* daemon started successfully\nList of devices attached\n'
-                                       b'emulator-5554\tdevice model:Pixel_5\n127.0.0.1:16384\toffline\n'))
+                                       b'List of devices attached\nemulator-5554\tdevice model:Pixel_5\n'
+                                       b'* daemon started successfully\n127.0.0.1:16384\toffline\n'
+                                       b"adb server version (41) doesn't match this client (39); killing...\n"
+                                       b'????????????\tno permissions (user in plugdev group)\n'))
         found = devices(str(adb), runner=runner)
         assert [(item.serial, item.state, item.model) for item in found] == [
             ('emulator-5554', 'device', 'Pixel 5'),
             ('127.0.0.1:16384', 'offline', None),
-        ], 'daemon 提示行不能被当成设备'
+            ('????????????', 'no permissions', None),
+        ], 'daemon/server 提示行不能被当成设备'
         assert runner.calls == [[str(adb), 'devices', '-l']]
 
-        runner = ScriptedRunner(adb_ok(b'* daemon started successfully\n'))
-        assert devices(str(adb), runner=runner) == [], '没有表头时也不能把 daemon 提示当成设备'
+        runner = ScriptedRunner(adb_ok(b'* daemon started successfully\n'
+                                       b"adb server version (41) doesn't match this client (39); killing...\n"))
+        assert devices(str(adb), runner=runner) == [], '没有表头时也不能把提示行当成设备'
 
 
 def check_scale() -> None:
@@ -233,7 +237,10 @@ def check_scale() -> None:
     assert to_device_point(1279, 719, 2560, 1440) == (2558, 1438)
     assert to_device_point(-40, 5000, 1920, 1080) == (0, 1079)
     assert to_device_point(5000, 5000, 2560, 1440) == (2559, 1439)
+    assert to_device_point(640, 360, 3840, 2160) == (1920, 1080)
     expect_error(lambda: to_device_point(1, 1, 0, 720), '分辨率', error_type=DeviceError)
+    expect_error(lambda: to_device_point(1, 1, 2340, 1080), '不支持的分辨率', '16:9', error_type=DeviceError)
+    expect_error(lambda: to_device_point(1, 1, 1080, 2400), '不支持的分辨率', error_type=DeviceError)
 
 
 def check_adb_metrics() -> None:
@@ -290,6 +297,10 @@ def check_adb_errors() -> None:
         device = AdbDevice(config, runner=runner)
         error = expect_error(device.metrics, '分辨率', 'DeviceConfig', 'width', error_type=DeviceError)
         assert '--width' not in str(error)
+
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 1080x2400\n'))
+        device = AdbDevice(config, runner=runner)
+        expect_error(device.metrics, '1080×2400', '不支持的分辨率', '16:9', error_type=DeviceError)
 
 
 def check_adb_actions() -> None:
@@ -377,6 +388,8 @@ def check_fake_sequence() -> None:
         lambda: FakeDevice([first], config=DeviceConfig(serial='mismatch', width=640, height=360)),
         '配置分辨率', '1280×720', error_type=DeviceError,
     )
+    square = Frame(image=make_png(1000, 1000), width=1000, height=1000, captured_at=4.0)
+    expect_error(lambda: FakeDevice([square]), '不支持的分辨率', '16:9', error_type=DeviceError)
 
     empty = FakeDevice(config=DeviceConfig(serial='tap-only', width=1280, height=720))
     assert empty.metrics().serial == 'tap-only'
@@ -419,6 +432,16 @@ def check_fake_dir() -> None:
         expect_error(lambda: FakeDevice(frame_dir=directory), 'broken.png', error_type=DeviceError)
 
 
+def check_optimized_guard() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, '-O', '-m', 'executor.device', '--self-test'],
+        cwd=root, capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 1, 'python -O 下自检必须显式失败，不能空跑通过'
+    assert 'python -O' in result.stderr, f'应说明 -O 不可用：{result.stderr}'
+
+
 CHECKS = [
     ('区服解析', check_region),
     ('设备配置校验', check_config),
@@ -434,10 +457,14 @@ CHECKS = [
     ('fake 帧序', check_fake_sequence),
     ('fake 动作记录', check_fake_actions),
     ('fake 帧目录', check_fake_dir),
+    ('python -O 防护', check_optimized_guard),
 ]
 
 
 def self_test() -> int:
+    if sys.flags.optimize:
+        print('设备网关自检不能在 python -O 下运行：断言会被剥离，请使用普通 python 运行', file=sys.stderr)
+        return 1
     failures = 0
     for name, check in CHECKS:
         try:

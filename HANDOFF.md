@@ -230,3 +230,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `adb devices -l` 解析改为先定位 `List of devices attached` 表头，忽略 daemon 启动提示；无表头时也过滤 `*` 提示行，避免把提示当设备。
 - `FakeDevice` 同时收到帧与显式分辨率配置时校验一致性，不一致抛带两种分辨率的 `DeviceError`。
 - 自检仍为 14 项，新增上述回归断言；`npm run replay` 36/36 不变。
+
+
+## 26. 设备网关第三轮收敛（票据 03，2026-11-20）
+
+- 分辨率支持明确为 16:9 横屏（容差 1%）；`DeviceConfig`、`AdbDevice.metrics()`、`FakeDevice` 与坐标换算都会拒绝 2340×1080、1080×2400 等宽高比，避免布局换算后盲点。
+- `DeviceMetrics` 移到 `config.py`，运行时 `typing.get_type_hints()` 可解析 `Region`；`base.py` 只保留协议、错误、帧、分辨率校验与坐标换算。
+- `adb devices -l` 改为按 serial + 已知设备状态解析，忽略 daemon/server 提示；覆盖 `no permissions` 与无表头场景。
+- `python -m executor.device --self-test` 增至 15 项；`python -O` 下显式失败，避免 assert 被剥离后假通过。
+- 包入口与测试断言改为顺序无关；`docs/agents/triage-labels.md` 记录 `done` 为本仓库额外终态。
+- `npm run replay` 36/36，`npm run build` 与 `compileall` 通过。

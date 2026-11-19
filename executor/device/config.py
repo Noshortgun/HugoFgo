@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from executor.device.base import DeviceError
+from executor.device.base import DeviceError, validate_resolution
 
 
 class Region(str, Enum):
@@ -28,6 +28,15 @@ class Region(str, Enum):
                 return region
         options = '、'.join(f'{region.value}（{region.label}）' for region in cls)
         raise DeviceError(f'未知区服 {value!r}；可选 {options}')
+
+
+@dataclass(frozen=True)
+class DeviceMetrics:
+    serial: str
+    width: int
+    height: int
+    density: int | None
+    region: Region
 
 
 @dataclass(frozen=True)
@@ -61,3 +70,5 @@ class DeviceConfig:
             if number <= 0:
                 raise DeviceError(f'设备配置的 {name} 必须是正整数，收到 {value!r}')
             object.__setattr__(self, name, number)
+        if self.width is not None and self.height is not None:
+            validate_resolution(self.width, self.height)

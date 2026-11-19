@@ -1,4 +1,4 @@
-"""设备协议：执行器只通过这四个操作访问设备，不感知 adb 或截图文件。
+"""设备协议、错误、帧与坐标换算：上层只通过四个操作访问设备，不感知 adb 或截图文件。
 
 坐标一律使用 1280×720 基准，由设备适配器换算到实际分辨率。
 """
@@ -8,23 +8,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from executor.device.config import Region
+    from executor.device.config import DeviceMetrics
 
 BASE_WIDTH = 1280
 BASE_HEIGHT = 720
+SUPPORTED_ASPECT = 16 / 9
+ASPECT_TOLERANCE = 0.01
 
 
 class DeviceError(RuntimeError):
     """设备访问失败。消息必须带定位信息：serial、命令、stderr 或截图路径。"""
-
-
-@dataclass(frozen=True)
-class DeviceMetrics:
-    serial: str
-    width: int
-    height: int
-    density: int | None
-    region: 'Region'
 
 
 @dataclass(frozen=True)
@@ -48,10 +41,19 @@ class Device(Protocol):
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 350) -> None: ...
 
 
-def to_device_point(x: int, y: int, width: int, height: int) -> tuple[int, int]:
-    """把 1280×720 基准坐标换算成设备像素，并把结果限制在屏幕内。"""
+def validate_resolution(width: int, height: int) -> None:
+    """只接受 16:9 附近的横屏分辨率；其他宽高比会破坏布局换算，必须拒绝而不是盲点。"""
     if width <= 0 or height <= 0:
         raise DeviceError(f'设备分辨率无效：{width}×{height}，无法换算 1280×720 基准坐标')
+    ratio = width / height
+    if abs(ratio - SUPPORTED_ASPECT) > ASPECT_TOLERANCE:
+        raise DeviceError(f'不支持的分辨率：{width}×{height}（宽高比 {ratio:.3f}:1）；'
+                          '仅支持 16:9 横屏，例如 1280×720、1920×1080')
+
+
+def to_device_point(x: int, y: int, width: int, height: int) -> tuple[int, int]:
+    """把 1280×720 基准坐标换算成设备像素，并把结果限制在屏幕内。"""
+    validate_resolution(width, height)
     return _scale(x, BASE_WIDTH, width), _scale(y, BASE_HEIGHT, height)
 
 

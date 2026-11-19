@@ -12,6 +12,6 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-本地 markdown 跟踪器下，标签写在每张票据顶部的 `Status:` 行，例如 `Status: ready-for-agent`。
+本地 markdown 跟踪器下，标签写在每张票据顶部的 `Status:` 行，例如 `Status: ready-for-agent`。`done` 是本仓库额外的终态，表示票据已按 tracker 关闭；它不是 triage 角色，不用于未关闭票据。
 
 Edit the "Label in our tracker" column to match whatever vocabulary you actually use.

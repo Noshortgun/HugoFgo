@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
-from executor.device.base import DeviceError, DeviceMetrics, Frame, to_device_point
-from executor.device.config import DeviceConfig
+from executor.device.base import DeviceError, Frame, to_device_point, validate_resolution
+from executor.device.config import DeviceConfig, DeviceMetrics
 from executor.device.png import png_size
 
 Runner = Callable[..., subprocess.CompletedProcess]
 _SIZE = re.compile(r'(\d+)x(\d+)')
+_DEVICE_LINE = re.compile(r'^(\S+)\s+(device|offline|unauthorized|recovery|sideload|bootloader|no permissions)\b')
 
 ADB_TIMEOUT = 30.0
 
@@ -141,17 +142,15 @@ def devices(adb_path: str | None = None, *, runner: Runner = subprocess.run) -> 
     if result.returncode != 0:
         raise _command_failed(command, result)
 
-    lines = _text(result.stdout).splitlines()
-    header = next((index for index, line in enumerate(lines) if 'list of devices attached' in line.lower()), None)
-    body = lines[header + 1:] if header is not None else [line for line in lines if not line.lstrip().startswith('*')]
-
     found: list[DeviceInfo] = []
-    for line in body:
-        parts = line.split()
-        if len(parts) < 2:
+    for line in _text(result.stdout).splitlines():
+        match = _DEVICE_LINE.match(line.strip())
+        if match is None:
             continue
+        serial, state = match.groups()
+        parts = line.strip().split()
         model = next((part[len('model:'):].replace('_', ' ') for part in parts[2:] if part.startswith('model:')), None)
-        found.append(DeviceInfo(serial=parts[0], state=parts[1], model=model))
+        found.append(DeviceInfo(serial=serial, state=state, model=model))
     return found
 
 
@@ -208,6 +207,7 @@ class AdbDevice:
                                   f'{output.strip() or "空"}）；请在 DeviceConfig 中设置 width/height，避免盲点')
             width, height = size
 
+        validate_resolution(width, height)
         density = parse_density(_text(self._run('shell', 'wm', 'density').stdout))
 
         return DeviceMetrics(serial=self.config.serial, width=width, height=height,
