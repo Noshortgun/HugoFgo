@@ -202,3 +202,11 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 全项目改名 FateFlow → HugoFgo：品牌字符串、`HugoFgoJob` 类型、`HUGOFGO_*` 环境变量、`hugofgo.*` 本地存储键、Cargo/包名、Tauri 标识符、脚本与示例作业文件名。
 - 公开仓库素材策略：`public/assets/` 游戏立绘不随仓库分发（README 免责声明说明版权与用途）；截图保留用于回放。
 - 已知影响：本地存储键改名会让收藏从者与常用礼装偏好重置一次；旧的 `FATEFLOW_*` 环境变量不再被读取。
+
+
+## 23. 设备网关（票据 03，2026-11-19）
+
+- 新增 `executor/` 包与 `executor/device/`：`Device` 协议（只有 `metrics` / `frame` / `tap` / `swipe`）、`DeviceError`、`DeviceConfig`（serial、区服、adb 路径、可选分辨率覆盖）、`AdbDevice`（adb 发现顺序、`get-state`、`wm size/density`、`screencap` PNG 校验、1280×720 坐标换算与钳制）、`FakeDevice`（帧列表或帧目录按序返回，动作只记录不执行）。
+- 自检：`python -m executor.device --self-test` 共 11 项，不依赖真机（adbd 调用由脚本化 runner 回放）。`--list` 需要真机，已在本机 adb 上只读验证。
+- 区服只作为设备配置存在，识别规则留给票据 13。读不到分辨率、截图与设备分辨率不一致、无效 PNG、adb 非零退出与设备离线都抛带 serial / 命令 / stderr 的 `DeviceError`，不盲点。
+- 未修改 `scripts/farm_ember.py`、`src-tauri/src/device.rs` 与旧回放；`npm run replay` 仍 36/36。
