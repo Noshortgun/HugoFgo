@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "name": "多回合测试",
+  "mysticId": "order-change",
+  "enemyCount": 3,
+  "formation": [
+    { "slot": 0, "name": "阿尔托莉雅", "role": "Saber" },
+    { "slot": 1, "name": "玛修·基列莱特", "role": "Shielder" },
+    { "slot": 2, "name": "吉尔伽美什", "role": "Archer" },
+    { "slot": 3, "name": "卫宫", "role": "Archer" },
+    { "slot": 4, "name": "", "role": "" },
+    { "slot": 5, "name": "", "role": "" }
+  ],
+  "strategy": {
+    "allowNp": true,
+    "servantOrder": ["卫宫", "玛修·基列莱特", "吉尔伽美什"],
+    "cards": "buster",
+    "colorPriority": ["buster", "arts", "quick"],
+    "strategyOrder": ["servant", "cards", "crit"]
+  },
+  "waves": [
+    {
+      "turnCount": 2,
+      "target": 3,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "orderChange",
+              "title": "换人 · 阿尔托莉雅 → 卫宫",
+              "detail": "阿尔托莉雅 下场，卫宫 上场",
+              "icon": "skill_00306",
+              "skill": 0,
+              "swapOutSlot": 0,
+              "swapInSlot": 3
+            },
+            {
+              "kind": "skill",
+              "title": "阿尔托莉雅 · 1 技能",
+              "detail": "目标：玛修·基列莱特",
+              "icon": "skill_00400",
+              "skill": 0,
+              "memberSlot": 0,
+              "playerTargetSlot": 1,
+              "secondarySelection": {
+                "type": "noblePhantasmCardType",
+                "index": 0,
+                "value": "arts",
+                "label": "蓝卡宝具"
+              }
+            },
+            {
+              "kind": "master",
+              "title": "御主礼装 · 2 技能",
+              "detail": "目标：玛修·基列莱特",
+              "icon": "mc_00300",
+              "skill": 1,
+              "playerTargetSlot": 1
+            },
+            {
+              "kind": "attack",
+              "title": "阿尔托莉雅 · 宝具",
+              "detail": "宝具释放卡序：2",
+              "icon": "skill_00400",
+              "memberSlot": 0
+            }
+          ],
+          "npPositions": { "0": 2, "3": "auto" },
+          "attack": {
+            "mode": "prefer",
+            "cards": [
+              { "slot": 0, "type": "arts" },
+              { "slot": 1, "type": "buster" },
+              { "slot": 2, "type": "buster", "deckIndex": 0 }
+            ]
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "target",
+              "title": "切换敌方目标",
+              "detail": "敌方 2",
+              "icon": "skill_00400",
+              "fromTarget": 3,
+              "toTarget": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "turnCount": 1,
+      "target": 1,
+      "turns": [
+        {
+          "actions": [
+            {
+              "kind": "spell",
+              "title": "令咒",
+              "detail": "目标：吉尔伽美什",
+              "icon": "spell",
+              "skill": 0,
+              "memberSlot": 2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
