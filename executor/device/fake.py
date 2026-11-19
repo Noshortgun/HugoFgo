@@ -36,7 +36,7 @@ class FakeDevice:
         else:
             raise DeviceError('FakeDevice 需要至少一帧截图，或在配置中给出 width/height')
 
-        validate_resolution(width, height, serial=config.serial if config else None)
+        validate_resolution(width, height, subject=f'设备 {config.serial}' if config else None)
         self.width = width
         self.height = height
 

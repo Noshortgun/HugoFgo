@@ -12,10 +12,8 @@ if TYPE_CHECKING:
 
 BASE_WIDTH = 1280
 BASE_HEIGHT = 720
-MIN_WIDTH = 1280
-MIN_HEIGHT = 720
-SUPPORTED_ASPECT = 16 / 9
-ASPECT_TOLERANCE = 0.01
+MIN_WIDTH = BASE_WIDTH
+MIN_HEIGHT = BASE_HEIGHT
 
 
 class DeviceError(RuntimeError):
@@ -43,18 +41,18 @@ class Device(Protocol):
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 350) -> None: ...
 
 
-def validate_resolution(width: int, height: int, *, serial: str | None = None) -> None:
-    """只接受不低于 1280×720、宽高比接近 16:9 的横屏；其他分辨率必须拒绝而不是盲点。"""
-    who = f'设备 {serial} ' if serial else ''
+def validate_resolution(width: int, height: int, *, subject: str | None = None) -> None:
+    """只接受不低于 1280×720 的精确 16:9 横屏；其他分辨率必须拒绝而不是盲点。"""
+    who = f'{subject} ' if subject else ''
     if width <= 0 or height <= 0:
-        raise DeviceError(f'{who}分辨率无效：{width}×{height}，无法换算 1280×720 基准坐标')
+        raise DeviceError(f'{who}分辨率无效：{width}×{height}，无法换算 {BASE_WIDTH}×{BASE_HEIGHT} 基准坐标')
     if width < MIN_WIDTH or height < MIN_HEIGHT:
-        raise DeviceError(f'{who}分辨率 {width}×{height} 低于最低支持的 1280×720；'
-                          '请把模拟器改成 16:9 横屏且不低于 1280×720')
-    ratio = width / height
-    if abs(ratio - SUPPORTED_ASPECT) / SUPPORTED_ASPECT > ASPECT_TOLERANCE:
-        raise DeviceError(f'{who}不支持的分辨率：{width}×{height}（宽高比 {ratio:.3f}:1）；'
-                          '请把模拟器改成 16:9 横屏且不低于 1280×720（如 1280×720、1920×1080）')
+        raise DeviceError(f'{who}分辨率 {width}×{height} 低于最低支持的 {BASE_WIDTH}×{BASE_HEIGHT}；'
+                          f'请把模拟器改成 16:9 横屏且不低于 {BASE_WIDTH}×{BASE_HEIGHT}')
+    if width * 9 != height * 16:
+        raise DeviceError(f'{who}不支持的分辨率：{width}×{height}（不是精确 16:9）；'
+                          f'请把模拟器改成 16:9 横屏且不低于 {BASE_WIDTH}×{BASE_HEIGHT}'
+                          f'（如 {BASE_WIDTH}×{BASE_HEIGHT}、1920×1080）')
 
 
 def to_device_point(x: int, y: int, width: int, height: int) -> tuple[int, int]:

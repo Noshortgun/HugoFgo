@@ -42,7 +42,7 @@ class DeviceMetrics:
 @dataclass(frozen=True)
 class DeviceConfig:
     serial: str
-    region: Region = Region.CN
+    region: Region | str | None = None
     adb_path: str | None = None
     width: int | None = None
     height: int | None = None
@@ -52,6 +52,9 @@ class DeviceConfig:
         if not serial:
             raise DeviceError('设备配置缺少 serial：请填写 adb devices 第一列的序列号（如 emulator-5554）')
         object.__setattr__(self, 'serial', serial)
+        if self.region is None:
+            options = '、'.join(f'{region.value}（{region.label}）' for region in Region)
+            raise DeviceError(f'设备配置缺少区服：请选择 {options}')
         object.__setattr__(self, 'region', Region.parse(self.region))
 
         adb_path = str(self.adb_path).strip() if self.adb_path else None
@@ -71,4 +74,4 @@ class DeviceConfig:
                 raise DeviceError(f'设备配置的 {name} 必须是正整数，收到 {value!r}')
             object.__setattr__(self, name, number)
         if self.width is not None and self.height is not None:
-            validate_resolution(self.width, self.height, serial=self.serial)
+            validate_resolution(self.width, self.height, subject=f'设备配置 {self.serial}')

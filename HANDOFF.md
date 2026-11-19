@@ -249,3 +249,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `adb devices` 状态白名单补齐 `authorizing`、`connecting`、`rescue`、`host`、`unknown` 等合法状态。
 - `python -O` 自检防护改为子进程带 `HUGOFGO_SELF_TEST_CHILD`，即使守卫被删也只会导致外层断言失败，不会递归。
 - 自检 15 项全过；`npm run replay` 36/36。
+
+
+## 28. 设备网关第五轮收敛（票据 03，2026-11-20）
+
+- 分辨率定为精确 16:9 且不低于 1280×720；1366×768、1920×1088、2340×1080 等一律拒绝。决策写入 `docs/adr/0005-supported-resolutions.md`，需求第 6 节与 spec 的 Out of Scope 同步改为“非精确 16:9 或低于 1280×720 的专门适配”。
+- `DeviceConfig.region` 改为必填；缺失时报“设备配置缺少区服”并列出 CN/JP/TW，不再静默默认国服。
+- 分辨率错误按来源区分“设备 serial”与“设备配置 serial”；包入口与 fake 路径都走同一校验。
+- `adb devices` 白名单移除 `host`，保留 authorizing/connecting/rescue 等真实设备状态。
+- `python -O` 守卫抽成 `require_unoptimized()`；自检用独立子进程调用它，不递归，仍能发现守卫被删或提示丢失。
+- `python -m executor.device --self-test` 15/15；`npm run replay` 36/36；构建与 compileall 通过。
