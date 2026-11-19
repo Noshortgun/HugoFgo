@@ -221,3 +221,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `list_devices` 改名 `devices` 并从 `executor/device/__init__.py` 导出，作为架构 2.2 的设备发现入口；`docs/architecture.md` 2.2 接口行同步为 `devices()` + `Device` 四操作。
 - adb 失败消息收敛到一个内部帮助函数，`devices` 与 `AdbDevice._run` 共用。
 - `python -m executor.device --self-test` 由 11 项扩到 14 项（新增密度解析、调用超时、设备发现入口）；`npm run replay` 仍 36/36，`python -m compileall -q executor` 通过。
+
+
+## 25. 设备网关收尾修复（票据 03，2026-11-20）
+
+- 区服枚举 `Region` 归位到票据指定的 `executor/device/config.py`；`base.py` 通过 `TYPE_CHECKING` 引用，避免与 `DeviceError` 形成循环依赖。
+- 包入口收紧为稳定接口：`AdbDevice`、`Device`、`DeviceConfig`、`DeviceError`、`DeviceMetrics`、`FakeDevice`、`Frame`、`Region`、`devices`；坐标换算内部工具不再从包入口暴露。
+- `adb devices -l` 解析改为先定位 `List of devices attached` 表头，忽略 daemon 启动提示；无表头时也过滤 `*` 提示行，避免把提示当设备。
+- `FakeDevice` 同时收到帧与显式分辨率配置时校验一致性，不一致抛带两种分辨率的 `DeviceError`。
+- 自检仍为 14 项，新增上述回归断言；`npm run replay` 36/36 不变。

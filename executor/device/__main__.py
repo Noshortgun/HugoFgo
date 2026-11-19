@@ -17,6 +17,7 @@ from unittest import mock
 
 import executor.device as gateway
 from executor.device import adb as adb_module
+from executor.device import base as base_module
 from executor.device.adb import ADB_TIMEOUT, AdbDevice, devices, parse_density, resolve_adb_path
 from executor.device.base import Device, DeviceError, Frame, to_device_point
 from executor.device.config import DeviceConfig, Region
@@ -74,6 +75,8 @@ def expect_error(action, *needles: str, error_type=Exception):
 
 
 def check_region() -> None:
+    assert Region.__module__ == 'executor.device.config', '区服枚举必须位于票据指定的 config.py'
+    assert not hasattr(base_module, 'Region'), 'base.py 只保留协议、错误、数据结构与坐标换算'
     assert Region.parse('CN') is Region.CN
     assert Region.parse('cn') is Region.CN
     assert Region.parse('国服') is Region.CN
@@ -199,17 +202,27 @@ def check_adb_timeouts() -> None:
 
 def check_discovery() -> None:
     assert gateway.devices is devices, '设备发现只保留一个实现，并从包入口导出'
+    assert gateway.__all__ == [
+        'AdbDevice', 'Device', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
+        'FakeDevice', 'Frame', 'Region', 'devices',
+    ], '包入口只暴露设备网关的稳定接口'
+    assert not hasattr(gateway, 'to_device_point'), '坐标换算属于适配器内部实现，不应从包入口暴露'
     with tempfile.TemporaryDirectory() as directory:
         adb = Path(directory) / 'adb.exe'
         adb.write_bytes(b'')
-        runner = ScriptedRunner(adb_ok(b'List of devices attached\nemulator-5554\tdevice model:Pixel_5\n'
-                                       b'127.0.0.1:16384\toffline\n'))
+
+        runner = ScriptedRunner(adb_ok(b'* daemon not running; starting now at tcp:5037\n'
+                                       b'* daemon started successfully\nList of devices attached\n'
+                                       b'emulator-5554\tdevice model:Pixel_5\n127.0.0.1:16384\toffline\n'))
         found = devices(str(adb), runner=runner)
         assert [(item.serial, item.state, item.model) for item in found] == [
             ('emulator-5554', 'device', 'Pixel 5'),
             ('127.0.0.1:16384', 'offline', None),
-        ]
+        ], 'daemon 提示行不能被当成设备'
         assert runner.calls == [[str(adb), 'devices', '-l']]
+
+        runner = ScriptedRunner(adb_ok(b'* daemon started successfully\n'))
+        assert devices(str(adb), runner=runner) == [], '没有表头时也不能把 daemon 提示当成设备'
 
 
 def check_scale() -> None:
@@ -359,6 +372,11 @@ def check_fake_sequence() -> None:
     small = Frame(image=make_png(640, 360), width=640, height=360, captured_at=3.0)
     expect_error(lambda: FakeDevice([first, small]), '分辨率', error_type=DeviceError)
     expect_error(lambda: FakeDevice([first], frame_dir='.'), '只能给出一个', error_type=DeviceError)
+    FakeDevice([first], config=DeviceConfig(serial='match', width=1280, height=720))
+    expect_error(
+        lambda: FakeDevice([first], config=DeviceConfig(serial='mismatch', width=640, height=360)),
+        '配置分辨率', '1280×720', error_type=DeviceError,
+    )
 
     empty = FakeDevice(config=DeviceConfig(serial='tap-only', width=1280, height=720))
     assert empty.metrics().serial == 'tap-only'

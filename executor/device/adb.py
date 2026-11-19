@@ -141,8 +141,12 @@ def devices(adb_path: str | None = None, *, runner: Runner = subprocess.run) -> 
     if result.returncode != 0:
         raise _command_failed(command, result)
 
+    lines = _text(result.stdout).splitlines()
+    header = next((index for index, line in enumerate(lines) if 'list of devices attached' in line.lower()), None)
+    body = lines[header + 1:] if header is not None else [line for line in lines if not line.lstrip().startswith('*')]
+
     found: list[DeviceInfo] = []
-    for line in _text(result.stdout).splitlines()[1:]:
+    for line in body:
         parts = line.split()
         if len(parts) < 2:
             continue

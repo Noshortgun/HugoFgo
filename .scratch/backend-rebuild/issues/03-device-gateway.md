@@ -1,6 +1,6 @@
 # 03: 新建设备网关
 
-**Status:** ready-for-agent
+**Status:** done（2026-11-20；设备网关、adb/fake 适配器、14 项自检与评审修复完成）
 **Blocked by:** 01、02（均已完成）
 
 ## Context

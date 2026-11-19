@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from executor.device.base import DeviceError, DeviceMetrics, Frame, Region, to_device_point
-from executor.device.config import DeviceConfig
+from executor.device.base import DeviceError, DeviceMetrics, Frame, to_device_point
+from executor.device.config import DeviceConfig, Region
 from executor.device.png import png_size
 
 
@@ -28,6 +28,9 @@ class FakeDevice:
                 if (frame.width, frame.height) != (width, height):
                     raise DeviceError(f'FakeDevice 第 {index + 1} 帧分辨率 {frame.width}×{frame.height} '
                                       f'与首帧 {width}×{height} 不一致')
+            if config is not None and config.width is not None and (config.width, config.height) != (width, height):
+                raise DeviceError(f'FakeDevice 配置分辨率 {config.width}×{config.height} 与帧分辨率 '
+                                  f'{width}×{height} 不一致；请修正 DeviceConfig 或回放截图')
         elif config is not None and config.width is not None:
             width, height = config.width, config.height
         else:

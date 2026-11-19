@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from executor.device.config import Region
 
 BASE_WIDTH = 1280
 BASE_HEIGHT = 720
@@ -16,36 +18,13 @@ class DeviceError(RuntimeError):
     """设备访问失败。消息必须带定位信息：serial、命令、stderr 或截图路径。"""
 
 
-class Region(str, Enum):
-    """区服属于设备（ADR-0003）：决定后续加载哪套识别配置与图库。"""
-
-    CN = 'CN'
-    JP = 'JP'
-    TW = 'TW'
-
-    @property
-    def label(self) -> str:
-        return {'CN': '国服', 'JP': '日服', 'TW': '台服'}[self.value]
-
-    @classmethod
-    def parse(cls, value: 'Region | str') -> 'Region':
-        if isinstance(value, cls):
-            return value
-        text = str(value).strip()
-        for region in cls:
-            if text.upper() == region.value or text == region.label:
-                return region
-        options = '、'.join(f'{region.value}（{region.label}）' for region in cls)
-        raise DeviceError(f'未知区服 {value!r}；可选 {options}')
-
-
 @dataclass(frozen=True)
 class DeviceMetrics:
     serial: str
     width: int
     height: int
     density: int | None
-    region: Region
+    region: 'Region'
 
 
 @dataclass(frozen=True)
