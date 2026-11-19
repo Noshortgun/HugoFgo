@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import subprocess
 import sys
@@ -75,7 +76,6 @@ def expect_error(action, *needles: str, error_type=Exception):
 
 
 def check_region() -> None:
-    assert get_type_hints(DeviceMetrics)['region'] is Region
     assert Region.parse('CN') is Region.CN
     assert Region.parse('cn') is Region.CN
     assert Region.parse('国服') is Region.CN
@@ -86,6 +86,7 @@ def check_region() -> None:
 
 
 def check_config() -> None:
+    assert get_type_hints(DeviceMetrics)['region'] is Region
     config = DeviceConfig(serial='emulator-5554')
     assert config.region is Region.CN
     assert config.adb_path is None and config.width is None and config.height is None
@@ -102,6 +103,9 @@ def check_config() -> None:
     expect_error(lambda: DeviceConfig(serial='x', region='EU'), 'EU', error_type=DeviceError)
     expect_error(lambda: DeviceConfig(serial='x', width='abc', height=720), 'width', error_type=DeviceError)
     expect_error(lambda: DeviceConfig(serial='x', width=2340, height=1080), '16:9', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', width=960, height=540), '低于最低支持', error_type=DeviceError)
+    DeviceConfig(serial='x', width=1366, height=768)
+    DeviceConfig(serial='x', width=1920, height=1088)
 
     assert not issubclass(DeviceError, ValueError), '调用方只需捕获 DeviceError，配置错误不应再走 ValueError'
 
@@ -206,6 +210,7 @@ def check_discovery() -> None:
         'AdbDevice', 'Device', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
         'FakeDevice', 'Frame', 'Region', 'devices',
     }, '包入口只暴露设备网关的稳定接口'
+    assert len(gateway.__all__) == len(set(gateway.__all__)), '__all__ 不应有重复项'
     assert not hasattr(gateway, 'to_device_point'), '坐标换算属于适配器内部实现，不应从包入口暴露'
     with tempfile.TemporaryDirectory() as directory:
         adb = Path(directory) / 'adb.exe'
@@ -215,13 +220,18 @@ def check_discovery() -> None:
                                        b'List of devices attached\nemulator-5554\tdevice model:Pixel_5\n'
                                        b'* daemon started successfully\n127.0.0.1:16384\toffline\n'
                                        b"adb server version (41) doesn't match this client (39); killing...\n"
-                                       b'????????????\tno permissions (user in plugdev group)\n'))
+                                       b'????????????\tno permissions (user in plugdev group)\n'
+                                       b'emulator-5556\tauthorizing\n192.168.0.2:5555\trescue\n'
+                                       b'localhost:5555\thost\n'))
         found = devices(str(adb), runner=runner)
         assert [(item.serial, item.state, item.model) for item in found] == [
             ('emulator-5554', 'device', 'Pixel 5'),
             ('127.0.0.1:16384', 'offline', None),
             ('????????????', 'no permissions', None),
-        ], 'daemon/server 提示行不能被当成设备'
+            ('emulator-5556', 'authorizing', None),
+            ('192.168.0.2:5555', 'rescue', None),
+            ('localhost:5555', 'host', None),
+        ], 'daemon/server 提示行不能被当成设备，合法状态不能被丢弃'
         assert runner.calls == [[str(adb), 'devices', '-l']]
 
         runner = ScriptedRunner(adb_ok(b'* daemon started successfully\n'
@@ -238,9 +248,11 @@ def check_scale() -> None:
     assert to_device_point(-40, 5000, 1920, 1080) == (0, 1079)
     assert to_device_point(5000, 5000, 2560, 1440) == (2559, 1439)
     assert to_device_point(640, 360, 3840, 2160) == (1920, 1080)
+    assert to_device_point(1, 1, 1920, 1088) == (2, 2)
+    assert to_device_point(1, 1, 1366, 768) == (1, 1)
     expect_error(lambda: to_device_point(1, 1, 0, 720), '分辨率', error_type=DeviceError)
     expect_error(lambda: to_device_point(1, 1, 2340, 1080), '不支持的分辨率', '16:9', error_type=DeviceError)
-    expect_error(lambda: to_device_point(1, 1, 1080, 2400), '不支持的分辨率', error_type=DeviceError)
+    expect_error(lambda: to_device_point(1, 1, 960, 540), '低于最低支持', error_type=DeviceError)
 
 
 def check_adb_metrics() -> None:
@@ -298,9 +310,10 @@ def check_adb_errors() -> None:
         error = expect_error(device.metrics, '分辨率', 'DeviceConfig', 'width', error_type=DeviceError)
         assert '--width' not in str(error)
 
-        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 1080x2400\n'))
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 2340x1080\n'))
         device = AdbDevice(config, runner=runner)
-        expect_error(device.metrics, '1080×2400', '不支持的分辨率', '16:9', error_type=DeviceError)
+        expect_error(device.metrics, 'emulator-5554', '2340×1080', '不支持的分辨率', '16:9',
+                     error_type=DeviceError)
 
 
 def check_adb_actions() -> None:
@@ -385,10 +398,10 @@ def check_fake_sequence() -> None:
     expect_error(lambda: FakeDevice([first], frame_dir='.'), '只能给出一个', error_type=DeviceError)
     FakeDevice([first], config=DeviceConfig(serial='match', width=1280, height=720))
     expect_error(
-        lambda: FakeDevice([first], config=DeviceConfig(serial='mismatch', width=640, height=360)),
+        lambda: FakeDevice([first], config=DeviceConfig(serial='mismatch', width=1920, height=1080)),
         '配置分辨率', '1280×720', error_type=DeviceError,
     )
-    square = Frame(image=make_png(1000, 1000), width=1000, height=1000, captured_at=4.0)
+    square = Frame(image=make_png(1600, 1000), width=1600, height=1000, captured_at=4.0)
     expect_error(lambda: FakeDevice([square]), '不支持的分辨率', '16:9', error_type=DeviceError)
 
     empty = FakeDevice(config=DeviceConfig(serial='tap-only', width=1280, height=720))
@@ -437,9 +450,10 @@ def check_optimized_guard() -> None:
     result = subprocess.run(
         [sys.executable, '-O', '-m', 'executor.device', '--self-test'],
         cwd=root, capture_output=True, text=True, timeout=60,
+        env={**os.environ, 'HUGOFGO_SELF_TEST_CHILD': '1'},
     )
     assert result.returncode == 1, 'python -O 下自检必须显式失败，不能空跑通过'
-    assert 'python -O' in result.stderr, f'应说明 -O 不可用：{result.stderr}'
+    assert result.stderr.strip(), 'python -O 失败时必须给出原因'
 
 
 CHECKS = [
@@ -457,8 +471,9 @@ CHECKS = [
     ('fake 帧序', check_fake_sequence),
     ('fake 动作记录', check_fake_actions),
     ('fake 帧目录', check_fake_dir),
-    ('python -O 防护', check_optimized_guard),
 ]
+if not os.environ.get('HUGOFGO_SELF_TEST_CHILD'):
+    CHECKS.append(('python -O 防护', check_optimized_guard))
 
 
 def self_test() -> int:

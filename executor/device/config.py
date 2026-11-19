@@ -71,4 +71,4 @@ class DeviceConfig:
                 raise DeviceError(f'设备配置的 {name} 必须是正整数，收到 {value!r}')
             object.__setattr__(self, name, number)
         if self.width is not None and self.height is not None:
-            validate_resolution(self.width, self.height)
+            validate_resolution(self.width, self.height, serial=self.serial)

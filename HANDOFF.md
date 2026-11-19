@@ -240,3 +240,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `python -m executor.device --self-test` 增至 15 项；`python -O` 下显式失败，避免 assert 被剥离后假通过。
 - 包入口与测试断言改为顺序无关；`docs/agents/triage-labels.md` 记录 `done` 为本仓库额外终态。
 - `npm run replay` 36/36，`npm run build` 与 `compileall` 通过。
+
+
+## 27. 设备网关第四轮收敛（票据 03，2026-11-20）
+
+- 分辨率支持集写进 `docs/requirements.md` F4.4 与 `docs/architecture.md` 2.2：16:9 横屏、相对误差 ≤1%，且不低于 1280×720；错误提示改为让用户把模拟器改成该范围，并带 serial。
+- 宽高比容差改为相对误差；1366×768、1920×1088（带系统栏）可通过，2340×1080、960×540 被拒绝。
+- `adb devices` 状态白名单补齐 `authorizing`、`connecting`、`rescue`、`host`、`unknown` 等合法状态。
+- `python -O` 自检防护改为子进程带 `HUGOFGO_SELF_TEST_CHILD`，即使守卫被删也只会导致外层断言失败，不会递归。
+- 自检 15 项全过；`npm run replay` 36/36。

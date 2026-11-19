@@ -16,7 +16,10 @@ from executor.device.png import png_size
 
 Runner = Callable[..., subprocess.CompletedProcess]
 _SIZE = re.compile(r'(\d+)x(\d+)')
-_DEVICE_LINE = re.compile(r'^(\S+)\s+(device|offline|unauthorized|recovery|sideload|bootloader|no permissions)\b')
+_DEVICE_LINE = re.compile(
+    r'^(\S+)\s+(device|offline|unauthorized|authorizing|connecting|recovery|rescue|sideload|bootloader|host|'
+    r'unknown|no permissions)\b'
+)
 
 ADB_TIMEOUT = 30.0
 
@@ -207,7 +210,7 @@ class AdbDevice:
                                   f'{output.strip() or "空"}）；请在 DeviceConfig 中设置 width/height，避免盲点')
             width, height = size
 
-        validate_resolution(width, height)
+        validate_resolution(width, height, serial=self.config.serial)
         density = parse_density(_text(self._run('shell', 'wm', 'density').stdout))
 
         return DeviceMetrics(serial=self.config.serial, width=width, height=height,
