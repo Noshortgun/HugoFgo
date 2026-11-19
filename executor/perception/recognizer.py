@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from executor.device.base import Frame
-from executor.perception.observation import Anchor, CardCandidate, Observation
+from executor.perception.observation import Anchor, CardCandidate, Observation, ScreenState
 from executor.perception.regions import cn
 
 TARGET_SIZE = (1280, 720)
@@ -98,13 +98,6 @@ def _contains(anchors: list[Anchor], needles: tuple[str, ...]) -> Anchor | None:
     return None
 
 
-def _find_all(anchors: list[Anchor], needles: tuple[str, ...]) -> list[Anchor]:
-    return [
-        anchor for anchor in anchors
-        if any(needle in anchor.text for needle in needles)
-    ]
-
-
 def _in_region(anchor: Anchor, region: tuple[int, int, int, int]) -> bool:
     x1, y1, x2, y2 = region
     return x1 <= anchor.x <= x2 and y1 <= anchor.y <= y2
@@ -141,10 +134,10 @@ def _read_cards(anchors: list[Anchor]) -> tuple[CardCandidate, ...]:
     return tuple(sorted(cards, key=lambda card: card.x))
 
 
-def _choose_state(anchors: list[Anchor], scores: dict[str, float]) -> tuple[str, float, bool]:
+def _choose_state(anchors: list[Anchor], scores: dict[str, float]) -> tuple[ScreenState, float, bool]:
     conflict = _contains(anchors, cn.CONFLICT_ANCHORS)
     if conflict is not None:
-        return 'unknown', conflict.confidence, True
+        return ScreenState.UNKNOWN, conflict.confidence, True
 
     for state, needles in (
         ('loading', cn.LOADING_ANCHORS),
@@ -157,13 +150,13 @@ def _choose_state(anchors: list[Anchor], scores: dict[str, float]) -> tuple[str,
     ):
         hit = _contains(anchors, needles)
         if hit is not None:
-            return state, hit.confidence, False
+            return ScreenState(state), hit.confidence, False
 
     for state in ('menu', 'battle', 'card', 'result'):
         if scores.get(state, 0.0) >= cn.TEMPLATE_THRESHOLD:
-            return state, scores[state], False
+            return ScreenState(state), scores[state], False
 
-    return 'unknown', max(scores.values(), default=0.0), True
+    return ScreenState.UNKNOWN, max(scores.values(), default=0.0), True
 
 
 class Perception:

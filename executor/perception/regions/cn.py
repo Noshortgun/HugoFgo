@@ -24,7 +24,7 @@ TEMPLATE_SPECS: dict[str, list[tuple[str, tuple[int, int, int, int]]]] = {
     ],
 }
 
-CONFLICT_ANCHORS = ('从者详情', '冠位编队')
+CONFLICT_ANCHORS = ('从者详情', '冠位编队', '撤退', '行动力回复')
 LOADING_ANCHORS = ('小贴士', '加载中')
 SUPPORT_ANCHORS = ('助战选择', '列表更新', '助战编队确认')
 TEAM_ANCHORS = ('队伍确认', '开始任务', '队伍编队')

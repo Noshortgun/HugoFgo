@@ -9,12 +9,36 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "cv"))
 
 import farm_ember as farm
 from image_io import read_image, write_image
 from state_classifier import load_templates, result_for_image
+from executor.device.base import Frame
+from executor.perception import Perception
+
+PERCEPTION_STATES = {
+    "01-daily-quest-list.png": "unknown",
+    "02-support-select.png": "support",
+    "03-team-confirm.png": "team",
+    "04-battle-wave1.png": "battle",
+    "05-skill.png": "battle",
+    "06-card-select.png": "card",
+    "07-battle-wave2.png": "battle",
+    "08-battle-wave3.png": "battle",
+    "09-skill-target.png": "battle",
+    "10-np-card-select.png": "card",
+    "11-np-selected.png": "card",
+    "12-battle-result-bond.png": "result",
+    "13-battle-result-exp.png": "result",
+    "14-drops.png": "result",
+    "15-return.png": "unknown",
+    "05-quest-start.png": "loading",
+    "01-gate.png": "support",
+    "07-battle-loading.png": "battle",
+}
 
 SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/key/02-support-select.png"
 GRAND_SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/34-grand-support-confirm.png"
@@ -45,6 +69,7 @@ def add_report(name, image, expected, actual, action, reason, ok, simulated_ocr=
 
 def check_classifications():
     templates = load_templates()
+    perception = Perception()
     labels = json.loads((ROOT / "cv/labels.json").read_text(encoding="utf-8"))
     cases = [(ROOT / "captures/2026-11-19-ember/key" / name, "unknown" if state == "other" else state)
              for name, state in labels.items()]
@@ -57,9 +82,18 @@ def check_classifications():
         output = result_for_image(path, templates)
         actual = output["state"] if output else "unreadable"
         ok = actual == expected
+        perception_state = PERCEPTION_STATES.get(path.name)
+        perception_reason = ""
+        if perception_state is not None:
+            observation = perception.read(Frame(
+                image=path.read_bytes(), width=1280, height=720, captured_at=0.0,
+            ))
+            perception_ok = observation.state == perception_state and observation.uncertain == (perception_state == "unknown")
+            perception_reason = f"perception={observation.state}/{observation.uncertain}"
+            ok = ok and perception_ok
         add_report(
             f"classify:{path.name}", path, expected, actual, "observe",
-            f"confidence={output['confidence']:.3f}" if output else "截图读取失败", ok,
+            (f"confidence={output['confidence']:.3f}" if output else "截图读取失败") + f"; {perception_reason}", ok,
         )
 
 

@@ -82,6 +82,24 @@ class PerceptionTest(unittest.TestCase):
         self.assertTrue(observation.uncertain)
         self.assertTrue(any('冠位编队' in anchor.text for anchor in observation.anchors))
 
+    def test_retreat_confirmation_is_unknown_and_uncertain(self):
+        observation = self.perception.read(frame_from(
+            ROOT / 'captures/2026-11-19-mystic/key/12-retreat-confirm.png'
+        ))
+
+        self.assertEqual('unknown', observation.state)
+        self.assertTrue(observation.uncertain)
+        self.assertTrue(any('撤退' in anchor.text for anchor in observation.anchors))
+
+    def test_ap_recovery_is_unknown_and_uncertain(self):
+        observation = self.perception.read(frame_from(
+            ROOT / 'captures/2026-11-19-ember/37-ap-recovery.png'
+        ))
+
+        self.assertEqual('unknown', observation.state)
+        self.assertTrue(observation.uncertain)
+        self.assertTrue(any('行动力回复' in anchor.text for anchor in observation.anchors))
+
 
 if __name__ == '__main__':
     unittest.main()

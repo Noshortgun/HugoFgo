@@ -306,3 +306,11 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 关键安全锚点（从者详情、冠位编队）强制返回 `unknown + uncertain`，不硬判成 support/team。
 - 新增 `captures/2026-11-19/key/01-main.png`（原 `01-main.png` 的 key 版本）用于 menu 离线验证。
 - 感知测试 6/6；既有回放 36/36；构建通过。未调用 adb、未读取作业、未实现状态机。
+
+
+## 35. 画面感知评审修复（票据 05A / #16，2026-11-20）
+
+- `Observation.state` 使用 `ScreenState` 枚举；移除未使用的锚点 helper。
+- 撤退确认、AP 恢复、从者详情、冠位编队优先归为 `unknown + uncertain`，避免“撤退会导致无法获得战利品”误判成 result。
+- `cv/replay.py` 在既有 36 条用例中并入新感知断言，不增加计数；`01-gate.png` 因完整助战锚点细化为 support。
+- 感知测试 8/8；回放 36/36；构建通过。
