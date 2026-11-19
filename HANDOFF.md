@@ -297,3 +297,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 
 - `strategy.servantOrderSlots` 与 `strategyByWave[*].servantOrderSlots` 也纳入空槽位校验；非法引用返回带 path 的诊断并拒绝生成计划。
 - 14 项领域测试通过；`npm run replay` 36/36。
+
+
+## 34. 画面感知适配器（票据 05A / #16，2026-11-20）
+
+- 新增 `executor/perception/`：`Perception.read(Frame) -> Observation`，输出状态、锚点、指令卡、面/回合、置信度与 `uncertain`。
+- 国服配置集中在 `regions/cn.py`：复用现有 OpenCV 模板与 RapidOCR，覆盖 menu / support / team / battle / card / result / loading / unknown。
+- 关键安全锚点（从者详情、冠位编队）强制返回 `unknown + uncertain`，不硬判成 support/team。
+- 新增 `captures/2026-11-19/key/01-main.png`（原 `01-main.png` 的 key 版本）用于 menu 离线验证。
+- 感知测试 6/6；既有回放 36/36；构建通过。未调用 adb、未读取作业、未实现状态机。
