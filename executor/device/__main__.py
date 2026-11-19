@@ -15,7 +15,9 @@ import zlib
 from pathlib import Path
 from unittest import mock
 
-from executor.device.adb import AdbDevice, list_devices, resolve_adb_path
+import executor.device as gateway
+from executor.device import adb as adb_module
+from executor.device.adb import ADB_TIMEOUT, AdbDevice, devices, parse_density, resolve_adb_path
 from executor.device.base import Device, DeviceError, Frame, to_device_point
 from executor.device.config import DeviceConfig, Region
 from executor.device.fake import FakeDevice
@@ -23,17 +25,22 @@ from executor.device.png import png_size
 
 
 class ScriptedRunner:
-    """按顺序回放 adb 调用结果，并记录每次的完整命令。"""
+    """按顺序回放 adb 调用结果或异常，并记录每次的完整命令与参数。"""
 
-    def __init__(self, *responses: tuple[int, bytes, bytes]):
+    def __init__(self, *responses: tuple[int, bytes, bytes] | Exception):
         self.responses = list(responses)
         self.calls: list[list[str]] = []
+        self.options: list[dict] = []
 
     def __call__(self, argv, **kwargs):
         self.calls.append(list(argv))
+        self.options.append(dict(kwargs))
         if not self.responses:
             raise AssertionError(f'意外的 adb 调用：{argv}')
-        code, stdout, stderr = self.responses.pop(0)
+        outcome = self.responses.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        code, stdout, stderr = outcome
         return subprocess.CompletedProcess(argv, code, stdout, stderr)
 
 
@@ -56,13 +63,13 @@ def make_png(width: int, height: int) -> bytes:
             + chunk(b'IDAT', zlib.compress(row * height)) + chunk(b'IEND', b''))
 
 
-def expect_error(action, *needles: str, error_type=Exception) -> None:
+def expect_error(action, *needles: str, error_type=Exception):
     try:
         action()
     except error_type as error:
         for needle in needles:
             assert needle in str(error), f'错误消息缺少 {needle!r}：{error}'
-        return
+        return error
     raise AssertionError(f'应当抛出错误，消息含 {needles!r}')
 
 
@@ -72,8 +79,8 @@ def check_region() -> None:
     assert Region.parse('国服') is Region.CN
     assert Region.parse(Region.JP) is Region.JP
     assert Region.CN.label == '国服'
-    expect_error(lambda: Region.parse('EU'), 'EU', error_type=ValueError)
-    expect_error(lambda: Region.parse('EU'), 'CN', error_type=ValueError)
+    expect_error(lambda: Region.parse('EU'), 'EU', error_type=DeviceError)
+    expect_error(lambda: Region.parse('EU'), 'CN', error_type=DeviceError)
 
 
 def check_config() -> None:
@@ -87,10 +94,13 @@ def check_config() -> None:
     assert config.adb_path is None
     assert (config.width, config.height) == (1280, 720)
 
-    expect_error(lambda: DeviceConfig(serial='  '), 'serial', error_type=ValueError)
-    expect_error(lambda: DeviceConfig(serial='x', width=1280), 'width', error_type=ValueError)
-    expect_error(lambda: DeviceConfig(serial='x', width=0, height=720), 'width', error_type=ValueError)
-    expect_error(lambda: DeviceConfig(serial='x', region='EU'), 'EU', error_type=ValueError)
+    expect_error(lambda: DeviceConfig(serial='  '), 'serial', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', width=1280), 'width', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', width=0, height=720), 'width', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', region='EU'), 'EU', error_type=DeviceError)
+    expect_error(lambda: DeviceConfig(serial='x', width='abc', height=720), 'width', error_type=DeviceError)
+
+    assert not issubclass(DeviceError, ValueError), '调用方只需捕获 DeviceError，配置错误不应再走 ValueError'
 
 
 def check_adb_resolution() -> None:
@@ -110,11 +120,96 @@ def check_adb_resolution() -> None:
             'HUGOFGO_ADB', error_type=DeviceError,
         )
         assert resolve_adb_path(None, env={}, which=lambda _: str(adb), candidates=()) == str(adb)
-        expect_error(
+        missing_device = expect_error(
             lambda: resolve_adb_path(None, env={}, which=lambda _: None, candidates=()),
             'HUGOFGO_ADB', error_type=DeviceError,
         )
+        assert 'adb_path' in str(missing_device) and '--list' not in str(missing_device)
+
+        missing_list = expect_error(
+            lambda: resolve_adb_path(None, env={}, which=lambda _: None, candidates=(), for_list=True),
+            'HUGOFGO_ADB', '--adb', error_type=DeviceError,
+        )
+        assert '--list' in str(missing_list)
+
         assert resolve_adb_path(str(adb), env={'HUGOFGO_ADB': str(missing)}, which=lambda _: None) == str(adb)
+
+
+def check_density() -> None:
+    assert parse_density('Physical density: 320\nOverride density: 440\n') == 440
+    assert parse_density('Override density: 440\nPhysical density: 320\n') == 440
+    assert parse_density('Physical density: 320\n') == 320
+    assert parse_density('') is None
+    assert parse_density('garbage') is None
+    assert not hasattr(adb_module, 'parse_last_number'), '应只保留诚实的 parse_density'
+
+    with tempfile.TemporaryDirectory() as directory:
+        adb = Path(directory) / 'adb.exe'
+        adb.write_bytes(b'')
+        runner = ScriptedRunner(
+            adb_ok(b'device\n'),
+            adb_ok(b'Physical size: 1920x1080\nOverride size: 1280x720\n'),
+            adb_ok(b'Physical density: 320\nOverride density: 440\n'),
+        )
+        device = AdbDevice(DeviceConfig(serial='emu', adb_path=str(adb)), runner=runner)
+        assert device.metrics().density == 440
+
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 1920x1080\n'),
+                                adb_ok(b'Physical density: 320\n'))
+        device = AdbDevice(DeviceConfig(serial='emu', adb_path=str(adb)), runner=runner)
+        assert device.metrics().density == 320
+
+
+def check_adb_timeouts() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        adb = Path(directory) / 'adb.exe'
+        adb.write_bytes(b'')
+        timeout = subprocess.TimeoutExpired(['adb'], ADB_TIMEOUT)
+
+        runner = ScriptedRunner(timeout)
+        device = AdbDevice(DeviceConfig(serial='emulator-5554', adb_path=str(adb)), runner=runner)
+        expect_error(device.metrics, 'emulator-5554', 'get-state', f'{ADB_TIMEOUT:g}', error_type=DeviceError)
+        assert runner.options[0]['timeout'] == ADB_TIMEOUT
+
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical density: 320\n'), timeout)
+        device = AdbDevice(DeviceConfig(serial='dev-tap', adb_path=str(adb), width=1280, height=720), runner=runner)
+        device.metrics()
+        expect_error(lambda: device.tap(10, 10), 'dev-tap', 'input tap', f'{ADB_TIMEOUT:g}', error_type=DeviceError)
+        assert runner.options[-1]['timeout'] == ADB_TIMEOUT
+
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical density: 320\n'), timeout)
+        device = AdbDevice(DeviceConfig(serial='dev-shot', adb_path=str(adb), width=1280, height=720), runner=runner)
+        device.metrics()
+        expect_error(device.frame, 'dev-shot', 'screencap', f'{ADB_TIMEOUT:g}', error_type=DeviceError)
+        assert runner.options[-1]['timeout'] == ADB_TIMEOUT
+
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 1280x720\n'), timeout)
+        device = AdbDevice(DeviceConfig(serial='dev-density', adb_path=str(adb)), runner=runner)
+        expect_error(device.metrics, 'dev-density', 'wm density', f'{ADB_TIMEOUT:g}', error_type=DeviceError)
+
+        runner = ScriptedRunner(timeout)
+        expect_error(lambda: devices(str(adb), runner=runner), 'devices -l', f'{ADB_TIMEOUT:g}',
+                     error_type=DeviceError)
+        assert runner.options[0]['timeout'] == ADB_TIMEOUT
+
+        runner = ScriptedRunner(adb_fail('error: cannot connect to daemon'))
+        expect_error(lambda: devices(str(adb), runner=runner), 'devices -l', 'cannot connect',
+                     error_type=DeviceError)
+
+
+def check_discovery() -> None:
+    assert gateway.devices is devices, '设备发现只保留一个实现，并从包入口导出'
+    with tempfile.TemporaryDirectory() as directory:
+        adb = Path(directory) / 'adb.exe'
+        adb.write_bytes(b'')
+        runner = ScriptedRunner(adb_ok(b'List of devices attached\nemulator-5554\tdevice model:Pixel_5\n'
+                                       b'127.0.0.1:16384\toffline\n'))
+        found = devices(str(adb), runner=runner)
+        assert [(item.serial, item.state, item.model) for item in found] == [
+            ('emulator-5554', 'device', 'Pixel 5'),
+            ('127.0.0.1:16384', 'offline', None),
+        ]
+        assert runner.calls == [[str(adb), 'devices', '-l']]
 
 
 def check_scale() -> None:
@@ -180,7 +275,8 @@ def check_adb_errors() -> None:
 
         runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'garbage\n'))
         device = AdbDevice(config, runner=runner)
-        expect_error(device.metrics, '分辨率', error_type=DeviceError)
+        error = expect_error(device.metrics, '分辨率', 'DeviceConfig', 'width', error_type=DeviceError)
+        assert '--width' not in str(error)
 
 
 def check_adb_actions() -> None:
@@ -239,7 +335,8 @@ def check_adb_frame() -> None:
             DeviceConfig(serial='emulator-5554', adb_path=str(adb), width=1600, height=900), runner=runner,
         )
         device.metrics()
-        expect_error(device.frame, '1280×720', '1600×900', error_type=DeviceError)
+        error = expect_error(device.frame, '1280×720', '1600×900', 'DeviceConfig', error_type=DeviceError)
+        assert '--width' not in str(error)
 
         png = make_png(1280, 720)
         assert png_size(png) == (1280, 720)
@@ -260,7 +357,8 @@ def check_fake_sequence() -> None:
     expect_error(device.frame, '帧', '2', error_type=DeviceError)
 
     small = Frame(image=make_png(640, 360), width=640, height=360, captured_at=3.0)
-    expect_error(lambda: FakeDevice([first, small]), '分辨率', error_type=ValueError)
+    expect_error(lambda: FakeDevice([first, small]), '分辨率', error_type=DeviceError)
+    expect_error(lambda: FakeDevice([first], frame_dir='.'), '只能给出一个', error_type=DeviceError)
 
     empty = FakeDevice(config=DeviceConfig(serial='tap-only', width=1280, height=720))
     assert empty.metrics().serial == 'tap-only'
@@ -278,10 +376,12 @@ def check_fake_actions() -> None:
         device.swipe(100, 200, 300, 400)
         device.swipe(10, 20, 1278, 718, duration_ms=900)
     assert device.actions == [
-        {'action': 'tap', 'x': 960, 'y': 540},
-        {'action': 'tap', 'x': 0, 'y': 1079},
-        {'action': 'swipe', 'x1': 150, 'y1': 300, 'x2': 450, 'y2': 600, 'duration_ms': 350},
-        {'action': 'swipe', 'x1': 15, 'y1': 30, 'x2': 1917, 'y2': 1077, 'duration_ms': 900},
+        {'action': 'tap', 'x': 640, 'y': 360, 'device_x': 960, 'device_y': 540},
+        {'action': 'tap', 'x': -10, 'y': 5000, 'device_x': 0, 'device_y': 1079},
+        {'action': 'swipe', 'x1': 100, 'y1': 200, 'x2': 300, 'y2': 400,
+         'device_x1': 150, 'device_y1': 300, 'device_x2': 450, 'device_y2': 600, 'duration_ms': 350},
+        {'action': 'swipe', 'x1': 10, 'y1': 20, 'x2': 1278, 'y2': 718,
+         'device_x1': 15, 'device_y1': 30, 'device_x2': 1917, 'device_y2': 1077, 'duration_ms': 900},
     ]
     assert device.metrics().region is Region.JP
 
@@ -307,6 +407,9 @@ CHECKS = [
     ('基准坐标换算与钳制', check_scale),
     ('adb 定位优先级', check_adb_resolution),
     ('adb 分辨率读取', check_adb_metrics),
+    ('adb 密度解析', check_density),
+    ('adb 调用超时', check_adb_timeouts),
+    ('设备发现入口', check_discovery),
     ('adb 离线与命令失败上下文', check_adb_errors),
     ('adb 点击与滑动换算', check_adb_actions),
     ('adb 截图校验', check_adb_frame),
@@ -335,14 +438,14 @@ def self_test() -> int:
 
 def list_command(adb_path: str | None) -> int:
     try:
-        devices = list_devices(adb_path)
+        found = devices(adb_path)
     except DeviceError as error:
         print(f'设备错误：{error}', file=sys.stderr)
         return 2
-    if not devices:
+    if not found:
         print('没有找到 adb 设备；请启动模拟器，并确认 adb devices 能看到它')
         return 1
-    for info in devices:
+    for info in found:
         print('\t'.join([info.serial, info.state, info.model or '']))
     return 0
 

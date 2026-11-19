@@ -37,7 +37,7 @@
 
 ### 2.2 设备网关 Device Gateway
 
-- **接口**：`devices()`、`metrics(serial)`、`frame(serial)`、`tap(serial, 点)`、`swipe(serial, 起止)`。
+- **接口**：`devices()`（设备发现）+ `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`；坐标参数是 1280×720 基准，serial 与区服属于 `DeviceConfig`。
 - **实现**：adb 发现与路径解析、坐标基准换算、截图校验、超时与错误上下文、设备配置（含区服）。
 - **适配器**：adb（实机）与 fake（回放喂截图、记录动作）。这是真实存在的缝，因为有两个适配器。
 - **区服**：区服是设备的属性（ADR-0003），设备配置决定后续加载哪套识别配置与图库。

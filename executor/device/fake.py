@@ -13,7 +13,7 @@ class FakeDevice:
     def __init__(self, frames: Sequence[Frame] | None = None, *, frame_dir: str | Path | None = None,
                  config: DeviceConfig | None = None):
         if frames is not None and frame_dir is not None:
-            raise ValueError('FakeDevice 的 frames 与 frame_dir 只能给出一个')
+            raise DeviceError('FakeDevice 的 frames 与 frame_dir 只能给出一个')
         if frame_dir is not None:
             frames = load_frames(frame_dir)
         self.frames = tuple(frames or ())
@@ -26,8 +26,8 @@ class FakeDevice:
             width, height = self.frames[0].width, self.frames[0].height
             for index, frame in enumerate(self.frames):
                 if (frame.width, frame.height) != (width, height):
-                    raise ValueError(f'FakeDevice 第 {index + 1} 帧分辨率 {frame.width}×{frame.height} '
-                                     f'与首帧 {width}×{height} 不一致')
+                    raise DeviceError(f'FakeDevice 第 {index + 1} 帧分辨率 {frame.width}×{frame.height} '
+                                      f'与首帧 {width}×{height} 不一致')
         elif config is not None and config.width is not None:
             width, height = config.width, config.height
         else:
@@ -58,13 +58,14 @@ class FakeDevice:
 
     def tap(self, x: int, y: int) -> None:
         px, py = to_device_point(x, y, self.width, self.height)
-        self.actions.append({'action': 'tap', 'x': px, 'y': py})
+        self.actions.append({'action': 'tap', 'x': int(x), 'y': int(y), 'device_x': px, 'device_y': py})
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 350) -> None:
         start = to_device_point(x1, y1, self.width, self.height)
         end = to_device_point(x2, y2, self.width, self.height)
-        self.actions.append({'action': 'swipe', 'x1': start[0], 'y1': start[1], 'x2': end[0], 'y2': end[1],
-                             'duration_ms': int(duration_ms)})
+        self.actions.append({'action': 'swipe', 'x1': int(x1), 'y1': int(y1), 'x2': int(x2), 'y2': int(y2),
+                             'device_x1': start[0], 'device_y1': start[1],
+                             'device_x2': end[0], 'device_y2': end[1], 'duration_ms': int(duration_ms)})
 
 
 def load_frames(directory: str | Path) -> list[Frame]:

@@ -36,7 +36,7 @@ class Region(str, Enum):
             if text.upper() == region.value or text == region.label:
                 return region
         options = '、'.join(f'{region.value}（{region.label}）' for region in cls)
-        raise ValueError(f'未知区服 {value!r}；可选 {options}')
+        raise DeviceError(f'未知区服 {value!r}；可选 {options}')
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,25 @@ from executor.device.png import png_size
 Runner = Callable[..., subprocess.CompletedProcess]
 _SIZE = re.compile(r'(\d+)x(\d+)')
 
-ADB_MISSING = '未找到 adb：请安装 Android platform-tools，或用 --adb / 环境变量 HUGOFGO_ADB 指定 adb.exe 路径'
+ADB_TIMEOUT = 30.0
+
+
+def _adb_missing(for_list: bool) -> DeviceError:
+    if for_list:
+        return DeviceError('未找到 adb：请安装 Android platform-tools，或在 --list 时用 --adb 指定 adb.exe 路径，'
+                           '或设置环境变量 HUGOFGO_ADB 指向 adb.exe')
+    return DeviceError('未找到 adb：请安装 Android platform-tools，或在 DeviceConfig 中设置 adb_path，'
+                       '或设置环境变量 HUGOFGO_ADB 指向 adb.exe')
+
+
+def _timeout_error(command: str, seconds: float, serial: str | None = None) -> DeviceError:
+    who = f'设备 {serial} 的 adb 命令' if serial else 'adb 命令'
+    return DeviceError(f'{who}超时（{seconds:g} 秒）：{command}')
+
+
+def _command_failed(command: str, result: subprocess.CompletedProcess) -> DeviceError:
+    stderr = _text(result.stderr).strip() or _text(result.stdout).strip() or '无输出'
+    return DeviceError(f'adb 命令失败（退出码 {result.returncode}）：{command}；{stderr}')
 
 
 def _common_candidates() -> list[str]:
@@ -34,13 +52,14 @@ def _common_candidates() -> list[str]:
 
 def resolve_adb_path(explicit: str | None = None, *, env: Mapping[str, str] | None = None,
                      which: Callable[[str], str | None] = shutil.which,
-                     candidates: Sequence[str] | None = None) -> str:
+                     candidates: Sequence[str] | None = None, for_list: bool = False) -> str:
     """按配置路径 → HUGOFGO_ADB → PATH → 常见模拟器路径的顺序定位 adb。"""
     if explicit and explicit.strip():
         path = Path(explicit.strip()).expanduser()
         if path.is_file():
             return str(path)
-        raise DeviceError(f'配置的 adb 路径不存在：{explicit}；请检查 --adb 或设备配置中的 adb_path')
+        raise DeviceError(f'配置的 adb 路径不存在：{explicit}；请检查 DeviceConfig 的 adb_path，'
+                          '--list 场景可用 --adb 指定')
 
     env = os.environ if env is None else env
     from_env = env.get('HUGOFGO_ADB', '').strip()
@@ -57,7 +76,7 @@ def resolve_adb_path(explicit: str | None = None, *, env: Mapping[str, str] | No
         if Path(candidate).is_file():
             return candidate
 
-    raise DeviceError(ADB_MISSING)
+    raise _adb_missing(for_list)
 
 
 def _text(data: bytes | str | None) -> str:
@@ -83,9 +102,21 @@ def parse_size(text: str) -> tuple[int, int] | None:
     return overridden or physical
 
 
-def parse_last_number(text: str) -> int | None:
-    match = re.findall(r'\d+', text)
-    return int(match[-1]) if match else None
+def parse_density(text: str) -> int | None:
+    """解析 wm density；模拟器可能同时上报 Physical 与 Override，优先 Override。"""
+    physical = overridden = fallback = None
+    for line in text.splitlines():
+        numbers = re.findall(r'\d+', line)
+        if not numbers:
+            continue
+        value = int(numbers[-1])
+        if 'Override density' in line:
+            overridden = value
+        elif 'Physical density' in line:
+            physical = value
+        elif fallback is None:
+            fallback = value
+    return overridden if overridden is not None else physical if physical is not None else fallback
 
 
 @dataclass(frozen=True)
@@ -95,22 +126,29 @@ class DeviceInfo:
     model: str | None
 
 
-def list_devices(adb_path: str | None = None) -> list[DeviceInfo]:
-    """列出 adb 设备；--list 使用，需要 adb 可用。"""
-    adb = resolve_adb_path(adb_path)
-    result = subprocess.run([adb, 'devices', '-l'], capture_output=True, check=False)
+def devices(adb_path: str | None = None, *, runner: Runner = subprocess.run) -> list[DeviceInfo]:
+    """列出 adb 设备；这是架构 2.2 的设备发现入口，需要 adb 可用。"""
+    adb = resolve_adb_path(adb_path, for_list=True)
+    argv = [adb, 'devices', '-l']
+    command = ' '.join(argv)
+    try:
+        result = runner(argv, capture_output=True, check=False, timeout=ADB_TIMEOUT)
+    except subprocess.TimeoutExpired as error:
+        seconds = error.timeout if error.timeout is not None else ADB_TIMEOUT
+        raise _timeout_error(command, seconds) from error
+    except OSError as error:
+        raise DeviceError(f'无法启动 adb（{adb}）：{error}；请用 --adb 指定 adb.exe 路径') from error
     if result.returncode != 0:
-        stderr = _text(result.stderr).strip()
-        raise DeviceError(f'adb 命令失败（退出码 {result.returncode}）：{adb} devices -l；{stderr or "无输出"}')
+        raise _command_failed(command, result)
 
-    devices: list[DeviceInfo] = []
+    found: list[DeviceInfo] = []
     for line in _text(result.stdout).splitlines()[1:]:
         parts = line.split()
         if len(parts) < 2:
             continue
         model = next((part[len('model:'):].replace('_', ' ') for part in parts[2:] if part.startswith('model:')), None)
-        devices.append(DeviceInfo(serial=parts[0], state=parts[1], model=model))
-    return devices
+        found.append(DeviceInfo(serial=parts[0], state=parts[1], model=model))
+    return found
 
 
 class AdbDevice:
@@ -135,7 +173,8 @@ class AdbDevice:
         metrics = self.metrics()
         if (width, height) != (metrics.width, metrics.height):
             raise DeviceError(f'设备 {self.config.serial} 截图分辨率 {width}×{height} 与设备分辨率 '
-                              f'{metrics.width}×{metrics.height} 不一致；请重新读取设备信息，或用 --width/--height 校正')
+                              f'{metrics.width}×{metrics.height} 不一致；请重新读取设备信息，'
+                              '或在 DeviceConfig 中设置 width/height 校正')
         return Frame(image=data, width=width, height=height, captured_at=time.time())
 
     def tap(self, x: int, y: int) -> None:
@@ -162,24 +201,25 @@ class AdbDevice:
             size = parse_size(output)
             if size is None:
                 raise DeviceError(f'无法从设备 {self.config.serial} 读取分辨率（wm size 输出：'
-                                  f'{output.strip() or "空"}）；请用 --width/--height 指定，避免盲点')
+                                  f'{output.strip() or "空"}）；请在 DeviceConfig 中设置 width/height，避免盲点')
             width, height = size
 
-        try:
-            density = parse_last_number(_text(self._run('shell', 'wm', 'density').stdout))
-        except DeviceError:
-            density = None
+        density = parse_density(_text(self._run('shell', 'wm', 'density').stdout))
 
         return DeviceMetrics(serial=self.config.serial, width=width, height=height,
                              density=density, region=self.config.region)
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
         argv = [self.adb_path, '-s', self.config.serial, *args]
+        command = ' '.join(argv)
         try:
-            result = self._runner(argv, capture_output=True, check=False)
+            result = self._runner(argv, capture_output=True, check=False, timeout=ADB_TIMEOUT)
+        except subprocess.TimeoutExpired as error:
+            seconds = error.timeout if error.timeout is not None else ADB_TIMEOUT
+            raise _timeout_error(command, seconds, self.config.serial) from error
         except OSError as error:
-            raise DeviceError(f'无法启动 adb（{self.adb_path}）：{error}；请检查路径或用 --adb 指定') from error
+            raise DeviceError(f'无法启动 adb（{self.adb_path}）：{error}；'
+                              '请检查 DeviceConfig 的 adb_path 或环境变量 HUGOFGO_ADB') from error
         if result.returncode != 0:
-            stderr = _text(result.stderr).strip() or _text(result.stdout).strip() or '无输出'
-            raise DeviceError(f'adb 命令失败（退出码 {result.returncode}）：{" ".join(argv)}；{stderr}')
+            raise _command_failed(command, result)
         return result

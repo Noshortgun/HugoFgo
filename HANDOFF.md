@@ -210,3 +210,14 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 自检：`python -m executor.device --self-test` 共 11 项，不依赖真机（adbd 调用由脚本化 runner 回放）。`--list` 需要真机，已在本机 adb 上只读验证。
 - 区服只作为设备配置存在，识别规则留给票据 13。读不到分辨率、截图与设备分辨率不一致、无效 PNG、adb 非零退出与设备离线都抛带 serial / 命令 / stderr 的 `DeviceError`，不盲点。
 - 未修改 `scripts/farm_ember.py`、`src-tauri/src/device.rs` 与旧回放；`npm run replay` 仍 36/36。
+
+
+## 24. 设备网关评审修复（票据 03，2026-11-19）
+
+- adb 调用统一加常数超时 `ADB_TIMEOUT = 30s`（`devices -l`、`get-state`、`wm size/density`、截图、tap/swipe），捕获 `subprocess.TimeoutExpired` 后抛带 serial、命令与超时值的 `DeviceError`；`wm density` 失败不再被静默吞掉。
+- `wm density` 优先 `Override density:`，函数改名 `parse_density`；`wm size` 提示与截图分辨率不一致的提示改为在 `DeviceConfig` 设置 width/height，不再声称 CLI 有 `--width/--height`。`ADB_MISSING` 区分设备运行（`adb_path` / `HUGOFGO_ADB`）与 `--list`（`--adb`）两种场景。
+- 设备层配置、区服解析、`FakeDevice` 构造错误统一为 `DeviceError`，调用方只需捕获一种异常；合法输入行为不变。
+- `FakeDevice.actions` 同时记录 1280×720 基准坐标（`x/y/x1…`，调用者语义）与换算后的设备像素（`device_x/device_y/device_x1…`），仍不调用外部进程。
+- `list_devices` 改名 `devices` 并从 `executor/device/__init__.py` 导出，作为架构 2.2 的设备发现入口；`docs/architecture.md` 2.2 接口行同步为 `devices()` + `Device` 四操作。
+- adb 失败消息收敛到一个内部帮助函数，`devices` 与 `AdbDevice._run` 共用。
+- `python -m executor.device --self-test` 由 11 项扩到 14 项（新增密度解析、调用超时、设备发现入口）；`npm run replay` 仍 36/36，`python -m compileall -q executor` 通过。
