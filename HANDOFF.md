@@ -192,3 +192,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 文档：`docs/requirements.md` 第 7 节记录全部已确认决策；`docs/architecture.md` 为目标架构；`GLOSSARY.md` 新增区服与恢复策略。
 
 票据重排为 13 张：01 工程基线 → 02 行为基线 → 03 设备网关 / 04 作业编译 / 09 存储与资源迁移 → 05 状态机执行器 → 06 补刀策略 / 07 AP 恢复与运行设置 → 08 桌面运行桥接 → 10 运行记录 / 11 打包分发 → 12 实机验收 → 13 日服台服（后续）。同时清理了重编号遗留的重复票据文件。
+
+
+## 22. 工程基线落地与项目改名（2026-11-19）
+
+- git 初始化（main），首次提交 `7ac34db`，已 rebase 到远端现有 LICENSE 提交之上；remote 指向 `Noshortgun/HugoFgo`，**尚未 push**。
+- `npm run replay` 统一入口（`scripts/replay.mjs`），36/36 通过；`vue-tsc && vite build` 通过。
+- 忽略规则：图库、原始元数据、`logs/`、过程截图、`public/assets/` 不入库；关键帧与回放引用的故障截图入库（34 张）。
+- 全项目改名 FateFlow → HugoFgo：品牌字符串、`HugoFgoJob` 类型、`HUGOFGO_*` 环境变量、`hugofgo.*` 本地存储键、Cargo/包名、Tauri 标识符、脚本与示例作业文件名。
+- 公开仓库素材策略：`public/assets/` 游戏立绘不随仓库分发（README 免责声明说明版权与用途）；截图保留用于回放。
+- 已知影响：本地存储键改名会让收藏从者与常用礼装偏好重置一次；旧的 `FATEFLOW_*` 环境变量不再被读取。

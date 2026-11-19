@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress（除首次提交外均完成，待 git 署名）
+**Status:** done（2026-11-19；git 基线、回放入口、忽略规则、README 完成）
 
 - [ ] 初始化 git 仓库并完成首次提交，提交前确认忽略规则覆盖依赖目录、构建产物、运行日志与临时截图
 - [ ] 确定 `captures/` 素材的版本策略（真实故障截图必须入库，大批量调试图不入库），并写进忽略规则
