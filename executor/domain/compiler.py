@@ -38,6 +38,14 @@ def _formation_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> dict
     return slots
 
 
+def _check_strategy_slots(strategy: dict[str, Any], path: str, formation: dict[int, str],
+                          diagnostics: list[Diagnostic], wave: int | None = None) -> None:
+    for index, slot in enumerate(strategy.get('servantOrderSlots') or []):
+        if not formation.get(slot):
+            _diagnostic(diagnostics, f'{path}.servantOrderSlots[{index}]',
+                        f'补刀策略引用了空槽位：{slot} 号位没有从者', wave)
+
+
 def _check_slot(action: dict[str, Any], key: str, action_path: str, wave: int, turn: int,
                 formation: dict[int, str], diagnostics: list[Diagnostic]) -> None:
     value = action.get(key)
@@ -135,6 +143,10 @@ def compile_job(text: str) -> CompileResult:
         return CompileResult(None, diagnostics)
 
     formation = _formation_slots(raw, diagnostics)
+    _check_strategy_slots(raw['strategy'], '$.strategy', formation, diagnostics)
+    for wave_text, strategy in (raw.get('strategyByWave') or {}).items():
+        if strategy is not None:
+            _check_strategy_slots(strategy, f'$.strategyByWave.{wave_text}', formation, diagnostics, int(wave_text))
     waves = tuple(
         _compile_wave(wave, index, formation, diagnostics)
         for index, wave in enumerate(raw['waves'])

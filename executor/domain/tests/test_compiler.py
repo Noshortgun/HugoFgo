@@ -151,6 +151,21 @@ class CompileJobTest(unittest.TestCase):
         self.assertIsNone(result.plan)
         self.assertEqual(['$.formation[0].name'], [diagnostic.path for diagnostic in result.diagnostics])
 
+    def test_fallback_strategy_rejects_empty_slots(self):
+        job = self.valid_job()
+        job['strategy']['servantOrderSlots'] = [4]
+        job['strategyByWave'] = {
+            '1': {**job['strategy'], 'servantOrderSlots': [4]},
+        }
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        paths = {diagnostic.path for diagnostic in result.diagnostics}
+        self.assertIn('$.strategy.servantOrderSlots[0]', paths)
+        self.assertIn('$.strategyByWave.1.servantOrderSlots[0]', paths)
+        self.assertTrue(all('空槽位' in diagnostic.message for diagnostic in result.diagnostics))
+
     def test_cli_reports_diagnostics_and_exits_2(self):
         result = subprocess.run(
             [sys.executable, '-B', '-m', 'executor.domain',
