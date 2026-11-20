@@ -12,6 +12,7 @@
     "resources:check": "node scripts/resources.mjs check",
     "resources:update": "node scripts/resources.mjs update",
     "resources:verify": "node scripts/resources.mjs verify",
+    "preflight": "node scripts/preflight.mjs",
     "replay": "node scripts/replay.mjs",
     "test": "node scripts/replay.mjs"
   },

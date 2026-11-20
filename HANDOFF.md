@@ -297,3 +297,18 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 
 - `strategy.servantOrderSlots` 与 `strategyByWave[*].servantOrderSlots` 也纳入空槽位校验；非法引用返回带 path 的诊断并拒绝生成计划。
 - 14 项领域测试通过；`npm run replay` 36/36。
+
+## 34. 工程预检与实机操作安全门（2026-11-20，#22）
+
+新增 `npm run preflight`（`scripts/preflight.mjs`），在任何实施或实机会话前判断环境是否适合继续。
+
+- 仓库检查：当前分支、与上游/`origin/main` 的领先落后数量、已跟踪文件的未提交改动。`main`、`prototype/*` 等非施工分支默认阻断，确认后加 `--allow-branch`；分离 HEAD 同样需要确认。
+- 回放环境：实际用 `-c` 验证解释器是 Python，再导入 `cv2`、`numpy`、`rapidocr_onnxruntime`；检查 `cv/templates/*.png` 与 `cv/labels.json`。缺失时给出可直接执行的 pip 或建虚拟环境命令。
+- 设备：adb 定位、设备列表与连接状态（含 offline/unauthorized 残留）、1280×720 分辨率校验；支持 `--serial`。
+- 外部自动化：扫描 BBChannel、FGA、FGO-py、AutoFGO 与本项目 `farm_ember.py` 进程，按可执行文件名匹配，避免把日志路径误报为进程。
+- 安全门：预检本身完全只读，不发送任何实机输入（实机操作只走 Python 执行器）。`--live` 表示进入实机会话，此时外部自动化冲突、进程扫描失败、多设备未指定 `--serial` 或设备未就绪均阻断。`--offline` 用于纯代码实施，跳过设备与进程检查。
+- 输出：文本或 `--json`；退出码 0/1/2；每个阻断项附下一条可执行命令。
+
+共享模块：`scripts/python-env.mjs`（解释器解析与 pip 安装命令）、`scripts/adb.mjs`（adb 定位与只读查询）、`scripts/automation-processes.mjs`（外部自动化进程扫描与匹配）由 `replay.mjs`、`device.mjs` 与预检共用。
+
+验证：`npm run replay` 36/36；`npm run build` 通过。手工覆盖分支阻断、确认继续、坏 adb 路径、非 Python 解释器、空虚拟环境缺依赖、offline 设备、外部进程检测与 `--live` 拦截。
