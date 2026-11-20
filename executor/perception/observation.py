@@ -16,8 +16,11 @@ class ScreenState(str, Enum):
     """
 
     SUPPORT = 'support'
+    SUPPORT_GRAND = 'support_grand'  # 冠位助战：礼装在头像右侧单开一区（1-3 格）
     SUPPORT_CONFIRM = 'support_confirm'
+    SUPPORT_PARTY_CONFIRM = 'support_party_confirm'  # 助战编队确认屏，顶部有“冠位编队”切换按钮
     TEAM = 'team'
+    TEAM_GRAND = 'team_grand'  # 冠位战队伍确认：卡片更宽、顶部有“受限”
     BATTLE = 'battle'
     CARD = 'card'
     RESULT = 'result'

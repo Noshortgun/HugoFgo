@@ -39,6 +39,9 @@ EXPECTED_STATES = {
     '55-battle-menu': 'battle_menu',
     '60-current-master-expanded': 'master_skills',
     '12-battle-start': 'loading',
+    'support-party-confirm': 'support_party_confirm',
+    'grand-team': 'team_grand',
+    'support-grand': 'support_grand',
 }
 
 _observations: dict[str, object] = {}

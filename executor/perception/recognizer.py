@@ -38,7 +38,10 @@ ORDER: tuple[ScreenState, ...] = (
     ScreenState.AP_RECOVERY,
     ScreenState.REPEAT_DIALOG,
     ScreenState.SUPPORT_CONFIRM,
+    ScreenState.SUPPORT_PARTY_CONFIRM,
+    ScreenState.SUPPORT_GRAND,
     ScreenState.SUPPORT,
+    ScreenState.TEAM_GRAND,
     ScreenState.TEAM,
     ScreenState.DROPS,
     ScreenState.RESULT,
@@ -168,20 +171,18 @@ def _template_score(image: np.ndarray, state: ScreenState) -> float:
 
 def _detect_state(image: np.ndarray) -> tuple[ScreenState, float]:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    best_state = ScreenState.UNKNOWN
-    best_score = 0.0
+    # 按优先级取第一个达标的：覆盖层必须先于底层，不能单纯比分数
     for state in ORDER:
         if state not in _load_templates():
             continue
         score = _template_score(gray, state)
         if state is ScreenState.MASTER_SKILLS:
-            # 御主技能展开没有专属文字，用图标槽亮度补充判定
             if not _master_skills_open(image):
                 continue
             score = max(score, TEMPLATE_THRESHOLD)
-        if score >= TEMPLATE_THRESHOLD and score > best_score:
-            best_state, best_score = state, score
-    return best_state, best_score
+        if score >= TEMPLATE_THRESHOLD:
+            return state, score
+    return ScreenState.UNKNOWN, 0.0
 
 
 def _master_skills_open(image: np.ndarray) -> bool:
@@ -366,6 +367,11 @@ def _fields_for(state: ScreenState, anchors: tuple[Anchor, ...],
                          and abs((a.box[1] + a.box[3]) / 2 - (cost.box[1] + cost.box[3]) / 2) < 30]
                 if right:
                     fields['ap_cost'] = int(min(right, key=lambda a: a.box[0]).text.strip())
+
+    elif state is ScreenState.SUPPORT_GRAND:
+        # 冠位从者同时只能展示 1 张礼装，3 张循环播放：
+        # 单帧只能看到其中一张，要靠多帧采样或读礼装名才能确认。
+        fields['ce_rotating'] = True
 
     elif state is ScreenState.AP_RECOVERY:
         fields['items'] = [name for name in AP_ITEMS if _find(anchors, name)]

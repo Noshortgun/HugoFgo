@@ -28,6 +28,9 @@ SIGNATURES = {
     'class_info': ('09-class-filter', (375, 122, 470, 160)),
     'battle_menu': ('55-battle-menu', (745, 205, 1085, 290)),
     'loading': ('12-battle-start', (555, 160, 725, 225)),
+    'support_party_confirm': ('34-grand-support-confirm', (695, 15, 795, 60)),
+    'team_grand': ('165-grand-team', (595, 28, 695, 66)),
+    'support_grand': ('163-grand-support', (60, 520, 175, 585)),
 }
 
 
@@ -36,6 +39,10 @@ def main() -> None:
     index = {}
     for state, (name, box) in SIGNATURES.items():
         source = ROOT / 'captures/2026-11-20/key' / f'{name}.jpg'
+        if not source.exists() and name.startswith('16'):
+            source = ROOT / '.scratch/live-20261120' / f'{name}.png'
+        if not source.exists() and name.startswith('34-'):
+            source = ROOT / 'captures/2026-11-19-ember' / f'{name}.png'
         image = cv2.imdecode(np.fromfile(str(source), dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
         if image is None:
             raise SystemExit(f'缺少参考截图：{source}')

@@ -113,6 +113,18 @@
     {
       "name": "12-battle-start",
       "state": "loading"
+    },
+    {
+      "name": "support-party-confirm",
+      "state": "support_party_confirm"
+    },
+    {
+      "name": "grand-team",
+      "state": "team_grand"
+    },
+    {
+      "name": "support-grand",
+      "state": "support_grand"
     }
   ]
 }

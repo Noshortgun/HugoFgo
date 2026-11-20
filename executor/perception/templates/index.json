@@ -158,5 +158,35 @@
   ],
   "source": "12-battle-start.jpg",
   "template": "loading.png"
+ },
+ "support_party_confirm": {
+  "box": [
+   695,
+   15,
+   795,
+   60
+  ],
+  "source": "34-grand-support-confirm.jpg",
+  "template": "support_party_confirm.png"
+ },
+ "team_grand": {
+  "box": [
+   595,
+   28,
+   695,
+   66
+  ],
+  "source": "165-grand-team.jpg",
+  "template": "team_grand.png"
+ },
+ "support_grand": {
+  "box": [
+   60,
+   520,
+   175,
+   585
+  ],
+  "source": "163-grand-support.jpg",
+  "template": "support_grand.png"
  }
 }
