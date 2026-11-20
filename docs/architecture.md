@@ -39,7 +39,8 @@
 
 - **接口**：`devices()`（设备发现）+ `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`；坐标参数是 1280×720 基准，serial 与区服属于 `DeviceConfig`。
 - **实现**：adb 发现与路径解析、坐标基准换算、截图校验、超时与错误上下文、设备配置（含区服）。
-- **适配器**：adb（实机）与 fake（回放喂截图、记录动作）。这是真实存在的缝，因为有两个适配器。
+- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）。这是真实存在的缝，因为有三个适配器。
+- **ldplayer-window**：从 LDPlayer 的 `RenderWindow` 取 1280×720 BGR24 原始帧，跳过 adb 子进程与 PNG 编解码；默认不启用，失败时明确报错、不静默退回 adb。只截图不输入，`tap`/`swipe` 仍走 adb。最小化/隐藏不可用，被遮挡可用，多开不支持；其他模拟器不因此获得支持。
 - **分辨率**：仅支持精确 16:9 横屏且不低于 1280×720；其他分辨率拒绝执行，不盲目缩放点击（ADR-0005）。
 - **区服**：区服是设备的属性（ADR-0003），设备配置必填并决定后续加载哪套识别配置与图库。
 - **不暴露**：adb 命令行细节、文件路径、PNG 编解码。
@@ -100,7 +101,7 @@ src/            前端（保留）
 src-tauri/      壳
 executor/       新后端（独立包）
   domain/       作业模型与编译
-  device/       设备网关（adb + fake 两个适配器）
+  device/       设备网关（adb + fake + 可选 ldplayer-window）
   perception/   画面感知
   core/         执行器状态机
   session/      运行会话与历史
