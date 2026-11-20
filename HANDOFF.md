@@ -336,3 +336,11 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `scripts/issue-sync.mjs` 比较改为「本地源去掉首行标题」对「远端 body 去掉发布器抬头」，使直接创建的 issue 与 `publish-issues.mjs` 发布的 issue 都能对齐；自检 13/13。
 - 迁移本地源：为 05A/05B/05C/19/22/23/24 建立 `NN-<slug>.md`（首行 `# NN: 标题`），6/7/12 以 GitHub 正文为准更新；`5/6/7/12/16/17/18/19` 的旧双份与错位副本移至 `.scratch/archive/legacy-issues/`，未删除内容。
 - `npm run issues:check`：无变化 18、阻塞漂移 0、结构错误 0，退出 0；仅 #3/#5 作为父/关闭票据的参考漂移。
+
+
+## 38. 回顾后的护栏（2026-11-20）
+
+- 预检新增「本地 main 与 origin/main 领先/落后」检查，任何分支上运行都会提示 main 的未推送提交或过期基线（这次分叉的直接教训）。
+- `issue-sync.selftest` 增加「直接创建的 issue（无发布抬头）与本地源对齐」用例。
+- AGENTS 明确：新施工从 `origin/main` 建 `ticket/*`；并行 PR 不在各自分支追加 HANDOFF，合入后统一追加。
+- CI 增加 informational 的 `npm run issues:check`（`continue-on-error`），不阻塞「本地源先改、后发布」的流程。

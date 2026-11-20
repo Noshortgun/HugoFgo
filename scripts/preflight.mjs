@@ -113,6 +113,7 @@ function checkGit({ allowBranch }) {
 
   checkSync(branch, detached);
   checkDirty();
+  checkMainSync();
 }
 
 function checkSync(branch, detached) {
@@ -181,6 +182,37 @@ function checkDirty() {
   add('仓库', 'warn', `${lines.length} 个已跟踪文件有未提交改动`, {
     detail: lines.length > 8 ? `${preview}\n …还有 ${lines.length - 8} 个` : preview,
     fix: 'git status --short',
+  });
+}
+
+function checkMainSync() {
+  if (!gitRun(['rev-parse', '--verify', '--quiet', 'refs/heads/main']).ok) return;
+  if (!gitRun(['rev-parse', '--verify', '--quiet', 'origin/main']).ok) return;
+
+  const counts = gitRun(['rev-list', '--left-right', '--count', 'origin/main...main']);
+  if (!counts.ok) {
+    add('仓库', 'warn', '无法比较本地 main 与 origin/main', { detail: counts.error });
+    return;
+  }
+
+  const [behind, ahead] = counts.stdout.split(/\s+/).map(Number);
+  if (!behind && !ahead) {
+    add('仓库', 'ok', '本地 main 与 origin/main 同步（基于最近一次 fetch）');
+    return;
+  }
+
+  const parts = [];
+  if (ahead) parts.push(`领先 ${ahead}`);
+  if (behind) parts.push(`落后 ${behind}`);
+  const fix = ahead && behind
+    ? 'git fetch origin && git log --oneline --left-right origin/main...main'
+    : ahead
+      ? 'git log --oneline origin/main..main'
+      : 'git fetch origin && git switch main && git merge --ff-only origin/main';
+
+  add('仓库', 'warn', `本地 main 与 origin/main 不一致：${parts.join(' / ')}`, {
+    detail: '基于最近一次 fetch；本地 main 的未推送提交或过期基线会让后续合并/rebase 产生分叉',
+    fix,
   });
 }
 

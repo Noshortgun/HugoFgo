@@ -45,6 +45,12 @@ jobs:
       - name: Run replay
         run: npm run replay
 
+      - name: Check ticket sources (informational)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run issues:check
+
       - name: List failed replay cases
         if: failure()
         run: |
