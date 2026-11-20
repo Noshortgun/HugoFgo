@@ -12,8 +12,9 @@
 取出自上而下的 BGR24 原始像素。1280×720 基准坐标不变，`metrics()` 上报窗口客户区尺寸。
 
 实机已知限制（2026-11-20，LDPlayer 14，1280×720，窗口客户区 1340×779）：
-- 窗口客户区比「工具栏 60 px + 画面 720 px」少 1 px，画面最后一行（基准 y=719）被窗口裁掉，
-  该行恒为黑色；其余像素与 adb 截图一致。换更大/更高的 LDPlayer 窗口可消除该行。
+- 父窗口客户区比「工具栏 60 px + 画面 720 px」少 1 px，`RenderWindow` 的最后一行被父窗口裁掉。
+  首次采集会自动把 LDPlayer 窗口加高被裁的像素（最多 16 px），并记录修正次数；修正后末行与 adb 一致。
+  窗口最大化或被系统限制导致加高失败时抛 `clipped`，不把黑帧当有效画面。
 - 最小化时 `PrintWindow` 返回 0 且像素全黑：明确报错，不承诺后台截图。
 - 窗口被其他窗口遮挡（但未最小化）时截图仍可用，已实机验证。
 - 多开（多个 LDPlayer 窗口）不受支持：会明确报错而不是猜哪个实例。
@@ -43,6 +44,10 @@ DIB_RGB_COLORS = 0
 PER_MONITOR_AWARE_V2 = -4
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 MAX_PATH_LONG = 1024
+MAX_WINDOW_ADJUST = 16
+SWP_NOMOVE = 0x0002
+SWP_NOZORDER = 0x0004
+SWP_NOACTIVATE = 0x0010
 
 REASON_NO_WINDOW = 'no-window'
 REASON_NO_RENDER_WINDOW = 'no-render-window'
@@ -54,6 +59,7 @@ REASON_COPY = 'copy'
 REASON_SIZE = 'size'
 REASON_EMPTY = 'empty'
 REASON_BLACK = 'black'
+REASON_CLIPPED = 'clipped'
 
 
 class CaptureFailure(DeviceError):
@@ -75,6 +81,7 @@ class CaptureStats:
     attempts: int = 0
     frames: int = 0
     failures: int = 0
+    window_adjustments: int = 0
     last_ms: float | None = None
     last_reason: str | None = None
     reasons: dict[str, int] = field(default_factory=dict)
@@ -137,6 +144,14 @@ class Win32Api:
         user32.IsIconic.restype = wintypes.BOOL
         user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
         user32.GetClientRect.restype = wintypes.BOOL
+        user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        user32.GetWindowRect.restype = wintypes.BOOL
+        user32.MapWindowPoints.argtypes = [wintypes.HWND, wintypes.HWND,
+                                           ctypes.POINTER(wintypes.POINT), wintypes.UINT]
+        user32.MapWindowPoints.restype = ctypes.c_int
+        user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                                        ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        user32.SetWindowPos.restype = wintypes.BOOL
         user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         user32.GetDC.argtypes = [wintypes.HWND]
@@ -243,6 +258,24 @@ class Win32Api:
 
     def release_dc(self, hwnd: int, hdc: int) -> None:
         self._user32.ReleaseDC(hwnd, hdc)
+
+    def window_size(self, hwnd: int) -> tuple[int, int]:
+        rect = wintypes.RECT()
+        if not self._user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            raise DeviceError(f'窗口 {hwnd} 已不可用：GetWindowRect 失败；请确认 LDPlayer 仍在运行')
+        return int(rect.right - rect.left), int(rect.bottom - rect.top)
+
+    def map_window_points(self, from_hwnd: int, to_hwnd: int,
+                          points: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        mapped = (wintypes.POINT * len(points))(*[wintypes.POINT(x, y) for x, y in points])
+        self._user32.MapWindowPoints(from_hwnd, to_hwnd, mapped, len(points))
+        return [(int(point.x), int(point.y)) for point in mapped]
+
+    def set_window_size(self, hwnd: int, width: int, height: int) -> bool:
+        return bool(self._user32.SetWindowPos(
+            hwnd, wintypes.HWND(0), 0, 0, width, height,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+        ))
 
     def create_memory_dc(self, hdc: int) -> int:
         return int(self._gdi32.CreateCompatibleDC(hdc) or 0)
@@ -389,6 +422,7 @@ class LdplayerWindowDevice:
             raise CaptureFailure(REASON_SIZE,
                                  f'RenderWindow 客户区已从 {metrics.width}×{metrics.height} 变为 {width}×{height}；'
                                  '窗口被缩放或模拟器分辨率变了，请重新读取设备信息')
+        window = self._ensure_visible(window)
         pixels = self._capture_pixels(window.render, width, height)
         self._check_pixels(pixels, width, height)
         return Frame(image=pixels, width=width, height=height, captured_at=time.time(),
@@ -450,6 +484,43 @@ class LdplayerWindowDevice:
         self._metrics = None
         return self._window
 
+    def _ensure_visible(self, window: LdplayerWindow) -> LdplayerWindow:
+        """父窗口比「工具栏 + 720」矮时，把窗口加高被裁的像素；只调整一次，之后每帧检查为空操作。"""
+        parent_width, parent_height = self._api.client_size(window.parent)
+        render_width, render_height = self._api.client_size(window.render)
+        _, corner = self._api.map_window_points(
+            window.render, window.parent, [(0, 0), (render_width, render_height)],
+        )
+        overflow_x = max(0, corner[0] - parent_width)
+        overflow_y = max(0, corner[1] - parent_height)
+        if not overflow_x and not overflow_y:
+            return window
+        if overflow_x > MAX_WINDOW_ADJUST or overflow_y > MAX_WINDOW_ADJUST:
+            raise CaptureFailure(
+                REASON_CLIPPED,
+                f'窗口客户区裁掉了画面 {overflow_x}×{overflow_y} px（自动修正上限 {MAX_WINDOW_ADJUST}）：'
+                '请把 LDPlayer 窗口调大或取消最大化',
+            )
+        window_width, window_height = self._api.window_size(window.parent)
+        if not self._api.set_window_size(window.parent, window_width + overflow_x, window_height + overflow_y):
+            raise CaptureFailure(
+                REASON_CLIPPED,
+                f'LDPlayer 窗口无法加高 {overflow_x}×{overflow_y} px：请手动调大窗口或取消最大化',
+            )
+        time.sleep(0.2)
+        parent_width, parent_height = self._api.client_size(window.parent)
+        _, corner = self._api.map_window_points(
+            window.render, window.parent, [(0, 0), (render_width, render_height)],
+        )
+        if corner[0] > parent_width or corner[1] > parent_height:
+            raise CaptureFailure(
+                REASON_CLIPPED,
+                f'加高窗口后画面仍被裁掉 {corner[0] - parent_width}×{corner[1] - parent_height} px：'
+                '请手动调大窗口或取消最大化',
+            )
+        self._stats.window_adjustments += 1
+        return window
+
     def _make_metrics(self, width: int, height: int) -> DeviceMetrics:
         subject = f'设备 {self.config.serial} 的 LDPlayer RenderWindow'
         try:
@@ -474,5 +545,6 @@ def stats_summary(stats: CaptureStats) -> str:
     reasons: Mapping[str, int] = stats.reasons
     detail = '、'.join(f'{reason}×{count}' for reason, count in sorted(reasons.items())) or '无'
     last = '—' if stats.last_ms is None else f'{stats.last_ms:.2f} ms'
+    adjusted = f'；窗口修正 {stats.window_adjustments} 次' if stats.window_adjustments else ''
     return (f'尝试 {stats.attempts} 帧，成功 {stats.frames}，失败 {stats.failures}；'
-            f'最近一帧 {last}；失败原因 {detail}')
+            f'最近一帧 {last}；失败原因 {detail}{adjusted}')

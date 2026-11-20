@@ -336,3 +336,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `scripts/issue-sync.mjs` 比较改为「本地源去掉首行标题」对「远端 body 去掉发布器抬头」，使直接创建的 issue 与 `publish-issues.mjs` 发布的 issue 都能对齐；自检 13/13。
 - 迁移本地源：为 05A/05B/05C/19/22/23/24 建立 `NN-<slug>.md`（首行 `# NN: 标题`），6/7/12 以 GitHub 正文为准更新；`5/6/7/12/16/17/18/19` 的旧双份与错位副本移至 `.scratch/archive/legacy-issues/`，未删除内容。
 - `npm run issues:check`：无变化 18、阻塞漂移 0、结构错误 0，退出 0；仅 #3/#5 作为父/关闭票据的参考漂移。
+
+
+## 39. 修复 LDPlayer 原始帧末行被裁（#20，2026-11-20）
+
+- `LdplayerWindowDevice._ensure_visible`：首次采集发现父窗口客户区裁掉 `RenderWindow` 像素时，自动加高窗口（上限 16 px），之后每帧检查为空操作；无法加高或超过上限时报 `clipped`，不返回黑行。
+- `CaptureStats.window_adjustments` 与 CLI 统计显示修正次数。
+- 实机：首次采集修正 1 次（窗口 779→780），100 帧稳态约 13 ms、含首次调整 mean 14.96 ms / P95 15.84 ms；修正后末行与 adb 对比 mean_abs_diff 0.34 / max 9，连续 10 帧末行均非黑。

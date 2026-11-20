@@ -68,7 +68,11 @@ class FakeWin32:
     STOCK_OBJECT = 1
 
     def __init__(self, *, width: int = 1280, height: int = 720, pixel: int = 0x11):
-        self.sizes = {self.RENDER: (width, height)}
+        self.sizes = {
+            self.RENDER: (width, height),
+            self.PARENT: (width + 60, height + 60),
+        }
+        self.origins = {self.RENDER: (0, 60)}
         self.parents: set[int] = {self.PARENT}
         self.classes = {self.PARENT: 'LDPlayerMainFrame', self.RENDER: 'RenderWindow'}
         self.titles = {self.PARENT: '雷电模拟器', self.RENDER: 'TheRender'}
@@ -113,6 +117,23 @@ class FakeWin32:
 
     def client_size(self, hwnd: int) -> tuple[int, int]:
         return self.sizes.get(hwnd, (0, 0))
+
+    def window_size(self, hwnd: int) -> tuple[int, int]:
+        return self.sizes.get(hwnd, (0, 0))
+
+    def map_window_points(self, from_hwnd: int, to_hwnd: int,
+                          points: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        origin = self.origins.get(from_hwnd, (0, 0))
+        if from_hwnd == self.RENDER and to_hwnd == self.PARENT:
+            return [(x + origin[0], y + origin[1]) for x, y in points]
+        if from_hwnd == self.PARENT and to_hwnd == self.RENDER:
+            return [(x - origin[0], y - origin[1]) for x, y in points]
+        return list(points)
+
+    def set_window_size(self, hwnd: int, width: int, height: int) -> bool:
+        self.calls.append('SetWindowPos')
+        self.sizes[hwnd] = (width, height)
+        return True
 
     def get_dc(self, hwnd: int) -> int:
         return self._new_dc('GetDC')
@@ -676,6 +697,19 @@ def check_ldplayer_frames() -> None:
     window_moved.sizes[replacement] = (1280, 720)
     assert device.frame().width == 1280, '窗口被重建后必须重新定位，而不是一直报旧句柄'
 
+    clipped = FakeWin32()
+    clipped.sizes[FakeWin32.PARENT] = (1340, 779)
+    device = LdplayerWindowDevice(make_config(serial='s'), api=clipped)
+    frame = device.frame()
+    assert (frame.width, frame.height) == (1280, 720)
+    assert clipped.sizes[FakeWin32.PARENT] == (1340, 780), '父窗口必须加高被裁的 1 px'
+    assert clipped.calls.count('SetWindowPos') == 1
+    assert device.stats().window_adjustments == 1
+    assert '窗口修正 1 次' in stats_summary(device.stats())
+    device.frame()
+    assert device.stats().window_adjustments == 1, '已经放得下就不应每帧重复加高'
+    assert clipped.leaked() == []
+
 
 def check_ldplayer_errors() -> None:
     config = make_config(serial='emulator-5554', channel='ldplayer-window')
@@ -702,6 +736,13 @@ def check_ldplayer_errors() -> None:
     expect_error(device.frame, '截图为空', 'empty', error_type=DeviceError)
     assert fake.leaked() == []
     fake.lines = None
+
+    clipped = FakeWin32()
+    clipped.sizes[FakeWin32.PARENT] = (1340, 700)
+    clipped_device = LdplayerWindowDevice(config, api=clipped)
+    error = expect_error(clipped_device.frame, 'clipped', '上限', error_type=DeviceError)
+    assert '16' in str(error)
+    assert clipped.leaked() == [], '裁切检查失败时也不能泄漏 GDI 资源'
 
     good = fake.pixels
     fake.pixels = bytes(1280 * 720 * 3)
