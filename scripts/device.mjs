@@ -12,10 +12,11 @@
  * adb 查找顺序：HUGOFGO_ADB -> PATH -> 常见模拟器目录。
  * 截图默认保存到系统临时目录下的 hugofgo-frames。
  */
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { deviceInfo, listDevices, runAdb } from './adb.mjs';
 
 const args = process.argv.slice(2);
 
@@ -29,73 +30,6 @@ function hasFlag(name) {
   return args.includes(name);
 }
 
-function existingFile(file) {
-  try {
-    return fs.statSync(file).isFile();
-  } catch {
-    return false;
-  }
-}
-
-function adbPath() {
-  const configured = process.env.HUGOFGO_ADB?.trim();
-  if (configured) return configured;
-
-  const localAppData = process.env.LOCALAPPDATA ?? '';
-  const candidates = [
-    'adb',
-    path.join(localAppData, 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
-    'C:\\LDPlayer\\LDPlayer14\\adb.exe',
-    'D:\\leidian\\LDPlayer14\\adb.exe',
-    'C:\\LDPlayer\\LDPlayer9\\adb.exe',
-    'C:\\Program Files\\Netease\\MuMuPlayer-12.0\\shell\\adb.exe',
-    'C:\\Program Files\\Netease\\MuMu Player 12\\shell\\adb.exe',
-  ];
-  for (const candidate of candidates) {
-    if (candidate === 'adb') {
-      const found = spawnSync('where', ['adb'], { encoding: 'utf8' });
-      if (found.status === 0) return 'adb';
-    } else if (existingFile(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error('未找到 adb。请设置 HUGOFGO_ADB 指向 adb.exe');
-}
-
-function runAdb(serial, adbArgs, { binary = false } = {}) {
-  const adb = adbPath();
-  const fullArgs = serial ? ['-s', serial, ...adbArgs] : adbArgs;
-  const result = spawnSync(adb, fullArgs, {
-    encoding: binary ? 'buffer' : 'utf8',
-    maxBuffer: 128 * 1024 * 1024,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const message = binary ? result.stderr?.toString('utf8') : result.stderr;
-    throw new Error(`adb 失败：${String(message ?? '').trim()}`);
-  }
-  return result.stdout;
-}
-
-function listDevices() {
-  const text = runAdb(undefined, ['devices', '-l']);
-  return text
-    .split(/\r?\n/)
-    .slice(1)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [serial, state, ...rest] = line.split(/\s+/);
-      const info = { serial, state };
-      for (const part of rest) {
-        if (part.startsWith('model:')) info.model = part.slice(6).replaceAll('_', ' ');
-        else if (part.startsWith('product:')) info.product = part.slice(8);
-        else if (part.startsWith('device:')) info.device = part.slice(7);
-      }
-      return info;
-    });
-}
-
 function pickSerial() {
   const requested = option('--serial');
   if (requested) return requested;
@@ -103,29 +37,6 @@ function pickSerial() {
   const usable = devices.find((device) => device.state === 'device');
   if (!usable) throw new Error('没有处于 device 状态的设备');
   return usable.serial;
-}
-
-function parseSize(text) {
-  let physical;
-  let overridden;
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/(\d+)\s*x\s*(\d+)/);
-    if (!match) continue;
-    const size = { width: Number(match[1]), height: Number(match[2]) };
-    if (line.includes('Override')) overridden = size;
-    else physical = size;
-  }
-  return overridden ?? physical;
-}
-
-function deviceInfo(serial) {
-  const sizeText = runAdb(serial, ['shell', 'wm', 'size']);
-  const size = parseSize(sizeText);
-  if (!size) throw new Error(`无法解析分辨率：${sizeText.trim()}`);
-  const densityText = runAdb(serial, ['shell', 'wm', 'density']);
-  const density = Number((densityText.match(/(\d+)\s*$/m) ?? [])[1]) || undefined;
-  const model = runAdb(serial, ['shell', 'getprop', 'ro.product.model']).trim();
-  return { serial, ...size, density, model };
 }
 
 function screenshot(serial) {
@@ -193,9 +104,11 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }

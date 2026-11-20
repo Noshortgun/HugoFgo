@@ -31,6 +31,22 @@ cv/.venv/Scripts/python.exe -m pip install opencv-python numpy rapidocr-onnxrunt
 
 也可用 `HUGOFGO_PYTHON` 指定解释器。
 
+## 预检
+
+任何实施或实机会话开始前运行一次，判断当前环境是否适合继续：
+
+```bash
+npm run preflight                    # 实机会话前：分支 + 回放依赖 + adb 设备 + 外部自动化进程
+npm run preflight -- --offline       # 只做代码：跳过设备与进程检查
+npm run preflight -- --live          # 实机会话：外部进程与设备问题改为阻断；预检本身不发送输入
+npm run preflight -- --allow-branch  # 确认在非施工分支（如原型分支）上继续
+```
+
+- 退出码：`0` 无阻断项（警告不阻断）、`1` 存在阻断项、`2` 参数错误。
+- 阻断项附可直接执行的修复命令；`--json` 输出机器可读结果。
+- 非施工分支（`main`、`prototype/*` 等）默认阻断，确认后加 `--allow-branch`。
+- 预检本身完全只读，不发送任何实机输入（实机操作只走 Python 执行器）；`--live` 表示进入实机会话，外部自动化冲突、进程扫描失败、多设备未指定或设备未就绪都会阻断。
+
 ## 测试
 
 ```bash
