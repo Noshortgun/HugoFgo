@@ -297,3 +297,14 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 
 - `strategy.servantOrderSlots` 与 `strategyByWave[*].servantOrderSlots` 也纳入空槽位校验；非法引用返回带 path 的诊断并拒绝生成计划。
 - 14 项领域测试通过；`npm run replay` 36/36。
+
+
+## 34. 画面感知适配器（票据 05A，2026-11-20）
+
+- 新增 `executor/perception/`：`Perception.read(Frame) -> Observation`。识别按 17 个实机确认的画面分类，外加 `unknown` 兜底；判据与按钮/区域坐标来自逐屏审查的标注，单源落在 `regions/cn.json`，不在代码里改写。
+- 关键字段：战斗的面/回合/敌方剩余/当前目标、指令卡的暴击星率与克制（克制与抵抗分开展示）、连续出击的 AP 与消耗、AP 恢复页实际出现的恢复道具；技能冷却读「剩余 N 回合」。
+- 小字数字用「放大 + 二值化」兜底读取（回合数、冷却回合）；读不到关键字段时 `uncertain=true`，不猜值。
+- 区服必须显式指定，未支持区服报错，不静默默认国服；不调用 adb、不读作业、不实现状态机。
+- 新增 `captures/2026-11-20/` 作为验证集（25 张实机关键帧，JPEG 入库），`.gitignore` 允许 `captures/*/key/*.jpg`。
+- `cv/replay.py` 新增 `check_perception_states()` 用例组，旧 36 条用例保留。
+- 本阶段没有合并 main 的文档提交，避免把 GitHub 票据迁移混进感知改动。

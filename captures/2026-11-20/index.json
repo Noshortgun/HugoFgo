@@ -8,36 +8,111 @@
   "quest": "迦勒底之门 · 每日替换搜集种火<剑·骑篇>初级（另含海盗本与训练本用于分支画面）",
   "capturedAt": "2026-11-20",
   "notes": [
-    "这是 05A 画面感知的验证集：25 张关键帧，覆盖 17 个已确认画面状态。",
+    "05A 画面感知验证集：25 张关键帧，覆盖 17 个已确认画面状态。",
     "原图为 1280x720 PNG，入库时转成 JPEG(q90) 控制体积；识别器内部统一缩放到 1280x720。",
     "标注与判据来源：.scratch/annotated/index.json；每屏的按钮与区域坐标以那里为准。",
     "所有画面均在实机模拟器上采集，未使用合成图。"
   ],
   "frames": [
-    "battle-wave1",
-    "battle-target-enemy2",
-    "battle-slot1-skill3-cooldown",
-    "battle-after-cards",
-    "64-order-change-done",
-    "card-select",
-    "card-np-selected",
-    "support-select-correct-ce",
-    "support-select-wrong-ce",
-    "support-list-update-confirm",
-    "team-confirm",
-    "result",
-    "result-exp",
-    "drops",
-    "repeat-dialog",
-    "ap-recovery",
-    "ap-recovery-bronze",
-    "61-order-change-select",
-    "70-command-spell-open",
-    "72-command-spell-target-select",
-    "73-command-spell-confirm",
-    "09-class-filter",
-    "55-battle-menu",
-    "60-current-master-expanded",
-    "12-battle-start"
+    {
+      "name": "support-select-correct-ce",
+      "state": "support"
+    },
+    {
+      "name": "support-select-wrong-ce",
+      "state": "support"
+    },
+    {
+      "name": "support-list-update-confirm",
+      "state": "support_confirm"
+    },
+    {
+      "name": "team-confirm",
+      "state": "team"
+    },
+    {
+      "name": "battle-wave1",
+      "state": "battle"
+    },
+    {
+      "name": "battle-target-enemy2",
+      "state": "battle"
+    },
+    {
+      "name": "battle-slot1-skill3-cooldown",
+      "state": "battle"
+    },
+    {
+      "name": "battle-after-cards",
+      "state": "battle"
+    },
+    {
+      "name": "64-order-change-done",
+      "state": "battle"
+    },
+    {
+      "name": "card-select",
+      "state": "card"
+    },
+    {
+      "name": "card-np-selected",
+      "state": "card"
+    },
+    {
+      "name": "result",
+      "state": "result"
+    },
+    {
+      "name": "result-exp",
+      "state": "result"
+    },
+    {
+      "name": "drops",
+      "state": "drops"
+    },
+    {
+      "name": "repeat-dialog",
+      "state": "repeat_dialog"
+    },
+    {
+      "name": "ap-recovery-bronze",
+      "state": "ap_recovery"
+    },
+    {
+      "name": "ap-recovery",
+      "state": "ap_recovery"
+    },
+    {
+      "name": "61-order-change-select",
+      "state": "order_change"
+    },
+    {
+      "name": "70-command-spell-open",
+      "state": "command_spell_menu"
+    },
+    {
+      "name": "73-command-spell-confirm",
+      "state": "command_spell_confirm"
+    },
+    {
+      "name": "72-command-spell-target-select",
+      "state": "command_spell_target"
+    },
+    {
+      "name": "09-class-filter",
+      "state": "class_info"
+    },
+    {
+      "name": "55-battle-menu",
+      "state": "battle_menu"
+    },
+    {
+      "name": "60-current-master-expanded",
+      "state": "master_skills"
+    },
+    {
+      "name": "12-battle-start",
+      "state": "loading"
+    }
   ]
 }

@@ -43,6 +43,31 @@ def add_report(name, image, expected, actual, action, reason, ok, simulated_ocr=
     })
 
 
+def check_perception_states():
+    """票据 05A：用实机关键帧验证画面感知的状态判定，不调用 ADB。"""
+    sys.path.insert(0, str(ROOT))
+    from executor.device.base import Frame
+    from executor.perception import Perception
+
+    perception = Perception('cn')
+    index_path = ROOT / "captures/2026-11-20/index.json"
+    if not index_path.exists():
+        return
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    for frame in index["frames"]:
+        name = frame["name"]
+        image = ROOT / "captures/2026-11-20/key" / f"{name}.jpg"
+        expected = frame["state"]
+        observation = perception.read(Frame(
+            image=image.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = observation.state.value
+        ok = actual == expected and not observation.uncertain
+        add_report(
+            f"perception:{name}", image, expected, actual,
+            "perception", "state", ok,
+        )
+
+
 def check_classifications():
     templates = load_templates()
     labels = json.loads((ROOT / "cv/labels.json").read_text(encoding="utf-8"))
@@ -202,6 +227,7 @@ def check_ocr_action(name, path, expected):
 def run(output: Path):
     REPORTS.clear()
     check_classifications()
+    check_perception_states()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))
     check_result_action("action:unknown-waits", [("加载中", 640, 360)], "wait")

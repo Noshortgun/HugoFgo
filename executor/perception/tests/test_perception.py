@@ -54,7 +54,7 @@ def observe(name: str):
     global _perception
     if name not in _observations:
         if _perception is None:
-            _perception = Perception()
+            _perception = Perception('cn')
         _observations[name] = _perception.read(fixture(name))
     return _observations[name]
 
@@ -137,12 +137,29 @@ class PerceptionButtonTest(unittest.TestCase):
 
 class PerceptionFallbackTest(unittest.TestCase):
     def test_blank_frame_is_unknown(self):
-        observation = Perception().read(synthetic(np.zeros((720, 1280, 3), dtype=np.uint8)))
+        observation = Perception('cn').read(synthetic(np.zeros((720, 1280, 3), dtype=np.uint8)))
         self.assertIs(ScreenState.UNKNOWN, observation.state)
         self.assertTrue(observation.uncertain)
 
+    def test_skill_cooldown_is_read(self):
+        observation = observe('battle-slot1-skill3-cooldown')
+        cooldowns = observation.fields.get('skill_cooldowns', {})
+        self.assertTrue(cooldowns)
+        label, turns = next(iter(cooldowns.items()))
+        self.assertIn('2号位', label)
+        self.assertIn('技能3', label)
+        self.assertEqual(6, turns)
+
+    def test_no_cooldown_on_fresh_battle(self):
+        observation = observe('battle-wave1')
+        self.assertNotIn('skill_cooldowns', observation.fields)
+
+    def test_unsupported_region_is_rejected(self):
+        with self.assertRaises(ValueError):
+            Perception('jp')
+
     def test_unknown_has_no_buttons(self):
-        observation = Perception().read(synthetic(np.zeros((720, 1280, 3), dtype=np.uint8)))
+        observation = Perception('cn').read(synthetic(np.zeros((720, 1280, 3), dtype=np.uint8)))
         self.assertEqual((), observation.buttons)
 
 

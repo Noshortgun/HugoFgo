@@ -65,6 +65,16 @@ class CardSlot:
 
 @dataclass(frozen=True)
 class Observation:
+    """一帧画面的结构化描述。
+
+    fields 的键按状态固定，避免调用方猜：
+    - battle：wave、wave_total、turn、enemies_left、target_x、skill_cooldowns（可能缺失）
+    - card：cards（卡位序号元组）
+    - repeat_dialog：ap_current、ap_max、ap_cost
+    - ap_recovery：items（本屏出现的恢复道具名）
+    - 读不到必需键时 uncertain=True，并把键名放进 fields['missing']
+    """
+
     state: ScreenState
     anchors: tuple[Anchor, ...] = ()
     buttons: tuple[Button, ...] = ()

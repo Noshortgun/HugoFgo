@@ -1075,16 +1075,6 @@
      "area": null
     },
     {
-     "kind": "text-exists",
-     "expect": "青铜果实",
-     "area": [
-      440,
-      290,
-      600,
-      350
-     ]
-    },
-    {
      "kind": "text-absent",
      "expect": "连续出击",
      "area": null
@@ -1482,6 +1472,11 @@
     {
      "kind": "text-absent",
      "expect": "开始任务",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "撤退",
      "area": null
     }
    ],

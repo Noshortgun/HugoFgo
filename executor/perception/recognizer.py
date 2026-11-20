@@ -41,7 +41,8 @@ ORDER: tuple[ScreenState, ...] = (
 
 # 这些状态读不到关键字段时算「不确定」，而不是猜一个值。
 REQUIRED_FIELDS: dict[ScreenState, tuple[str, ...]] = {
-    ScreenState.BATTLE: ('wave', 'turn'),
+    ScreenState.BATTLE: ('wave', 'turn', 'enemies_left'),
+    ScreenState.CARD: ('cards',),
     ScreenState.REPEAT_DIALOG: ('ap_current', 'ap_cost'),
 }
 
@@ -49,6 +50,55 @@ MASTER_SKILL_SLOTS = ((868, 275, 945, 352), (957, 275, 1034, 352), (1046, 274, 1
 MASTER_SKILL_MIN_VALUE = 150.0
 
 AP_ITEMS = ('圣晶石', '黄金果实', '白银果实', '青铜果实', '赤铜果实')
+
+# 技能图标带：技能按钮的 y 范围（基准 1280x720），用于读取“剩余 N”冷却文字
+SKILL_BAND = (0, 530, 940, 650)
+SKILL_ZOOM = 6
+SKILL_OTSU = 140
+
+
+def _skill_cooldowns(image: np.ndarray, buttons: dict[str, Button]) -> dict[str, int]:
+    """读取“剩余 N 回合”文字，映射到最近的技能格。
+
+    原尺寸 OCR 读不到冷却文字，必须放大技能带再识别。
+    """
+    skill_buttons = [b for b in buttons.values()
+                     if '号位' in b.label and '技能' in b.label]
+    if not skill_buttons:
+        return {}
+    x1, y1, x2, y2 = SKILL_BAND
+    crop = image[y1:y2, x1:x2]
+    big = cv2.resize(crop, None, fx=SKILL_ZOOM, fy=SKILL_ZOOM, interpolation=cv2.INTER_LANCZOS4)
+    gray = cv2.cvtColor(big, cv2.COLOR_BGR2GRAY)
+    _, big = cv2.threshold(gray, SKILL_OTSU, 255, cv2.THRESH_BINARY)
+    result, _ = _ocr()(big)
+    tokens = []
+    for box, text, score in result or []:
+        if float(score) < OCR_THRESHOLD:
+            continue
+        xs = [point[0] for point in box]
+        ys = [point[1] for point in box]
+        tokens.append({
+            'text': text.strip(),
+            'x1': min(xs) / SKILL_ZOOM + x1,
+            'x2': max(xs) / SKILL_ZOOM + x1,
+            'y': (min(ys) + max(ys)) / 2 / SKILL_ZOOM + y1,
+        })
+    cooldowns: dict[str, int] = {}
+    for token in tokens:
+        if '剩余' not in token['text']:
+            continue
+        turns = _int_in(token['text'])
+        if turns is None:
+            # “剩余”和数字常被拆成两段，取同一行右侧最近的数字
+            right = [t for t in tokens
+                     if t['text'].isdigit() and t['x1'] >= token['x2']
+                     and abs(t['y'] - token['y']) < 20]
+            if right:
+                turns = int(min(right, key=lambda t: t['x1'])['text'])
+        nearest = min(skill_buttons, key=lambda b: abs((b.box[0] + b.box[2]) / 2 - token['x1']))
+        cooldowns[nearest.label] = turns if turns is not None else -1
+    return cooldowns
 
 _ocr_engine: Any | None = None
 
@@ -168,6 +218,9 @@ def _fields_for(state: ScreenState, anchors: tuple[Anchor, ...],
         target = _find(anchors, '目标')
         if target:
             fields['target_x'] = round(_center(target)[0])
+        cooldowns = _skill_cooldowns(image, buttons)
+        if cooldowns:
+            fields['skill_cooldowns'] = cooldowns
 
     elif state is ScreenState.CARD:
         slots = []
@@ -228,8 +281,8 @@ def _fields_for(state: ScreenState, anchors: tuple[Anchor, ...],
 class Perception:
     """`read(frame)` 是唯一入口。配置在构造时加载一次。"""
 
-    def __init__(self, config: dict | None = None) -> None:
-        self._config = config or load_config()
+    def __init__(self, region: str, config: dict | None = None) -> None:
+        self._config = config or load_config(region)
 
     def read(self, frame: Frame) -> Observation:
         image = _decode(frame)
@@ -256,8 +309,10 @@ class Perception:
                    for item in spec['buttons']}
         fields, cards = _fields_for(matched, anchors, buttons, image)
 
+        if matched is ScreenState.CARD:
+            fields['cards'] = tuple(card.index for card in cards)
         missing = [name for name in REQUIRED_FIELDS.get(matched, ())
-                   if fields.get(name) is None]
+                   if fields.get(name) is None or fields.get(name) == ()]
         uncertain = bool(missing)
         if missing:
             fields['missing'] = missing

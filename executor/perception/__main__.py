@@ -36,10 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='画面感知：识别截图属于哪个界面')
     parser.add_argument('--image', type=Path, help='单张图片')
     parser.add_argument('--dir', type=Path, help='目录下所有 png/jpg')
-    parser.add_argument('--json', action='store_true', help='输出 JSON')
+    parser.add_argument('--region', default=None, help='区服（当前仅 cn）')
     args = parser.parse_args(argv)
 
-    perception = Perception()
+    if not args.region:
+        parser.error('必须显式指定 --region（当前仅 cn）；未采集的区服不会按国服猜测')
+    perception = Perception(args.region)
 
     if args.image:
         observation = _read(args.image, perception)
