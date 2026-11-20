@@ -1,0 +1,1683 @@
+{
+ "states": {
+  "support": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "助战选择",
+     "area": [
+      1035,
+      5,
+      1275,
+      65
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "职阶",
+     "area": [
+      740,
+      100,
+      805,
+      140
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "列表更新",
+     "area": [
+      885,
+      100,
+      975,
+      142
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "返回",
+     "area": [
+      70,
+      15,
+      150,
+      65
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "从者",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗场次",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "是否确认执行",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "返回",
+     "box": [
+      16,
+      9,
+      172,
+      78
+     ]
+    },
+    {
+     "label": "职阶筛选 展开/缩回",
+     "box": [
+      6,
+      96,
+      53,
+      162
+     ]
+    },
+    {
+     "label": "职阶筛选 图标1",
+     "box": [
+      62,
+      98,
+      123,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标2",
+     "box": [
+      130,
+      98,
+      191,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标3",
+     "box": [
+      197,
+      98,
+      258,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标4",
+     "box": [
+      265,
+      98,
+      326,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标5",
+     "box": [
+      332,
+      98,
+      393,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标6",
+     "box": [
+      400,
+      98,
+      461,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标7",
+     "box": [
+      467,
+      98,
+      528,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标8",
+     "box": [
+      535,
+      98,
+      596,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标9",
+     "box": [
+      602,
+      98,
+      663,
+      159
+     ]
+    },
+    {
+     "label": "职阶筛选 图标10",
+     "box": [
+      670,
+      98,
+      731,
+      159
+     ]
+    },
+    {
+     "label": "职阶情报",
+     "box": [
+      742,
+      101,
+      806,
+      159
+     ]
+    },
+    {
+     "label": "技能显示切换",
+     "box": [
+      812,
+      97,
+      883,
+      163
+     ]
+    },
+    {
+     "label": "列表更新",
+     "box": [
+      888,
+      98,
+      972,
+      162
+     ]
+    },
+    {
+     "label": "排序器（当前：等级顺序）",
+     "box": [
+      1104,
+      106,
+      1206,
+      152
+     ]
+    },
+    {
+     "label": "升/降序切换（圆形）",
+     "box": [
+      1221,
+      89,
+      1271,
+      154
+     ]
+    },
+    {
+     "label": "助战卡片 第1行（整卡可点）",
+     "box": [
+      40,
+      168,
+      1216,
+      343
+     ]
+    },
+    {
+     "label": "第1行 助战编队确认（项目用不上）",
+     "box": [
+      1088,
+      170,
+      1179,
+      216
+     ]
+    },
+    {
+     "label": "助战卡片 第2行（整卡可点）",
+     "box": [
+      40,
+      346,
+      1216,
+      539
+     ]
+    },
+    {
+     "label": "第2行 助战编队确认（项目用不上）",
+     "box": [
+      1088,
+      369,
+      1179,
+      416
+     ]
+    },
+    {
+     "label": "助战卡片 第3行（整卡可点）",
+     "box": [
+      40,
+      546,
+      1216,
+      715
+     ]
+    },
+    {
+     "label": "第3行 助战编队确认（项目用不上）",
+     "box": [
+      1087,
+      569,
+      1178,
+      616
+     ]
+    },
+    {
+     "label": "助战卡片 第1行（整卡可点）",
+     "box": [
+      40,
+      219,
+      1216,
+      425
+     ]
+    },
+    {
+     "label": "第1行 助战编队确认（项目用不上）",
+     "box": [
+      1088,
+      251,
+      1180,
+      297
+     ]
+    },
+    {
+     "label": "助战卡片 第2行（整卡可点）",
+     "box": [
+      40,
+      427,
+      1216,
+      620
+     ]
+    },
+    {
+     "label": "第2行 助战编队确认（项目用不上）",
+     "box": [
+      1086,
+      448,
+      1179,
+      498
+     ]
+    }
+   ],
+   "screens": [
+    "support-select-correct-ce.png",
+    "support-select-wrong-ce.png"
+   ]
+  },
+  "support_confirm": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "列表更新",
+     "area": [
+      555,
+      105,
+      725,
+      160
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "是否确认执行",
+     "area": [
+      510,
+      330,
+      755,
+      385
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "是",
+     "area": [
+      810,
+      538,
+      868,
+      592
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "否",
+     "area": [
+      415,
+      540,
+      470,
+      592
+     ]
+    },
+    {
+     "kind": "text-absent",
+     "expect": "开始任务",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "否",
+     "box": [
+      313,
+      534,
+      572,
+      592
+     ]
+    },
+    {
+     "label": "是",
+     "box": [
+      708,
+      534,
+      969,
+      592
+     ]
+    }
+   ],
+   "screens": [
+    "support-list-update-confirm.png"
+   ]
+  },
+  "team": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "队伍确认",
+     "area": [
+      1045,
+      5,
+      1275,
+      65
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "先发成员",
+     "area": [
+      35,
+      108,
+      115,
+      142
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "支援成员",
+     "area": [
+      652,
+      108,
+      725,
+      142
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "开始任务",
+     "area": [
+      1100,
+      648,
+      1235,
+      698
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "消耗值",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗场次",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "返回",
+     "box": [
+      16,
+      9,
+      172,
+      78
+     ]
+    },
+    {
+     "label": "从者卡 第1位 1号位（助战娄希 104级）",
+     "box": [
+      36,
+      140,
+      229,
+      620
+     ]
+    },
+    {
+     "label": "从者卡 第2位 2号位（自己娄希 120级）",
+     "box": [
+      236,
+      140,
+      429,
+      620
+     ]
+    },
+    {
+     "label": "从者卡 第3位 3号位（奥伯龙 100级）",
+     "box": [
+      436,
+      140,
+      629,
+      620
+     ]
+    },
+    {
+     "label": "从者卡 第4位 4号位（候补 90级）",
+     "box": [
+      651,
+      140,
+      844,
+      620
+     ]
+    },
+    {
+     "label": "从者卡 第5位 5号位（候补 65级）",
+     "box": [
+      851,
+      140,
+      1044,
+      620
+     ]
+    },
+    {
+     "label": "从者卡 第6位 6号位（玛修 100级）",
+     "box": [
+      1051,
+      140,
+      1244,
+      620
+     ]
+    },
+    {
+     "label": "御主装备",
+     "box": [
+      80,
+      647,
+      183,
+      710
+     ]
+    },
+    {
+     "label": "变更配置",
+     "box": [
+      184,
+      647,
+      260,
+      710
+     ]
+    },
+    {
+     "label": "自动编队",
+     "box": [
+      261,
+      647,
+      336,
+      710
+     ]
+    },
+    {
+     "label": "队伍编成",
+     "box": [
+      339,
+      650,
+      410,
+      708
+     ]
+    },
+    {
+     "label": "职阶确认",
+     "box": [
+      414,
+      647,
+      489,
+      710
+     ]
+    },
+    {
+     "label": "特效详情设定",
+     "box": [
+      493,
+      647,
+      584,
+      710
+     ]
+    },
+    {
+     "label": "自动变还",
+     "box": [
+      589,
+      647,
+      665,
+      710
+     ]
+    },
+    {
+     "label": "开始任务",
+     "box": [
+      1087,
+      637,
+      1243,
+      706
+     ]
+    }
+   ],
+   "screens": [
+    "team-confirm.png"
+   ]
+  },
+  "battle": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "战斗场次",
+     "area": [
+      770,
+      4,
+      990,
+      45
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "回合数",
+     "area": [
+      770,
+      80,
+      990,
+      118
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "攻击",
+     "area": [
+      1020,
+      540,
+      1240,
+      700
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "敌方单位",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗结果",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "战斗菜单",
+     "box": [
+      1141,
+      162,
+      1245,
+      250
+     ]
+    },
+    {
+     "label": "御主技能",
+     "box": [
+      1139,
+      271,
+      1248,
+      365
+     ]
+    },
+    {
+     "label": "攻击",
+     "box": [
+      1043,
+      515,
+      1230,
+      702
+     ]
+    },
+    {
+     "label": "令咒",
+     "box": [
+      1000,
+      20,
+      1122,
+      133
+     ]
+    },
+    {
+     "label": "1号位 助战娄希 技能1",
+     "box": [
+      43,
+      548,
+      104,
+      610
+     ]
+    },
+    {
+     "label": "1号位 助战娄希 技能2",
+     "box": [
+      130,
+      548,
+      191,
+      610
+     ]
+    },
+    {
+     "label": "1号位 助战娄希 技能3",
+     "box": [
+      217,
+      548,
+      278,
+      610
+     ]
+    },
+    {
+     "label": "2号位 自己娄希 技能1",
+     "box": [
+      365,
+      548,
+      426,
+      610
+     ]
+    },
+    {
+     "label": "2号位 自己娄希 技能2",
+     "box": [
+      452,
+      548,
+      513,
+      610
+     ]
+    },
+    {
+     "label": "2号位 自己娄希 技能3",
+     "box": [
+      539,
+      548,
+      600,
+      610
+     ]
+    },
+    {
+     "label": "3号位 奥伯龙 技能1",
+     "box": [
+      675,
+      548,
+      736,
+      610
+     ]
+    },
+    {
+     "label": "3号位 奥伯龙 技能2",
+     "box": [
+      766,
+      548,
+      827,
+      610
+     ]
+    },
+    {
+     "label": "3号位 奥伯龙 技能3",
+     "box": [
+      852,
+      548,
+      913,
+      610
+     ]
+    }
+   ],
+   "screens": [
+    "battle-wave1.png",
+    "battle-target-enemy2.png",
+    "battle-slot1-skill3-cooldown.png",
+    "battle-after-cards.png",
+    "64-order-change-done.png"
+   ]
+  },
+  "card": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "战斗速度",
+     "area": [
+      1050,
+      60,
+      1220,
+      110
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "返回",
+     "area": [
+      1140,
+      655,
+      1260,
+      710
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "战斗场次",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗结果",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "卡1（指令卡）",
+     "box": [
+      46,
+      415,
+      211,
+      655
+     ]
+    },
+    {
+     "label": "卡2",
+     "box": [
+      301,
+      415,
+      466,
+      655
+     ]
+    },
+    {
+     "label": "卡3",
+     "box": [
+      556,
+      415,
+      721,
+      655
+     ]
+    },
+    {
+     "label": "卡4",
+     "box": [
+      811,
+      415,
+      976,
+      655
+     ]
+    },
+    {
+     "label": "卡5",
+     "box": [
+      1066,
+      415,
+      1231,
+      655
+     ]
+    },
+    {
+     "label": "返回（放弃本次选卡）",
+     "box": [
+      1140,
+      662,
+      1262,
+      705
+     ]
+    },
+    {
+     "label": "战斗速度",
+     "box": [
+      1061,
+      36,
+      1209,
+      96
+     ]
+    },
+    {
+     "label": "卡1（指令卡）",
+     "box": [
+      46,
+      415,
+      210,
+      655
+     ]
+    },
+    {
+     "label": "卡2",
+     "box": [
+      300,
+      415,
+      466,
+      655
+     ]
+    },
+    {
+     "label": "卡3",
+     "box": [
+      556,
+      415,
+      720,
+      655
+     ]
+    },
+    {
+     "label": "卡4",
+     "box": [
+      810,
+      415,
+      976,
+      655
+     ]
+    },
+    {
+     "label": "卡5",
+     "box": [
+      1066,
+      415,
+      1230,
+      655
+     ]
+    },
+    {
+     "label": "战斗速度",
+     "box": [
+      1060,
+      36,
+      1208,
+      96
+     ]
+    }
+   ],
+   "screens": [
+    "card-select.png",
+    "card-np-selected.png"
+   ]
+  },
+  "result": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "战斗结果",
+     "area": [
+      500,
+      25,
+      780,
+      95
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "请点击游戏界面",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "获得的战利品",
+     "area": null
+    }
+   ],
+   "buttons": [],
+   "screens": [
+    "result.png",
+    "result-exp.png"
+   ]
+  },
+  "drops": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "获得的战利品",
+     "area": [
+      130,
+      25,
+      400,
+      80
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "下步",
+     "area": [
+      1020,
+      595,
+      1200,
+      690
+     ]
+    },
+    {
+     "kind": "text-absent",
+     "expect": "连续出击",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "下一步",
+     "box": [
+      948,
+      606,
+      1272,
+      676
+     ]
+    },
+    {
+     "label": "显示切换",
+     "box": [
+      1043,
+      35,
+      1161,
+      68
+     ]
+    }
+   ],
+   "screens": [
+    "drops.png"
+   ]
+  },
+  "repeat_dialog": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "是否连续进行同一关卡",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "连续出击",
+     "area": [
+      740,
+      550,
+      940,
+      620
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "关闭",
+     "area": [
+      380,
+      545,
+      510,
+      620
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "行动力现在",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "关闭（取消连刷）",
+     "box": [
+      313,
+      554,
+      574,
+      612
+     ]
+    },
+    {
+     "label": "连续出击",
+     "box": [
+      709,
+      554,
+      970,
+      612
+     ]
+    },
+    {
+     "label": "开关：获得星光之砂（自动使用）",
+     "box": [
+      437,
+      428,
+      595,
+      513
+     ]
+    },
+    {
+     "label": "开关：牵绊获得量2倍化（自动使用）",
+     "box": [
+      686,
+      427,
+      845,
+      518
+     ]
+    }
+   ],
+   "screens": [
+    "repeat-dialog.png"
+   ]
+  },
+  "ap_recovery": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "行动力回复",
+     "area": [
+      550,
+      25,
+      730,
+      80
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "消耗道具回复行动力",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "青铜果实",
+     "area": [
+      440,
+      290,
+      600,
+      350
+     ]
+    },
+    {
+     "kind": "text-absent",
+     "expect": "连续出击",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "白银果实（不用）",
+     "box": [
+      315,
+      143,
+      981,
+      267
+     ]
+    },
+    {
+     "label": "青铜果实（默认用）",
+     "box": [
+      315,
+      290,
+      981,
+      415
+     ]
+    },
+    {
+     "label": "赤铜果实（0个，不可用）",
+     "box": [
+      315,
+      438,
+      981,
+      562
+     ]
+    },
+    {
+     "label": "兑换青铜树苗",
+     "box": [
+      807,
+      580,
+      973,
+      654
+     ]
+    },
+    {
+     "label": "关闭（不回复，退出）",
+     "box": [
+      527,
+      589,
+      753,
+      647
+     ]
+    },
+    {
+     "label": "圣晶石（不用）",
+     "box": [
+      315,
+      120,
+      981,
+      265
+     ]
+    },
+    {
+     "label": "黄金果实（不用）",
+     "box": [
+      315,
+      267,
+      981,
+      412
+     ]
+    },
+    {
+     "label": "白银果实（不用）",
+     "box": [
+      315,
+      414,
+      981,
+      559
+     ]
+    }
+   ],
+   "screens": [
+    "ap-recovery-bronze.png",
+    "ap-recovery.png"
+   ]
+  },
+  "order_change": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "分别挑选",
+     "area": [
+      360,
+      145,
+      920,
+      185
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "进行更替",
+     "area": [
+      560,
+      590,
+      720,
+      650
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "先发成员",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "先发第1位 娄希",
+     "box": [
+      36,
+      250,
+      229,
+      565
+     ]
+    },
+    {
+     "label": "先发第2位 娄希",
+     "box": [
+      236,
+      250,
+      429,
+      565
+     ]
+    },
+    {
+     "label": "先发第3位 奥伯龙（下场）",
+     "box": [
+      436,
+      250,
+      629,
+      565
+     ]
+    },
+    {
+     "label": "候补第1位 幼体/提亚马特",
+     "box": [
+      651,
+      250,
+      844,
+      565
+     ]
+    },
+    {
+     "label": "候补第2位 莎乐美",
+     "box": [
+      851,
+      250,
+      1044,
+      565
+     ]
+    },
+    {
+     "label": "候补第3位 玛修（上场）",
+     "box": [
+      1051,
+      250,
+      1244,
+      565
+     ]
+    },
+    {
+     "label": "进行更替",
+     "box": [
+      478,
+      591,
+      803,
+      661
+     ]
+    },
+    {
+     "label": "战斗菜单",
+     "box": [
+      1141,
+      162,
+      1245,
+      250
+     ]
+    },
+    {
+     "label": "关闭（退出换人）",
+     "box": [
+      1192,
+      98,
+      1254,
+      164
+     ]
+    }
+   ],
+   "screens": [
+    "61-order-change-select.png"
+   ]
+  },
+  "command_spell_menu": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "令咒剩余",
+     "area": [
+      800,
+      130,
+      1020,
+      185
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "宝具解放",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "灵基修复",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "请选择对象",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "宝具解放（不点）",
+     "box": [
+      246,
+      296,
+      1033,
+      422
+     ]
+    },
+    {
+     "label": "灵基修复（不点）",
+     "box": [
+      246,
+      446,
+      1033,
+      572
+     ]
+    },
+    {
+     "label": "战斗菜单",
+     "box": [
+      1141,
+      162,
+      1245,
+      250
+     ]
+    }
+   ],
+   "screens": [
+    "70-command-spell-open.png"
+   ]
+  },
+  "command_spell_confirm": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "是否使用令咒",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "取消",
+     "area": [
+      300,
+      390,
+      600,
+      470
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "决定",
+     "area": [
+      680,
+      390,
+      970,
+      470
+     ]
+    },
+    {
+     "kind": "text-absent",
+     "expect": "请选择对象",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "取消",
+     "box": [
+      318,
+      400,
+      584,
+      461
+     ]
+    },
+    {
+     "label": "决定（会真的消耗1划）",
+     "box": [
+      692,
+      399,
+      958,
+      461
+     ]
+    }
+   ],
+   "screens": [
+    "73-command-spell-confirm.png"
+   ]
+  },
+  "command_spell_target": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "请选择对象",
+     "area": [
+      550,
+      165,
+      740,
+      220
+     ]
+    },
+    {
+     "kind": "text-exists",
+     "expect": "是否使用",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "灵基修复",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "目标从者1（娄希，大卡）",
+     "box": [
+      178,
+      233,
+      452,
+      558
+     ]
+    },
+    {
+     "label": "目标从者2（娄希，大卡）",
+     "box": [
+      480,
+      233,
+      757,
+      558
+     ]
+    },
+    {
+     "label": "目标从者3（玛修，大卡）",
+     "box": [
+      845,
+      233,
+      1085,
+      558
+     ]
+    },
+    {
+     "label": "关闭（退出令咒）",
+     "box": [
+      1056,
+      109,
+      1136,
+      194
+     ]
+    }
+   ],
+   "screens": [
+    "72-command-spell-target-select.png"
+   ]
+  },
+  "class_info": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "职阶相性",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "特殊职阶",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "开始任务",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "关闭",
+     "box": [
+      348,
+      532,
+      607,
+      590
+     ]
+    },
+    {
+     "label": "职阶星图分值效果",
+     "box": [
+      673,
+      531,
+      932,
+      589
+     ]
+    },
+    {
+     "label": "返回",
+     "box": [
+      16,
+      9,
+      172,
+      78
+     ]
+    }
+   ],
+   "screens": [
+    "09-class-filter.png"
+   ]
+  },
+  "battle_menu": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "撤退",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "技能使用确认",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "请选择对象",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "撤退",
+     "box": [
+      752,
+      214,
+      1077,
+      283
+     ]
+    },
+    {
+     "label": "开关：技能使用确认",
+     "box": [
+      866,
+      355,
+      932,
+      405
+     ]
+    },
+    {
+     "label": "开关：宝具动画匀速",
+     "box": [
+      1093,
+      355,
+      1159,
+      405
+     ]
+    },
+    {
+     "label": "开关：缩短敌人消失时间",
+     "box": [
+      866,
+      426,
+      932,
+      474
+     ]
+    },
+    {
+     "label": "战利品一览",
+     "box": [
+      419,
+      556,
+      611,
+      614
+     ]
+    },
+    {
+     "label": "音量设定",
+     "box": [
+      670,
+      557,
+      860,
+      613
+     ]
+    }
+   ],
+   "screens": [
+    "55-battle-menu.png"
+   ]
+  },
+  "master_skills": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "战斗场次",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "御主",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗结果",
+     "area": null
+    }
+   ],
+   "buttons": [
+    {
+     "label": "御主技能1",
+     "box": [
+      868,
+      275,
+      945,
+      352
+     ]
+    },
+    {
+     "label": "御主技能2",
+     "box": [
+      957,
+      275,
+      1034,
+      352
+     ]
+    },
+    {
+     "label": "御主技能3（换人）",
+     "box": [
+      1046,
+      274,
+      1123,
+      352
+     ]
+    },
+    {
+     "label": "战斗菜单",
+     "box": [
+      1141,
+      162,
+      1245,
+      250
+     ]
+    }
+   ],
+   "screens": [
+    "60-current-master-expanded.png"
+   ]
+  },
+  "loading": {
+   "criteria": [
+    {
+     "kind": "text-exists",
+     "expect": "加载中",
+     "area": null
+    },
+    {
+     "kind": "text-exists",
+     "expect": "小贴士",
+     "area": null
+    },
+    {
+     "kind": "text-absent",
+     "expect": "战斗场次",
+     "area": null
+    }
+   ],
+   "buttons": [],
+   "screens": [
+    "12-battle-start.png"
+   ]
+  }
+ }
+}
