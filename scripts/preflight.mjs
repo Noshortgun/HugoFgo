@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { deviceInfo, listDevices, resolveAdb } from './adb.mjs';
 import { scanAutomationProcesses } from './automation-processes.mjs';
-import { pipInstallCommand, REPLAY_PACKAGES, resolvePython, venvPython } from './python-env.mjs';
+import { probeReplayDeps, REPLAY_PACKAGES, requirementsInstallCommand, resolvePython, venvPython } from './python-env.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isWindows = process.platform === 'win32';
@@ -29,30 +29,6 @@ const SECTIONS = ['仓库', '回放环境', '设备', '外部自动化', '实机
 const WORK_BRANCH = /^(ticket|integration|feature|fix|chore|issue)\//;
 const SUPPORTED_WIDTH = 1280;
 const SUPPORTED_HEIGHT = 720;
-
-const PROBE_SCRIPT = `
-import importlib
-import importlib.metadata
-import json
-import platform
-
-packages = ${JSON.stringify(
-  Object.fromEntries(REPLAY_PACKAGES.map((item) => [item.module, item.pip])),
-)}
-modules = {}
-missing = []
-for module, distribution in packages.items():
-    try:
-        importlib.import_module(module)
-        try:
-            version = importlib.metadata.version(distribution)
-        except Exception:
-            version = "已安装"
-        modules[module] = version
-    except Exception as exc:
-        missing.append({"module": module, "pip": distribution, "error": str(exc)})
-print(json.dumps({"version": platform.python_version(), "modules": modules, "missing": missing}))
-`;
 
 function hasFlag(name, alias) {
   return process.argv.includes(name) || Boolean(alias && process.argv.includes(alias));
@@ -218,45 +194,37 @@ function checkPython() {
         : '已尝试 cv/.venv 与 PATH 中的 python3/python',
       fix: configured
         ? (isWindows ? 'set HUGOFGO_PYTHON=C:\\path\\to\\python.exe' : 'export HUGOFGO_PYTHON=/path/to/python')
-        : `python -m venv cv/.venv && ${pipInstallCommand(venvPython(root))}`,
+        : `python -m venv cv/.venv && ${requirementsInstallCommand(venvPython(root), root)}`,
     });
     return;
   }
 
-  const probe = spawnSync(python.command, ['-c', PROBE_SCRIPT], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, PYTHONUTF8: '1', PYTHONDONTWRITEBYTECODE: '1' },
-    timeout: 120_000,
-  });
+  const probe = probeReplayDeps(python.command, { cwd: root });
 
-  if (probe.error?.code === 'ETIMEDOUT') {
+  if (probe.status === 'timeout') {
     add('回放环境', 'fail', 'Python 依赖探测超时', {
-      detail: `解释器：${python.command}`,
-      fix: pipInstallCommand(python.command),
+      detail: `解释器：${python.command}；${probe.detail}`,
+      fix: requirementsInstallCommand(python.command, root),
     });
     return;
   }
 
-  let report;
-  try {
-    report = JSON.parse((probe.stdout ?? '').trim());
-  } catch {
-    const stderr = (probe.stderr ?? '').trim().split(/\r?\n/).slice(0, 3).join('\n');
+  if (probe.status === 'error') {
     add('回放环境', 'fail', '无法运行 Python 依赖探测', {
-      detail: stderr || `解释器：${python.command}（退出码 ${probe.status}）`,
-      fix: pipInstallCommand(python.command),
+      detail: `${probe.detail}\n解释器：${python.command}`,
+      fix: requirementsInstallCommand(python.command, root),
     });
     return;
   }
 
-  if (report.missing?.length) {
-    const packages = report.missing.map((item) => item.pip);
+  if (probe.status === 'missing') {
+    const packages = probe.missing.map((item) => item.pip);
     add('回放环境', 'fail', `缺少回放依赖：${packages.join('、')}`, {
-      detail: report.missing.map((item) => ` ${item.module}: ${item.error}`).join('\n'),
-      fix: pipInstallCommand(python.command, packages),
+      detail: probe.missing.map((item) => ` ${item.module}: ${item.error}`).join('\n'),
+      fix: requirementsInstallCommand(python.command, root),
     });
   } else {
+    const report = probe.report;
     const versions = REPLAY_PACKAGES.map((item) => `${item.module} ${report.modules?.[item.module] ?? '?'}`).join(' / ');
     add('回放环境', 'ok', `Python ${report.version}（${python.source}）可导入全部回放依赖`, {
       detail: versions,

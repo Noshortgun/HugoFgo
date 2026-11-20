@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 构建与回放
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: cv/requirements.txt
+
+      - name: Install Python replay dependencies
+        run: python -m pip install -r cv/requirements.txt
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run executor domain unit tests
+        run: python -m unittest discover -s executor/domain/tests -t . -v
+
+      - name: Run replay
+        run: npm run replay
+
+      - name: List failed replay cases
+        if: failure()
+        run: |
+          node -e '
+          const fs = require("fs");
+          const file = "logs/replay/latest.json";
+          if (!fs.existsSync(file)) {
+            console.log("没有回放报告：回放在运行用例前就失败了（依赖或环境问题）。");
+            process.exit(0);
+          }
+          const report = JSON.parse(fs.readFileSync(file, "utf8"));
+          for (const item of report.cases.filter((testCase) => !testCase.ok)) {
+            console.log(`::error title=回放用例失败::${item.name}（预期 ${item.expected}，实际 ${item.actual}）`);
+          }
+          console.log(`${report.passed}/${report.total} 通过，失败 ${report.failed} 条`);
+          '
+
+      - name: Upload replay report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-report
+          path: logs/replay/latest.json
+          if-no-files-found: warn
