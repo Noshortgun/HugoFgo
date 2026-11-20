@@ -12,6 +12,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import zlib
 from pathlib import Path
 from typing import get_type_hints
@@ -19,10 +20,12 @@ from unittest import mock
 
 import executor.device as gateway
 from executor.device import adb as adb_module
+from executor.device import open_device
 from executor.device.adb import ADB_TIMEOUT, AdbDevice, devices, parse_density, resolve_adb_path
-from executor.device.base import Device, DeviceError, Frame, to_device_point
-from executor.device.config import DeviceConfig, DeviceMetrics, Region
+from executor.device.base import Device, DeviceError, Frame, FrameFormat, to_device_point
+from executor.device.config import DeviceChannel, DeviceConfig, DeviceMetrics, Region
 from executor.device.fake import FakeDevice
+from executor.device.ldplayer import LdplayerWindowDevice, find_ldplayer_window, stats_summary
 from executor.device.png import png_size
 
 
@@ -52,6 +55,116 @@ def adb_ok(stdout: bytes = b'') -> tuple[int, bytes, bytes]:
 
 def adb_fail(stderr: str, code: int = 1) -> tuple[int, bytes, bytes]:
     return (code, b'', stderr.encode('utf-8'))
+
+
+class FakeWin32:
+    """假 Win32：内存窗口树 + 合成像素，用来验证 LDPlayer 适配器的资源释放与每个失败分支。
+
+    `leaked()` 非空说明 DC 或位图没释放；DeleteObject 时位图仍被选中会直接断言失败。
+    """
+
+    PARENT = 1000
+    RENDER = 1001
+    STOCK_OBJECT = 1
+
+    def __init__(self, *, width: int = 1280, height: int = 720, pixel: int = 0x11):
+        self.sizes = {self.RENDER: (width, height)}
+        self.parents: set[int] = {self.PARENT}
+        self.classes = {self.PARENT: 'LDPlayerMainFrame', self.RENDER: 'RenderWindow'}
+        self.titles = {self.PARENT: '雷电模拟器', self.RENDER: 'TheRender'}
+        self.processes = {self.PARENT: r'D:\leidian\LDPlayer14\dnplayer.exe'}
+        self.render_children = {self.PARENT: [self.RENDER]}
+        self.iconic = False
+        self.print_ok = True
+        self.lines: int | None = None
+        self.pixels = bytes([pixel]) * (width * height * 3)
+        self.live_dcs: list[int] = []
+        self.live_bitmaps: list[int] = []
+        self.selected: dict[int, int] = {}
+        self.calls: list[str] = []
+        self._next_handle = 5000
+
+    def _new_dc(self, kind: str) -> int:
+        self._next_handle += 1
+        self.live_dcs.append(self._next_handle)
+        self.calls.append(kind)
+        return self._next_handle
+
+    def enum_windows(self) -> list[int]:
+        return sorted(self.parents)
+
+    def enum_children(self, parent: int) -> list[int]:
+        return list(self.render_children.get(parent, []))
+
+    def class_name(self, hwnd: int) -> str:
+        return self.classes.get(hwnd, '')
+
+    def window_title(self, hwnd: int) -> str:
+        return self.titles.get(hwnd, '')
+
+    def process_name(self, hwnd: int) -> str | None:
+        return self.processes.get(hwnd)
+
+    def is_window(self, hwnd: int) -> bool:
+        return hwnd in self.classes
+
+    def is_iconic(self, hwnd: int) -> bool:
+        return self.iconic
+
+    def client_size(self, hwnd: int) -> tuple[int, int]:
+        return self.sizes.get(hwnd, (0, 0))
+
+    def get_dc(self, hwnd: int) -> int:
+        return self._new_dc('GetDC')
+
+    def release_dc(self, hwnd: int, hdc: int) -> None:
+        self.calls.append('ReleaseDC')
+        assert hdc in self.live_dcs, f'ReleaseDC 了未创建的 DC {hdc}'
+        self.live_dcs.remove(hdc)
+
+    def create_memory_dc(self, hdc: int) -> int:
+        return self._new_dc('CreateCompatibleDC')
+
+    def delete_dc(self, hdc: int) -> None:
+        self.calls.append('DeleteDC')
+        assert hdc in self.live_dcs, f'DeleteDC 了未创建的 DC {hdc}'
+        assert self.selected.get(hdc, self.STOCK_OBJECT) == self.STOCK_OBJECT, f'DC {hdc} 删除时仍选中位图'
+        self.live_dcs.remove(hdc)
+
+    def create_bitmap(self, hdc: int, width: int, height: int) -> int:
+        self._next_handle += 1
+        self.live_bitmaps.append(self._next_handle)
+        self.calls.append('CreateCompatibleBitmap')
+        return self._next_handle
+
+    def select_object(self, hdc: int, obj: int) -> int:
+        self.calls.append('SelectObject')
+        previous = self.selected.get(hdc, self.STOCK_OBJECT)
+        self.selected[hdc] = obj
+        return previous
+
+    def delete_object(self, obj: int) -> None:
+        self.calls.append('DeleteObject')
+        assert obj in self.live_bitmaps, f'DeleteObject 了未创建的位图 {obj}'
+        for hdc, selected in self.selected.items():
+            assert selected != obj, f'位图 {obj} 仍被 DC {hdc} 选中就 DeleteObject 了'
+        self.live_bitmaps.remove(obj)
+
+    def print_window(self, hwnd: int, hdc: int) -> bool:
+        self.calls.append('PrintWindow')
+        return self.print_ok
+
+    def bitmap_bits(self, hdc: int, bitmap: int, width: int, height: int) -> tuple[bytes, int]:
+        self.calls.append('GetDIBits')
+        return self.pixels, height if self.lines is None else self.lines
+
+    def leaked(self) -> list[str]:
+        leaks = []
+        if self.live_dcs:
+            leaks.append(f'DC {len(self.live_dcs)} 个')
+        if self.live_bitmaps:
+            leaks.append(f'位图 {len(self.live_bitmaps)} 个')
+        return leaks
 
 
 def make_png(width: int, height: int) -> bytes:
@@ -214,8 +327,8 @@ def check_adb_timeouts() -> None:
 def check_discovery() -> None:
     assert gateway.devices is devices, '设备发现只保留一个实现，并从包入口导出'
     assert set(gateway.__all__) == {
-        'AdbDevice', 'Device', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
-        'FakeDevice', 'Frame', 'Region', 'devices',
+        'AdbDevice', 'Device', 'DeviceChannel', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
+        'FakeDevice', 'Frame', 'FrameFormat', 'LdplayerWindowDevice', 'Region', 'devices', 'open_device',
     }, '包入口只暴露设备网关的稳定接口'
     assert len(gateway.__all__) == len(set(gateway.__all__)), '__all__ 不应有重复项'
     assert not hasattr(gateway, 'to_device_point'), '坐标换算属于适配器内部实现，不应从包入口暴露'
@@ -457,6 +570,192 @@ def check_fake_dir() -> None:
                      error_type=DeviceError)
 
 
+def check_channel() -> None:
+    assert DeviceChannel.parse('adb') is DeviceChannel.ADB
+    assert DeviceChannel.parse(' LDPLAYER-WINDOW ') is DeviceChannel.LDPLAYER_WINDOW
+    assert DeviceChannel.parse(DeviceChannel.LDPLAYER_WINDOW) is DeviceChannel.LDPLAYER_WINDOW
+    assert DeviceChannel.parse('LDPlayer 窗口原始帧') is DeviceChannel.LDPLAYER_WINDOW
+    assert 'adb' in DeviceChannel.options() and 'ldplayer-window' in DeviceChannel.options()
+    error = expect_error(lambda: DeviceChannel.parse('bluestacks'), 'bluestacks', error_type=DeviceError)
+    assert 'adb' in str(error) and 'ldplayer-window' in str(error)
+
+    assert make_config(serial='x').channel is DeviceChannel.ADB, '默认通道必须仍是 adb'
+    assert make_config(serial='x', channel='ldplayer-window').channel is DeviceChannel.LDPLAYER_WINDOW
+    assert make_config(serial='x', channel='ADB').channel is DeviceChannel.ADB
+    expect_error(lambda: make_config(serial='x', channel='mumu'), 'mumu', error_type=DeviceError)
+
+
+def check_frame_format() -> None:
+    raw = Frame(image=b'\x00' * 12, width=2, height=2, captured_at=0.0, format='bgr24')
+    assert raw.format is FrameFormat.BGR24 and raw.capture_ms is None
+    expect_error(lambda: Frame(image=b'\x00' * 8, width=2, height=2, captured_at=0.0, format=FrameFormat.BGR24),
+                 '12 字节', error_type=DeviceError)
+    expect_error(lambda: Frame(image=b'', width=1, height=1, captured_at=0.0, format='jpeg'),
+                 'PNG', error_type=DeviceError)
+    png_frame = Frame(image=make_png(1280, 720), width=1280, height=720, captured_at=1.0)
+    assert png_frame.format is FrameFormat.PNG, 'adb 与回放帧的默认格式必须仍是 PNG'
+
+
+def check_ldplayer_window() -> None:
+    fake = FakeWin32()
+    window = find_ldplayer_window(fake)
+    assert (window.parent, window.render, window.title) == (FakeWin32.PARENT, FakeWin32.RENDER, '雷电模拟器')
+
+    fake = FakeWin32()
+    fake.parents = set()
+    error = expect_error(lambda: find_ldplayer_window(fake), 'LDPlayer', 'adb', error_type=DeviceError)
+    assert 'no-window' in str(error)
+
+    fake = FakeWin32()
+    fake.render_children = {}
+    error = expect_error(lambda: find_ldplayer_window(fake), 'RenderWindow', error_type=DeviceError)
+    assert 'no-render-window' in str(error) and 'LDPlayer 9/14' in str(error)
+
+    fake = FakeWin32()
+    fake.parents.add(2000)
+    fake.classes[2000] = 'LDPlayerMainFrame'
+    fake.titles[2000] = '雷电模拟器-2'
+    fake.render_children[2000] = [2001]
+    fake.classes[2001] = 'RenderWindow'
+    fake.sizes[2001] = (1280, 720)
+    error = expect_error(lambda: find_ldplayer_window(fake), '多开', '2 个', error_type=DeviceError)
+    assert 'multi-instance' in str(error)
+
+    fake = FakeWin32()
+    fake.parents.add(2000)
+    fake.classes[2000] = 'LDPlayerMainFrame'
+    fake.titles[2000] = '雷电模拟器-2'
+    assert find_ldplayer_window(fake).parent == FakeWin32.PARENT, '没有 RenderWindow 的辅助窗口不算实例'
+
+    fake = FakeWin32()
+    fake.classes[FakeWin32.PARENT] = 'UnknownMainFrame'
+    assert find_ldplayer_window(fake).parent == FakeWin32.PARENT, '类名不认识时按进程名 dnplayer.exe 识别'
+
+    if sys.platform != 'win32':
+        expect_error(lambda: gateway.LdplayerWindowDevice(make_config(serial='x')), 'Windows',
+                     error_type=DeviceError)
+
+
+def check_ldplayer_frames() -> None:
+    fake = FakeWin32()
+    device = LdplayerWindowDevice(make_config(serial='emulator-5554', channel='ldplayer-window'), api=fake)
+    assert isinstance(device, Device)
+    metrics = device.metrics()
+    assert (metrics.serial, metrics.width, metrics.height, metrics.density) == ('emulator-5554', 1280, 720, None)
+    assert metrics.region is Region.CN
+
+    frame = device.frame()
+    assert (frame.width, frame.height) == (1280, 720)
+    assert frame.format is FrameFormat.BGR24
+    assert frame.image == fake.pixels and len(frame.image) == 1280 * 720 * 3
+    assert frame.captured_at > 0
+    assert frame.capture_ms is not None and frame.capture_ms >= 0, '每帧必须记录采集耗时'
+    assert fake.leaked() == [], '每帧都必须释放 DC、位图并还原 SelectObject'
+    assert fake.calls[:6] == ['GetDC', 'CreateCompatibleDC', 'CreateCompatibleBitmap', 'SelectObject',
+                              'PrintWindow', 'GetDIBits'], f'采集调用顺序固定：{fake.calls}'
+    assert fake.calls[6:] == ['SelectObject', 'DeleteObject', 'DeleteDC', 'ReleaseDC'], \
+        f'释放顺序必须是还原 SelectObject → DeleteObject → DeleteDC → ReleaseDC：{fake.calls}'
+
+    stats = device.stats()
+    assert (stats.attempts, stats.frames, stats.failures) == (1, 1, 0)
+    assert stats.last_reason is None and stats.last_ms is not None
+    assert '失败原因 无' in stats_summary(stats)
+
+    device.frame()
+    assert device.stats().frames == 2, '连续取帧必须累计统计'
+    assert fake.leaked() == []
+
+    window_moved = FakeWin32()
+    device = LdplayerWindowDevice(make_config(serial='s'), api=window_moved)
+    device.metrics()
+    replacement = 3001
+    window_moved.classes.pop(FakeWin32.RENDER)
+    window_moved.sizes.pop(FakeWin32.RENDER)
+    window_moved.render_children[FakeWin32.PARENT] = [replacement]
+    window_moved.classes[replacement] = 'RenderWindow'
+    window_moved.sizes[replacement] = (1280, 720)
+    assert device.frame().width == 1280, '窗口被重建后必须重新定位，而不是一直报旧句柄'
+
+
+def check_ldplayer_errors() -> None:
+    config = make_config(serial='emulator-5554', channel='ldplayer-window')
+    fake = FakeWin32()
+    device = LdplayerWindowDevice(config, api=fake)
+
+    fake.iconic = True
+    error = expect_error(device.frame, '最小化', 'minimized', error_type=DeviceError)
+    assert fake.leaked() == [] and 'PrintWindow' in str(error), '最小化必须在采集前明确报错'
+    stats = device.stats()
+    assert (stats.attempts, stats.frames, stats.failures, stats.last_reason) == (1, 0, 1, 'minimized')
+    assert stats.reasons == {'minimized': 1}
+    fake.iconic = False
+
+    fake.print_ok = False
+    expect_error(device.frame, 'PrintWindow', 'print-window', error_type=DeviceError)
+    assert fake.leaked() == [], 'PrintWindow 失败路径也要释放资源'
+    fake.print_ok = True
+
+    fake.lines = 719
+    expect_error(device.frame, '719/720', 'copy', error_type=DeviceError)
+    assert fake.leaked() == []
+    fake.lines = 0
+    expect_error(device.frame, '截图为空', 'empty', error_type=DeviceError)
+    assert fake.leaked() == []
+    fake.lines = None
+
+    good = fake.pixels
+    fake.pixels = bytes(1280 * 720 * 3)
+    expect_error(device.frame, '全黑', 'black', error_type=DeviceError)
+    assert fake.leaked() == []
+    fake.pixels = good
+
+    fake.sizes[FakeWin32.RENDER] = (1600, 900)
+    error = expect_error(device.frame, '1600×900', 'size', error_type=DeviceError)
+    assert '1280×720' in str(error)
+    fake.sizes[FakeWin32.RENDER] = (1280, 720)
+
+    assert device.stats().reasons == {'minimized': 1, 'print-window': 1, 'copy': 1, 'empty': 1, 'black': 1,
+                                      'size': 1}
+    assert 'black×1' in stats_summary(device.stats())
+
+    expect_error(lambda: device.tap(1, 2), '只提供截图', 'adb', error_type=DeviceError)
+    expect_error(lambda: device.swipe(1, 2, 3, 4), '只提供截图', error_type=DeviceError)
+
+    fake = FakeWin32()
+    device = LdplayerWindowDevice(config, api=fake)
+    device.metrics()
+    fake.parents = set()
+    fake.classes = {}
+    expect_error(device.frame, '未找到 LDPlayer', 'no-window', error_type=DeviceError)
+
+    error = expect_error(lambda: LdplayerWindowDevice(make_config(serial='x', width=1920, height=1080),
+                                                      api=FakeWin32()).metrics(),
+                         '1920×1080', '1280×720', error_type=DeviceError)
+    assert 'DeviceConfig' in str(error)
+
+    error = expect_error(lambda: LdplayerWindowDevice(make_config(serial='x'),
+                                                      api=FakeWin32(width=1366, height=768)).metrics(),
+                         '不支持的分辨率', error_type=DeviceError)
+    assert 'DPI' in str(error), '非 16:9 时要提示 DPI 感知，方便排查系统缩放'
+
+
+def check_open_device() -> None:
+    assert gateway.open_device is open_device
+    with tempfile.TemporaryDirectory() as directory:
+        adb = Path(directory) / 'adb.exe'
+        adb.write_bytes(b'')
+        runner = ScriptedRunner(adb_ok(b'device\n'), adb_ok(b'Physical size: 1280x720\n'),
+                                adb_ok(b'Physical density: 320\n'))
+        device = open_device(make_config(serial='emulator-5554', adb_path=str(adb)), runner=runner)
+        assert isinstance(device, AdbDevice), '默认通道必须构造 adb 适配器'
+        assert device.metrics().width == 1280
+
+    if sys.platform == 'win32':
+        device = open_device(make_config(serial='emulator-5554', channel='ldplayer-window'))
+        assert isinstance(device, LdplayerWindowDevice)
+        assert isinstance(device, Device)
+
+
 def require_unoptimized() -> None:
     if sys.flags.optimize:
         raise RuntimeError('设备网关自检不能在 python -O 下运行：断言会被剥离，请使用普通 python 运行')
@@ -476,6 +775,7 @@ def check_optimized_guard() -> None:
 CHECKS = [
     ('区服解析', check_region),
     ('设备配置校验', check_config),
+    ('设备通道配置', check_channel),
     ('基准坐标换算与钳制', check_scale),
     ('adb 定位优先级', check_adb_resolution),
     ('adb 分辨率读取', check_adb_metrics),
@@ -488,6 +788,11 @@ CHECKS = [
     ('fake 帧序', check_fake_sequence),
     ('fake 动作记录', check_fake_actions),
     ('fake 帧目录', check_fake_dir),
+    ('帧格式与原始像素校验', check_frame_format),
+    ('LDPlayer 窗口定位', check_ldplayer_window),
+    ('LDPlayer 原始帧与资源释放', check_ldplayer_frames),
+    ('LDPlayer 采集失败与原因', check_ldplayer_errors),
+    ('设备工厂按通道构造', check_open_device),
 ]
 if not os.environ.get('HUGOFGO_SELF_TEST_CHILD'):
     CHECKS.append(('python -O 防护', check_optimized_guard))
@@ -529,16 +834,83 @@ def list_command(adb_path: str | None) -> int:
     return 0
 
 
+def _percentile(values: list[float], fraction: float) -> float:
+    """最近秩百分位；不引第三方依赖，够用即可。"""
+    ordered = sorted(values)
+    if not ordered:
+        return 0.0
+    index = min(len(ordered) - 1, max(0, round(fraction * (len(ordered) - 1))))
+    return ordered[index]
+
+
+def capture_command(*, serial: str | None, channel: str, adb_path: str | None, region: str,
+                    count: int) -> int:
+    """按通道连续取帧并打印耗时统计：实机验收入口，不写任何截图文件。"""
+    if not serial:
+        print('--capture 需要 --serial（adb devices 第一列，如 emulator-5554）', file=sys.stderr)
+        return 2
+    if count <= 0:
+        print('--capture 的帧数必须为正整数', file=sys.stderr)
+        return 2
+    try:
+        config = DeviceConfig(serial=serial, region=region, adb_path=adb_path, channel=channel)
+        device = open_device(config)
+        metrics = device.metrics()
+    except DeviceError as error:
+        print(f'设备错误：{error}', file=sys.stderr)
+        return 2
+
+    print(f'通道 {config.channel.value}（{config.channel.label}），设备 {metrics.serial}，'
+          f'metrics {metrics.width}×{metrics.height}，连续 {count} 帧')
+    times: list[float] = []
+    failures = 0
+    for index in range(1, count + 1):
+        started = time.perf_counter()
+        try:
+            frame = device.frame()
+        except DeviceError as error:
+            failures += 1
+            print(f'第 {index} 帧失败：{error}', file=sys.stderr)
+            continue
+        wall_ms = (time.perf_counter() - started) * 1000
+        times.append(wall_ms)
+        adapter = '—' if frame.capture_ms is None else f'{frame.capture_ms:.2f} ms'
+        print(f'第 {index} 帧 {frame.width}×{frame.height} {frame.format.value} {len(frame.image)} 字节'
+              f'｜墙钟 {wall_ms:.2f} ms｜通道 {adapter}')
+
+    if times:
+        mean = sum(times) / len(times)
+        print(f'成功 {len(times)} 帧，失败 {failures} 帧；单帧墙钟 mean={mean:.2f} ms '
+              f'P95={_percentile(times, 0.95):.2f} ms min={min(times):.2f} ms max={max(times):.2f} ms')
+    else:
+        print(f'全部 {count} 帧都失败', file=sys.stderr)
+    stats = getattr(device, 'stats', None)
+    if callable(stats):
+        print(f'通道统计：{stats_summary(stats())}')
+    return 0 if not failures else 1
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog='python -m executor.device', description='设备网关自检与设备列表')
+    parser = argparse.ArgumentParser(prog='python -m executor.device',
+                                     description='设备网关自检、设备列表与通道取帧验收')
     parser.add_argument('--self-test', action='store_true', help='运行不依赖真机的自检')
     parser.add_argument('--list', action='store_true', help='列出 adb 设备（需要 adb 与在线模拟器）')
+    parser.add_argument('--capture', metavar='帧数', type=int,
+                        help='按 --channel 连续取帧并打印耗时统计（实机验收，不写文件）')
+    parser.add_argument('--channel', choices=[channel.value for channel in DeviceChannel],
+                        default=DeviceChannel.ADB.value,
+                        help='帧来源通道；默认 adb，ldplayer-window 只支持 Windows + LDPlayer')
+    parser.add_argument('--serial', help='设备序列号，如 emulator-5554（--capture 必填）')
+    parser.add_argument('--region', default='CN', help='区服：CN、JP、TW 或中文名（默认 CN）')
     parser.add_argument('--adb', help='adb 路径；缺省按设备配置 → HUGOFGO_ADB → PATH → 常见模拟器路径查找')
     args = parser.parse_args(argv)
     if args.self_test:
         return self_test()
     if args.list:
         return list_command(args.adb)
+    if args.capture is not None:
+        return capture_command(serial=args.serial, channel=args.channel, adb_path=args.adb,
+                               region=args.region, count=args.capture)
     parser.print_help()
     return 2
 

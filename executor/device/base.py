@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -20,14 +21,36 @@ class DeviceError(RuntimeError):
     """设备访问失败。消息必须带定位信息：serial、命令、stderr 或截图路径。"""
 
 
+class FrameFormat(str, Enum):
+    """帧字节的语义：PNG 压缩图，或自上而下的 BGR24 原始像素（每像素 3 字节，行间无填充）。"""
+
+    PNG = 'png'
+    BGR24 = 'bgr24'
+
+
 @dataclass(frozen=True)
 class Frame:
-    """一帧截图。image 是原始 PNG 字节，由画面感知解码；captured_at 是 Unix 秒。"""
+    """一帧截图。image 是 PNG 字节或 BGR24 原始像素（见 format），由画面感知解码；captured_at 是 Unix 秒。
+
+    capture_ms 是适配器记录的采集耗时（毫秒），None 表示该通道不记录；失败原因不走 Frame，而是 DeviceError。
+    """
 
     image: bytes
     width: int
     height: int
     captured_at: float
+    format: FrameFormat = FrameFormat.PNG
+    capture_ms: float | None = None
+
+    def __post_init__(self) -> None:
+        try:
+            frame_format = FrameFormat(self.format)
+        except ValueError:
+            raise DeviceError(f'未知帧格式 {self.format!r}；可选 PNG、BGR24') from None
+        object.__setattr__(self, 'format', frame_format)
+        if frame_format is FrameFormat.BGR24 and len(self.image) != self.width * self.height * 3:
+            raise DeviceError(f'{self.width}×{self.height} 的 BGR24 帧应为 {self.width * self.height * 3} 字节，'
+                              f'实际 {len(self.image)} 字节；原始像素帧不做补齐或截断')
 
 
 @runtime_checkable
