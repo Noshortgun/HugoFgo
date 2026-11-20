@@ -308,3 +308,14 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 新增 `captures/2026-11-20/` 作为验证集（25 张实机关键帧，JPEG 入库），`.gitignore` 允许 `captures/*/key/*.jpg`。
 - `cv/replay.py` 新增 `check_perception_states()` 用例组，旧 36 条用例保留。
 - 本阶段没有合并 main 的文档提交，避免把 GitHub 票据迁移混进感知改动。
+
+
+## 35. 画面感知性能优化（票据 05A，2026-11-20）
+
+- 实测瓶颈：RapidOCR 在 CPU 上的单次调用约 2–3s，缩小 ROI 几乎不提速；DirectML 只能降到约 1.8s。所以优化目标是**减少 OCR 调用**，不是换引擎。
+- 状态判定改为**模板匹配**：`build_templates.py` 从验证集裁出 16 个状态的签名区域（`templates/`），逐状态在小窗口内 `matchTemplate`，单帧约 10ms；御主技能展开用三个图标槽的亮度判定。
+- 字段识别改为**只读需要的区域**：把该区域拼成一张图做一次 OCR，不再全图识别。
+- 增加两级缓存：整帧字节 hash 命中直接复用 Observation；区域像素 hash 命中则该区域不再 OCR。
+- 技能冷却从每帧必读取改为**按需** `Perception.read_cooldowns(frame)`，避免普通战斗帧多一次放大 OCR。
+- 实测：无字段状态约 0.01s/帧；战斗约 1.98s、选卡约 1.80s、AP 恢复约 1.83s；25 帧首轮 19.1s，全缓存命中时 0.01s。
+- 准确率保持：25/25 状态判对，且 `uncertain` 不再误置。

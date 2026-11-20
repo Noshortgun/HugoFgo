@@ -142,8 +142,8 @@ class PerceptionFallbackTest(unittest.TestCase):
         self.assertTrue(observation.uncertain)
 
     def test_skill_cooldown_is_read(self):
-        observation = observe('battle-slot1-skill3-cooldown')
-        cooldowns = observation.fields.get('skill_cooldowns', {})
+        perception = Perception('cn')
+        cooldowns = perception.read_cooldowns(fixture('battle-slot1-skill3-cooldown'))
         self.assertTrue(cooldowns)
         label, turns = next(iter(cooldowns.items()))
         self.assertIn('2号位', label)
@@ -151,8 +151,8 @@ class PerceptionFallbackTest(unittest.TestCase):
         self.assertEqual(6, turns)
 
     def test_no_cooldown_on_fresh_battle(self):
-        observation = observe('battle-wave1')
-        self.assertNotIn('skill_cooldowns', observation.fields)
+        perception = Perception('cn')
+        self.assertEqual({}, perception.read_cooldowns(fixture('battle-wave1')))
 
     def test_unsupported_region_is_rejected(self):
         with self.assertRaises(ValueError):

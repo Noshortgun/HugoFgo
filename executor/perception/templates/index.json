@@ -1,0 +1,162 @@
+{
+ "support": {
+  "box": [
+   1035,
+   5,
+   1275,
+   65
+  ],
+  "source": "support-select-correct-ce.jpg",
+  "template": "support.png"
+ },
+ "support_confirm": {
+  "box": [
+   510,
+   330,
+   755,
+   385
+  ],
+  "source": "support-list-update-confirm.jpg",
+  "template": "support_confirm.png"
+ },
+ "team": {
+  "box": [
+   1045,
+   5,
+   1275,
+   65
+  ],
+  "source": "team-confirm.jpg",
+  "template": "team.png"
+ },
+ "battle": {
+  "box": [
+   1060,
+   555,
+   1205,
+   645
+  ],
+  "source": "battle-wave1.jpg",
+  "template": "battle.png"
+ },
+ "card": {
+  "box": [
+   1050,
+   60,
+   1220,
+   110
+  ],
+  "source": "card-select.jpg",
+  "template": "card.png"
+ },
+ "result": {
+  "box": [
+   500,
+   25,
+   780,
+   95
+  ],
+  "source": "result.jpg",
+  "template": "result.png"
+ },
+ "drops": {
+  "box": [
+   130,
+   25,
+   400,
+   80
+  ],
+  "source": "drops.jpg",
+  "template": "drops.png"
+ },
+ "repeat_dialog": {
+  "box": [
+   460,
+   90,
+   810,
+   135
+  ],
+  "source": "repeat-dialog.jpg",
+  "template": "repeat_dialog.png"
+ },
+ "ap_recovery": {
+  "box": [
+   550,
+   25,
+   730,
+   80
+  ],
+  "source": "ap-recovery-bronze.jpg",
+  "template": "ap_recovery.png"
+ },
+ "order_change": {
+  "box": [
+   360,
+   145,
+   920,
+   185
+  ],
+  "source": "61-order-change-select.jpg",
+  "template": "order_change.png"
+ },
+ "command_spell_menu": {
+  "box": [
+   280,
+   300,
+   430,
+   350
+  ],
+  "source": "70-command-spell-open.jpg",
+  "template": "command_spell_menu.png"
+ },
+ "command_spell_target": {
+  "box": [
+   550,
+   165,
+   740,
+   220
+  ],
+  "source": "72-command-spell-target-select.jpg",
+  "template": "command_spell_target.png"
+ },
+ "command_spell_confirm": {
+  "box": [
+   450,
+   296,
+   995,
+   340
+  ],
+  "source": "73-command-spell-confirm.jpg",
+  "template": "command_spell_confirm.png"
+ },
+ "class_info": {
+  "box": [
+   375,
+   122,
+   470,
+   160
+  ],
+  "source": "09-class-filter.jpg",
+  "template": "class_info.png"
+ },
+ "battle_menu": {
+  "box": [
+   745,
+   205,
+   1085,
+   290
+  ],
+  "source": "55-battle-menu.jpg",
+  "template": "battle_menu.png"
+ },
+ "loading": {
+  "box": [
+   555,
+   160,
+   725,
+   225
+  ],
+  "source": "12-battle-start.jpg",
+  "template": "loading.png"
+ }
+}
