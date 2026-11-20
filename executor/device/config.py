@@ -42,15 +42,44 @@ class DeviceMetrics:
     region: Region
 
 
+class DeviceChannel(str, Enum):
+    """帧来源通道：adb 截图（默认，跨模拟器）或 LDPlayer 窗口原始帧（仅 Windows + LDPlayer）。"""
+
+    ADB = 'adb'
+    LDPLAYER_WINDOW = 'ldplayer-window'
+
+    @property
+    def label(self) -> str:
+        return {'adb': 'adb 截图', 'ldplayer-window': 'LDPlayer 窗口原始帧'}[self.value]
+
+    @classmethod
+    def options(cls) -> str:
+        return '、'.join(f'{channel.value}（{channel.label}）' for channel in cls)
+
+    @classmethod
+    def parse(cls, value: 'DeviceChannel | str') -> 'DeviceChannel':
+        if isinstance(value, cls):
+            return value
+        text = str(value).strip()
+        for channel in cls:
+            if text.lower() == channel.value or text == channel.label:
+                return channel
+        raise DeviceError(f'未知设备通道 {value!r}；可选 {cls.options()}')
+
+
 @dataclass(frozen=True)
 class DeviceConfig:
-    """设备配置。region 必填；None 仅用于构造时给出可操作错误，不是有效配置。"""
+    """设备配置。region 必填；None 仅用于构造时给出可操作错误，不是有效配置。
+
+    channel 默认 adb；只有显式选择 ldplayer-window 才会走窗口原始帧通道，不会静默切换。
+    """
 
     serial: str
     region: Region | str | None = None
     adb_path: str | None = None
     width: int | None = None
     height: int | None = None
+    channel: DeviceChannel | str = DeviceChannel.ADB
 
     def __post_init__(self) -> None:
         serial = str(self.serial).strip()
@@ -60,6 +89,7 @@ class DeviceConfig:
         if self.region is None:
             raise DeviceError(f'设备配置缺少区服：请选择 {Region.options()}')
         object.__setattr__(self, 'region', Region.parse(self.region))
+        object.__setattr__(self, 'channel', DeviceChannel.parse(self.channel))
 
         adb_path = str(self.adb_path).strip() if self.adb_path else None
         object.__setattr__(self, 'adb_path', adb_path or None)
