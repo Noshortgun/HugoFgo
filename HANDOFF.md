@@ -319,3 +319,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 跟踪方式从本地 markdown 改为 GitHub Issues；`docs/agents/issue-tracker.md` 与 `AGENTS.md` 已更新，`.scratch/` 保留为发布源。
 - `scripts/publish-issues.mjs` 幂等发布 13 张票据：标题、正文、标签、原生 blocked-by 依赖；01、02 创建后关闭。
 - 结果：#1–#13。frontier 为 #3、#4、#9。
+
+
+## 36. 并行施工：CI 护栏、票据同步与 LDPlayer 原始帧（2026-11-20，#20/#23/#24）
+
+- #23（已关闭）：`cv/requirements.txt` 固定回放依赖；`scripts/python-env.mjs` 共享依赖探测，`npm run replay` 在运行用例前验证真实导入，失败立即退出且不产生半份报告；新增 `.github/workflows/ci.yml`（PR 与 main push：安装依赖、构建、领域单测、回放、失败用例定位与报告上传），CI 已实际通过。
+- #24（工具入库，迁移未完成）：`scripts/issue-sync.mjs` 只读拉取 GitHub 并与 `.scratch/.../NN-<slug>.md` 比较，输出新增/修改/无变化/缺本地源；父票与已关闭票保护，重复/遗留文件只报告；`issues:selftest` 13/13。真实检查暴露 6/7/12 漂移与 5A/5B/5C/19/23/24 缺本地源，迁移尚未完成。
+- #20（不关闭，最后一行像素有环境限制）：`executor/device/ldplayer.py` 可选 LDPlayer RenderWindow 原始帧通道，输出 1280×720 BGR24，默认 adb；实机 120 帧 mean 12.86 ms / P95 13.30 ms（adb 约 382–399 ms），GDI/USER 对象计数不变，同屏静态像素 max diff=1；最小化/隐藏明确失败，遮挡可截图。窗口客户区少 1 px 导致画面末行恒黑，尚未解决。
+- #16 评审：`integration/issue-5a-perception` 是每帧同步 OCR 的旧路线，与 ADR-0005 的快路径禁 OCR 冲突，且缺 drops/ap_recovery、覆盖层与字段状态；未合并，待按原型与 ADR-0005 重新实现。
+
+验证：合并后 main `npm run replay` 36/36、`npm run build`、设备自检 21/21、领域单测 14/14、`issues:selftest` 13/13；main CI 在三次合并后均通过。
