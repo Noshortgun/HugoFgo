@@ -98,10 +98,6 @@ class Field:
         return self.status is FieldStatus.CONFIRMED
 
 
-def applicable(value: bool = True) -> Field:
-    return Field(FieldStatus.NOT_READ) if value else Field(FieldStatus.NOT_APPLICABLE)
-
-
 @dataclass(frozen=True)
 class Observation:
     """一次画面读取的快照。构造后不可修改；后台 OCR 只产出新快照。"""

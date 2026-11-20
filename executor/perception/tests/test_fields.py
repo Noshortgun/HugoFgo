@@ -3,19 +3,12 @@ from __future__ import annotations
 
 import threading
 import unittest
-from pathlib import Path
 
 import numpy as np
 
-from executor.device.base import Frame
 from executor.perception import Field, FieldStatus, Perception, StaleFrameError
 from executor.perception.ocr import OcrLine, OcrWorker
-
-ROOT = Path(__file__).resolve().parents[3]
-
-
-def load(relative: str) -> Frame:
-    return Frame(image=(ROOT / relative).read_bytes(), width=1280, height=720, captured_at=0.0)
+from executor.perception.tests.fixtures import load_frame
 
 
 class GatedReader:
@@ -42,8 +35,8 @@ class FieldTest(unittest.TestCase):
     def setUp(self) -> None:
         self.reader = GatedReader()
         self.perception = Perception(ocr_reader=self.reader)
-        self.battle = load('captures/2026-11-20/key/battle-wave1.png')
-        self.card = load('captures/2026-11-20/key/card-select.png')
+        self.battle = load_frame('captures/2026-11-20/key/battle-wave1.png')
+        self.card = load_frame('captures/2026-11-20/key/card-select.png')
 
     def tearDown(self) -> None:
         self.reader.release.set()
@@ -54,10 +47,10 @@ class FieldTest(unittest.TestCase):
         pending = self.perception.read_fields(self.battle, ['wave'])
 
         self.assertIs(FieldStatus.PENDING, pending.field('wave').status)
-        self.assertIs(FieldStatus.PENDING, pending.field('turn').status)
+        self.assertIs(FieldStatus.NOT_READ, pending.field('turn').status)
 
         self.reader.release.set()
-        ready = self.perception.read_fields(self.battle, ['wave'], timeout=5)
+        ready = self.perception.read_fields(self.battle, ['wave', 'turn', 'np'], timeout=5)
 
         self.assertIs(FieldStatus.CONFIRMED, ready.field('wave').status)
         self.assertEqual(1, ready.field('wave').value)
@@ -109,11 +102,12 @@ class FieldTest(unittest.TestCase):
             self.perception.read_fields(self.battle, ['bond'])
 
     def test_field_not_applicable_on_page_stays_unread(self) -> None:
-        result = load('captures/2026-11-20/key/result.png')
+        result = load_frame('captures/2026-11-20/key/result.png')
         self.perception.read(result)
         observed = self.perception.read_fields(result, ['wave'])
 
         self.assertIs(FieldStatus.NOT_APPLICABLE, observed.field('wave').status)
+        self.assertEqual(0, self.reader.calls)
 
     def test_cached_ocr_result_is_used_by_next_read(self) -> None:
         self.perception.read(self.battle)
@@ -124,6 +118,16 @@ class FieldTest(unittest.TestCase):
         fresh = self.perception.read(self.battle)
         self.assertIs(FieldStatus.CONFIRMED, fresh.field('wave').status)
         self.assertTrue(isinstance(fresh.field('wave'), Field))
+
+    def test_unrequested_fields_stay_not_read(self) -> None:
+        self.perception.read(self.battle)
+        self.perception.read_fields(self.battle, ['wave'])
+        self.reader.release.set()
+        ready = self.perception.read_fields(self.battle, ['wave'], timeout=5)
+
+        self.assertIs(FieldStatus.CONFIRMED, ready.field('wave').status)
+        self.assertIs(FieldStatus.NOT_READ, ready.field('turn').status)
+        self.assertIs(FieldStatus.NOT_READ, ready.field('np').status)
 
     def test_results_are_bound_to_frame_and_request(self) -> None:
         reader = GatedReader()

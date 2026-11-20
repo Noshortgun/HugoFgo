@@ -2,16 +2,9 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
-from executor.device.base import Frame
 from executor.perception import Perception
-
-ROOT = Path(__file__).resolve().parents[3]
-
-
-def load(relative: str) -> Frame:
-    return Frame(image=(ROOT / relative).read_bytes(), width=1280, height=720, captured_at=0.0)
+from executor.perception.tests.fixtures import load_frame
 
 
 class SafetyTest(unittest.TestCase):
@@ -24,7 +17,7 @@ class SafetyTest(unittest.TestCase):
         cls.perception.close()
 
     def read(self, relative: str):
-        return self.perception.read(load(relative))
+        return self.perception.read(load_frame(relative))
 
     def test_third_card_submitted_stops_card_selection(self) -> None:
         for relative in (
@@ -87,6 +80,13 @@ class SafetyTest(unittest.TestCase):
         attack = observation.control('攻击')
         self.assertIsNotNone(attack)
         self.assertFalse(attack.actionable)
+
+    def test_order_change_needs_both_selections(self) -> None:
+        waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
+        ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')
+
+        self.assertFalse(waiting.control('进行更替').actionable)
+        self.assertTrue(ready.control('进行更替').actionable)
 
 
 if __name__ == '__main__':

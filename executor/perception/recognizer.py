@@ -15,7 +15,7 @@ import cv2
 from executor.device.base import Frame
 from executor.perception import evidence
 from executor.perception.errors import StaleFrameError
-from executor.perception.evidence import Template
+from executor.perception.evidence import Evidence, Template
 from executor.perception.observation import (
     BasePage,
     Control,
@@ -31,38 +31,30 @@ from executor.perception.regions import cn
 __all__ = ['Perception', 'StaleFrameError']
 
 
-def _hit(scores: Mapping[str, float], templates: Mapping[str, Template], name: str) -> bool:
-    template = templates.get(name)
-    return template is not None and scores.get(name, 0.0) >= template.threshold
-
-
-def _classify(scores: Mapping[str, float], templates: Mapping[str, Template]):
-    def hit(name: str) -> bool:
-        return _hit(scores, templates, name)
-
+def _classify(evidence: Evidence):
     for rule in cn.PAGE_RULES:
-        if all(hit(anchor) for anchor in rule.anchors):
+        if all(evidence.hit(anchor) for anchor in rule.anchors):
             page = rule.page
-            confidence = min(scores.get(anchor, 0.0) for anchor in rule.anchors)
+            confidence = min(evidence.score(anchor) for anchor in rule.anchors)
             break
     else:
         page = BasePage.UNKNOWN
-        confidence = max(scores.values(), default=0.0)
+        confidence = max(evidence.scores.values(), default=0.0)
 
     variants = frozenset(
         rule.variant for rule in cn.VARIANT_RULES
-        if rule.page is page and all(hit(anchor) for anchor in rule.anchors)
+        if rule.page is page and all(evidence.hit(anchor) for anchor in rule.anchors)
     )
     overlays = frozenset(
         rule.overlay for rule in cn.OVERLAY_RULES
-        if all(hit(anchor) for anchor in rule.anchors)
-        and not any(hit(anchor) for anchor in rule.absent)
+        if all(evidence.hit(anchor) for anchor in rule.anchors)
+        and not any(evidence.hit(anchor) for anchor in rule.absent)
     )
     return page, variants, overlays, confidence
 
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
-              templates: Mapping[str, Template], scores: Mapping[str, float]) -> tuple[Control, ...]:
+              evidence: Evidence) -> tuple[Control, ...]:
     if page in (BasePage.UNKNOWN, BasePage.LOADING):
         return ()
 
@@ -73,7 +65,7 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
     for spec in specs:
         if blocked:
             actionable, reason = False, 'blocked_by_overlay'
-        elif spec.anchor is not None and not _hit(scores, templates, spec.anchor):
+        elif spec.anchor is not None and not evidence.hit(spec.anchor):
             actionable, reason = False, f'anchor_missing:{spec.anchor}'
         else:
             actionable, reason = True, 'visible'
@@ -81,16 +73,22 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
 
     for overlay in sorted(overlays, key=lambda item: item.value):
         for spec in cn.OVERLAY_CONTROLS.get(overlay, ()):
-            controls.append(Control(spec.name, spec.kind, spec.box, True, f'overlay:{overlay.value}'))
+            if spec.anchor is not None and not evidence.hit(spec.anchor):
+                actionable, reason = False, f'anchor_missing:{spec.anchor}'
+            else:
+                actionable, reason = True, f'overlay:{overlay.value}'
+            controls.append(Control(spec.name, spec.kind, spec.box, actionable, reason))
     return tuple(controls)
 
 
 def _fields(page: BasePage, cached: Mapping[str, Field] | None,
-            pending: bool) -> dict[str, Field]:
+            pending: bool, requested: frozenset[str] = frozenset()) -> dict[str, Field]:
     fields: dict[str, Field] = {}
     for name, pages in cn.FIELD_PAGES.items():
         if page not in pages:
             fields[name] = Field(FieldStatus.NOT_APPLICABLE)
+        elif name not in requested:
+            fields[name] = Field(FieldStatus.NOT_READ)
         elif cached is not None and name in cached:
             fields[name] = cached[name]
         elif pending:
@@ -110,6 +108,7 @@ class Perception:
         self._clock = clock
         self._cache_size = cache_size
         self._cache: OrderedDict[str, Observation] = OrderedDict()
+        self._requested: dict[str, frozenset[str]] = {}
         self._lock = threading.Lock()
         self._latest: Observation | None = None
         self._timings: deque[float] = deque(maxlen=200)
@@ -130,7 +129,8 @@ class Perception:
             with self._lock:
                 self._cache[digest] = observation
                 while len(self._cache) > self._cache_size:
-                    self._cache.popitem(last=False)
+                    evicted, _ = self._cache.popitem(last=False)
+                    self._requested.pop(evicted, None)
                 self._latest = observation
                 self._reads += 1
                 self._timings.append((self._clock() - started) * 1000.0)
@@ -140,29 +140,33 @@ class Perception:
         image = evidence.decode_frame(frame)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         scores = evidence.match_templates(gray, self._templates)
-        page, variants, overlays, confidence = _classify(scores, self._templates)
+        means = evidence.measure_probes(gray)
+        frame_evidence = Evidence(scores=scores, templates=self._templates, means=means)
+        page, variants, overlays, confidence = _classify(frame_evidence)
         return Observation(
             base_page=page,
             variants=variants,
             overlays=overlays,
-            controls=_controls(page, variants, overlays, self._templates, scores),
+            controls=_controls(page, variants, overlays, frame_evidence),
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
-            evidence={name: round(score, 4) for name, score in scores.items()},
+            evidence={name: round(value, 4) for name, value in {**scores, **means}.items()},
         )
 
     def _with_ocr(self, observation: Observation) -> Observation:
         digest = observation.frame_hash
         cached = self._worker.cached(digest)
         pending = self._worker.pending(digest)
-        fields = _fields(observation.base_page, cached, pending)
+        with self._lock:
+            requested = self._requested.get(digest, frozenset())
+        fields = _fields(observation.base_page, cached, pending, requested)
         return observation.with_fields(fields)
 
     def read_fields(self, frame: Frame, names: Iterable[str], *,
                     timeout: float | None = None) -> Observation:
         """按需读取字段。timeout 为 None 时立即返回；只有必要字段才值得等待。"""
-        wanted = tuple(names)
+        wanted = tuple(dict.fromkeys(names))
         unknown = [name for name in wanted if name not in PARSEABLE_FIELDS]
         if unknown:
             raise ValueError(f'未知字段 {unknown}；可选 {list(PARSEABLE_FIELDS)}')
@@ -172,6 +176,12 @@ class Perception:
             latest = self._latest
         if latest is None or latest.frame_hash != digest:
             raise StaleFrameError('传入的帧不是最近一次 read() 的画面，结果只能进缓存')
+
+        applicable = frozenset(name for name in wanted if latest.base_page in cn.FIELD_PAGES[name])
+        if not applicable:
+            return self._with_ocr(latest)
+        with self._lock:
+            self._requested[digest] = self._requested.get(digest, frozenset()) | applicable
 
         cached = self._worker.cached(digest)
         request_id = None

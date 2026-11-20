@@ -59,37 +59,38 @@ def _inside(line: OcrLine, box: tuple[int, int, int, int]) -> bool:
     return x1 <= line.x <= x2 and y1 <= line.y <= y2
 
 
-def _parse_number(lines: list[OcrLine], region: tuple[int, int, int, int],
-                  pattern: str, group: int = 1) -> Field:
-    best: tuple[float, int] | None = None
+def _best_match(lines: list[OcrLine], region: tuple[int, int, int, int] | None,
+                pattern: str, extract):
+    best: tuple[float, object] | None = None
     for line in lines:
-        if line.confidence < cn.OCR_MIN_CONFIDENCE or not _inside(line, region):
+        if line.confidence < cn.OCR_MIN_CONFIDENCE:
+            continue
+        if region is not None and not _inside(line, region):
             continue
         match = re.search(pattern, line.text)
         if match is None:
             continue
-        value = int(match.group(group))
+        value = extract(match)
         if best is None or line.confidence > best[0]:
             best = (line.confidence, value)
+    return best
+
+
+def _field(best: tuple[float, object] | None) -> Field:
     if best is None:
         return Field(FieldStatus.UNCERTAIN)
-    return Field(FieldStatus.CONFIRMED, best[1], round(best[0], 3))
+    confidence, value = best
+    return Field(FieldStatus.CONFIRMED, value, round(confidence, 3))
+
+
+def _parse_number(lines: list[OcrLine], region: tuple[int, int, int, int],
+                  pattern: str, group: int = 1) -> Field:
+    return _field(_best_match(lines, region, pattern, lambda match: int(match.group(group))))
 
 
 def _parse_ap(lines: list[OcrLine]) -> Field:
-    best: tuple[float, tuple[int, int]] | None = None
-    for line in lines:
-        if line.confidence < cn.OCR_MIN_CONFIDENCE:
-            continue
-        match = re.search(cn.AP_PATTERN, line.text)
-        if match is None:
-            continue
-        value = (int(match.group(1)), int(match.group(2)))
-        if best is None or line.confidence > best[0]:
-            best = (line.confidence, value)
-    if best is None:
-        return Field(FieldStatus.UNCERTAIN)
-    return Field(FieldStatus.CONFIRMED, best[1], round(best[0], 3))
+    return _field(_best_match(lines, None, cn.AP_PATTERN,
+                              lambda match: (int(match.group(1)), int(match.group(2)))))
 
 
 def _parse_np(lines: list[OcrLine]) -> Field:

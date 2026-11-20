@@ -361,3 +361,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 素材：新增 `captures/2026-11-20/key/` 28 屏（状态标签仍为 pending_review，作为开发/回归集，不代表留出验收）；`captures/2026-11-19/` 追加 3 张第三张卡之后的帧。跨会话断言覆盖 36 帧。
 - 验证：感知测试 29 项（28 屏逐屏断言、覆盖层与第三张卡安全、OCR 时效与帧绑定）；领域测试 14 项；`npm run replay` 36/36；`npm run build` 通过。离线 PNG 帧同步感知均值 20.6 ms、P95 22.8 ms（含 PNG 解码，不含设备采集）；端到端速度门槛仍由 #12 验收。
 - 未完成：判据冻结后采集的留出集、实机验收、`support_party_confirm`（无样本，规则未启用）、master_skills 锚点与当前御主礼装绑定（换礼装需重建模板）。未调用 adb、未读取作业、未实现状态机。
+
+
+## 41. 画面感知评审修复（票据 05A / #16，2026-11-20）
+
+- 感知用例并入 `cv/replay.py`（`perception:regression:*` 与 `perception:crossSession:*`），与感知单测共用 `executor/perception/fixtures/screens-cn.json`；回放 100/100，第三张卡之后的 3 张帧由回放直接引用入库。
+- 覆盖层控件同样检查可用性证据：新增亮度探针 `order_change_ready`，上下场未选齐时「进行更替」不可行动（按钮平均灰度 97.6 对 190.9）。
+- `read_fields()` 只提交当前页面适用且被请求的字段：不适用字段不触发 OCR，未请求字段保持 not_read，不预取。
+- 模板与亮度证据合并为 `Evidence`，抽出共用的 OCR 最佳匹配解析与测试取帧助手；删除未使用的 helper。
+- 感知测试 31 项、领域测试 14 项、回放 100/100、构建通过。留出集与实机验收仍未完成；`support_party_confirm` 仍无样本。

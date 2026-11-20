@@ -1,71 +1,545 @@
 {
   "region": "cn",
   "regression": [
-    {"file": "captures/2026-11-20/key/support-select-correct-ce.png", "base": "support", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/support-select-wrong-ce.png", "base": "support", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/support-list-update-confirm.png", "base": "support", "variants": [], "overlays": ["support_confirm"], "actionable": true},
-    {"file": "captures/2026-11-20/key/team-confirm.png", "base": "team", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/battle-wave1.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/battle-target-enemy2.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/battle-slot1-skill3-cooldown.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/battle-after-cards.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/64-order-change-done.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/card-select.png", "base": "card", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/card-np-selected.png", "base": "card", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/result.png", "base": "result", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-20/key/result-exp.png", "base": "result", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-20/key/drops.png", "base": "drops", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/repeat-dialog.png", "base": "battle", "variants": [], "overlays": ["repeat_dialog"], "actionable": true},
-    {"file": "captures/2026-11-20/key/ap-recovery-bronze.png", "base": "ap_recovery", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/ap-recovery.png", "base": "ap_recovery", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/61-order-change-select.png", "base": "battle", "variants": [], "overlays": ["order_change"], "actionable": true},
-    {"file": "captures/2026-11-20/key/70-command-spell-open.png", "base": "battle", "variants": [], "overlays": ["command_spell_menu"], "actionable": true},
-    {"file": "captures/2026-11-20/key/73-command-spell-confirm.png", "base": "battle", "variants": [], "overlays": ["command_spell_confirm"], "actionable": true},
-    {"file": "captures/2026-11-20/key/72-command-spell-target-select.png", "base": "battle", "variants": [], "overlays": ["command_spell_target"], "actionable": true},
-    {"file": "captures/2026-11-20/key/09-class-filter.png", "base": "support", "variants": [], "overlays": ["class_info"], "actionable": true},
-    {"file": "captures/2026-11-20/key/55-battle-menu.png", "base": "battle", "variants": [], "overlays": ["battle_menu"], "actionable": true},
-    {"file": "captures/2026-11-20/key/60-current-master-expanded.png", "base": "battle", "variants": [], "overlays": ["master_skills"], "actionable": true},
-    {"file": "captures/2026-11-20/key/12-battle-start.png", "base": "loading", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-20/key/163-grand-support.png", "base": "support", "variants": ["grand_support"], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/164-current.png", "base": "support", "variants": ["grand_support"], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-20/key/165-grand-team.png", "base": "team", "variants": ["grand_team"], "overlays": [], "actionable": true}
+    {
+      "file": "captures/2026-11-20/key/support-select-correct-ce.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/support-select-wrong-ce.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/support-list-update-confirm.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [
+        "support_confirm"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/team-confirm.png",
+      "base": "team",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/battle-wave1.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/battle-target-enemy2.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/battle-slot1-skill3-cooldown.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/battle-after-cards.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/64-order-change-done.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/card-select.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/card-np-selected.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/result.png",
+      "base": "result",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-20/key/result-exp.png",
+      "base": "result",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-20/key/drops.png",
+      "base": "drops",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/repeat-dialog.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "repeat_dialog"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/ap-recovery-bronze.png",
+      "base": "ap_recovery",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/ap-recovery.png",
+      "base": "ap_recovery",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/61-order-change-select.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "order_change"
+      ],
+      "actionable": true,
+      "absentControls": [
+        "进行更替"
+      ]
+    },
+    {
+      "file": "captures/2026-11-20/key/70-command-spell-open.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "command_spell_menu"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/73-command-spell-confirm.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "command_spell_confirm"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/72-command-spell-target-select.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "command_spell_target"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/09-class-filter.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [
+        "class_info"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/55-battle-menu.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "battle_menu"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/60-current-master-expanded.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "master_skills"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/12-battle-start.png",
+      "base": "loading",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-20/key/163-grand-support.png",
+      "base": "support",
+      "variants": [
+        "grand_support"
+      ],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/164-current.png",
+      "base": "support",
+      "variants": [
+        "grand_support"
+      ],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-20/key/165-grand-team.png",
+      "base": "team",
+      "variants": [
+        "grand_team"
+      ],
+      "overlays": [],
+      "actionable": true
+    }
   ],
   "crossSession": [
-    {"file": "captures/2026-11-19-ember/key/01-daily-quest-list.png", "base": "menu", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-ember/key/02-support-select.png", "base": "support", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/03-team-confirm.png", "base": "team", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/04-battle-wave1.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/05-skill.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击"]},
-    {"file": "captures/2026-11-19-ember/key/06-card-select.png", "base": "card", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/07-battle-wave2.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/08-battle-wave3.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/09-skill-target.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击"]},
-    {"file": "captures/2026-11-19-ember/key/10-np-card-select.png", "base": "card", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/11-np-selected.png", "base": "card", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/12-battle-result-bond.png", "base": "result", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-ember/key/13-battle-result-exp.png", "base": "result", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-ember/key/14-drops.png", "base": "drops", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/key/15-return.png", "base": "menu", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-ember/05-quest-start.png", "base": "loading", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-ember/01-gate.png", "base": "support", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/36-attack-animation.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击"]},
-    {"file": "captures/2026-11-19-ember/37-ap-recovery.png", "base": "ap_recovery", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-ember/34-grand-support-confirm.png", "base": "unknown", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19/07-battle-loading.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/01-mystic-combat.png", "base": "unknown", "variants": [], "overlays": [], "actionable": false},
-    {"file": "captures/2026-11-19-mystic/key/02-team-equipped.png", "base": "team", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/03-battle-combat.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/04-master-skills.png", "base": "battle", "variants": [], "overlays": ["master_skills"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/05-order-change-select.png", "base": "battle", "variants": [], "overlays": ["order_change"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/06-swap-out-selected.png", "base": "battle", "variants": [], "overlays": ["order_change"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/07-swap-in-selected.png", "base": "battle", "variants": [], "overlays": ["order_change"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/08-swap-result.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击"]},
-    {"file": "captures/2026-11-19-mystic/key/09-target-switched.png", "base": "battle", "variants": [], "overlays": [], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/10-command-spell.png", "base": "battle", "variants": [], "overlays": ["command_spell_menu"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/11-command-spell-confirm.png", "base": "battle", "variants": [], "overlays": ["command_spell_confirm"], "actionable": true},
-    {"file": "captures/2026-11-19-mystic/key/12-retreat-confirm.png", "base": "battle", "variants": [], "overlays": ["retreat_confirm"], "actionable": true, "absentControls": ["撤退", "技能使用确认"]},
-    {"file": "captures/2026-11-19/13-cards-selected.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击", "卡1", "卡2", "卡3", "卡4", "卡5"]},
-    {"file": "captures/2026-11-19/19-cards2-selected.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击", "卡1", "卡2", "卡3", "卡4", "卡5"]},
-    {"file": "captures/2026-11-19/25-cards3-selected.png", "base": "battle", "variants": [], "overlays": [], "actionable": true, "absentControls": ["攻击", "卡1", "卡2", "卡3", "卡4", "卡5"]}
+    {
+      "file": "captures/2026-11-19-ember/key/01-daily-quest-list.png",
+      "base": "menu",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/02-support-select.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/03-team-confirm.png",
+      "base": "team",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/04-battle-wave1.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/05-skill.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/06-card-select.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/07-battle-wave2.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/08-battle-wave3.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/09-skill-target.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/10-np-card-select.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/11-np-selected.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/12-battle-result-bond.png",
+      "base": "result",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/13-battle-result-exp.png",
+      "base": "result",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/14-drops.png",
+      "base": "drops",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/key/15-return.png",
+      "base": "menu",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-ember/05-quest-start.png",
+      "base": "loading",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-ember/01-gate.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/36-attack-animation.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-ember/37-ap-recovery.png",
+      "base": "ap_recovery",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-ember/34-grand-support-confirm.png",
+      "base": "unknown",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19/07-battle-loading.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/01-mystic-combat.png",
+      "base": "unknown",
+      "variants": [],
+      "overlays": [],
+      "actionable": false
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/02-team-equipped.png",
+      "base": "team",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/03-battle-combat.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/04-master-skills.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "master_skills"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/05-order-change-select.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "order_change"
+      ],
+      "actionable": true,
+      "absentControls": [
+        "进行更替"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/06-swap-out-selected.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "order_change"
+      ],
+      "actionable": true,
+      "absentControls": [
+        "进行更替"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/07-swap-in-selected.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "order_change"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "进行更替"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/08-swap-result.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/09-target-switched.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/10-command-spell.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "command_spell_menu"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/11-command-spell-confirm.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "command_spell_confirm"
+      ],
+      "actionable": true
+    },
+    {
+      "file": "captures/2026-11-19-mystic/key/12-retreat-confirm.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "retreat_confirm"
+      ],
+      "actionable": true,
+      "absentControls": [
+        "撤退",
+        "技能使用确认"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19/13-cards-selected.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击",
+        "卡1",
+        "卡2",
+        "卡3",
+        "卡4",
+        "卡5"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19/19-cards2-selected.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击",
+        "卡1",
+        "卡2",
+        "卡3",
+        "卡4",
+        "卡5"
+      ]
+    },
+    {
+      "file": "captures/2026-11-19/25-cards3-selected.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "攻击",
+        "卡1",
+        "卡2",
+        "卡3",
+        "卡4",
+        "卡5"
+      ]
+    }
   ]
 }

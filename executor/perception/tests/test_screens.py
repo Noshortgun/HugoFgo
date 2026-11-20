@@ -5,16 +5,11 @@ import json
 import unittest
 from pathlib import Path
 
-from executor.device.base import Frame
 from executor.perception import Perception
+from executor.perception.tests.fixtures import load_frame
 
-ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = json.loads((Path(__file__).resolve().parents[1] / 'fixtures' / 'screens-cn.json')
                       .read_text(encoding='utf-8'))
-
-
-def load(relative: str) -> Frame:
-    return Frame(image=(ROOT / relative).read_bytes(), width=1280, height=720, captured_at=0.0)
 
 
 class ScreenRegressionTest(unittest.TestCase):
@@ -27,7 +22,7 @@ class ScreenRegressionTest(unittest.TestCase):
         cls.perception.close()
 
     def check(self, case: dict) -> None:
-        observation = self.perception.read(load(case['file']))
+        observation = self.perception.read(load_frame(case['file']))
         self.assertEqual(case['base'], observation.base_page.value, case['file'])
         self.assertEqual(sorted(case['variants']), sorted(item.value for item in observation.variants),
                          case['file'])
@@ -38,6 +33,10 @@ class ScreenRegressionTest(unittest.TestCase):
             control = observation.control(name)
             self.assertTrue(control is None or not control.actionable,
                             f"{case['file']} 不应可点：{name}")
+        for name in case.get('actionableControls', ()):
+            control = observation.control(name)
+            self.assertIsNotNone(control, f"{case['file']} 缺少控件：{name}")
+            self.assertTrue(control.actionable, f"{case['file']} 应可点：{name}")
 
     def test_regression_set_28_screens(self) -> None:
         cases = FIXTURES['regression']

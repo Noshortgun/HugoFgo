@@ -2,18 +2,12 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from unittest import mock
 
 from executor.device.base import Frame, FrameFormat
 from executor.perception import BasePage, FieldStatus, Perception, evidence
+from executor.perception.tests.fixtures import ROOT, load_frame
 from executor.perception.observation import ControlKind
-
-ROOT = Path(__file__).resolve().parents[3]
-
-
-def frame(relative: str) -> Frame:
-    return Frame(image=(ROOT / relative).read_bytes(), width=1280, height=720, captured_at=0.0)
 
 
 class RecordingReader:
@@ -43,13 +37,13 @@ class ContractTest(unittest.TestCase):
             'captures/2026-11-20/key/12-battle-start.png',
         ):
             with self.subTest(relative=relative):
-                self.perception.read(frame(relative))
+                self.perception.read(load_frame(relative))
 
         self.assertEqual(0, self.reader.calls)
 
     def test_field_status_separates_not_applicable_from_not_read(self) -> None:
-        result = self.perception.read(frame('captures/2026-11-20/key/result.png'))
-        battle = self.perception.read(frame('captures/2026-11-20/key/battle-wave1.png'))
+        result = self.perception.read(load_frame('captures/2026-11-20/key/result.png'))
+        battle = self.perception.read(load_frame('captures/2026-11-20/key/battle-wave1.png'))
 
         self.assertIs(FieldStatus.NOT_APPLICABLE, result.field('wave').status)
         self.assertIs(FieldStatus.NOT_READ, battle.field('wave').status)
@@ -61,13 +55,13 @@ class ContractTest(unittest.TestCase):
             ('captures/2026-11-19-ember/34-grand-support-confirm.png', BasePage.UNKNOWN),
         ):
             with self.subTest(relative=relative):
-                observation = self.perception.read(frame(relative))
+                observation = self.perception.read(load_frame(relative))
                 self.assertIs(expected, observation.base_page)
                 self.assertEqual((), observation.controls)
                 self.assertFalse(observation.actionable)
 
     def test_identical_frame_comes_from_cache(self) -> None:
-        sample = frame('captures/2026-11-20/key/team-confirm.png')
+        sample = load_frame('captures/2026-11-20/key/team-confirm.png')
         original = evidence.match_templates
         with mock.patch.object(evidence, 'match_templates', wraps=original) as matcher:
             first = self.perception.read(sample)
@@ -78,8 +72,8 @@ class ContractTest(unittest.TestCase):
         self.assertIs(first.base_page, second.base_page)
 
     def test_frame_hash_tracks_content_and_format(self) -> None:
-        battle = frame('captures/2026-11-20/key/battle-wave1.png')
-        card = frame('captures/2026-11-20/key/card-select.png')
+        battle = load_frame('captures/2026-11-20/key/battle-wave1.png')
+        card = load_frame('captures/2026-11-20/key/card-select.png')
         self.assertNotEqual(evidence.frame_hash(battle), evidence.frame_hash(card))
 
         raw = Frame(image=bytes(range(12)), width=2, height=2, captured_at=0.0,
@@ -89,7 +83,7 @@ class ContractTest(unittest.TestCase):
                                                       captured_at=0.0)))
 
     def test_observation_is_immutable(self) -> None:
-        observation = self.perception.read(frame('captures/2026-11-20/key/battle-wave1.png'))
+        observation = self.perception.read(load_frame('captures/2026-11-20/key/battle-wave1.png'))
         with self.assertRaises(TypeError):
             observation.fields['wave'] = None  # type: ignore[index]
 
@@ -98,7 +92,7 @@ class ContractTest(unittest.TestCase):
         self.assertIs(FieldStatus.NOT_READ, observation.field('wave').status)
 
     def test_controls_carry_base_coordinates(self) -> None:
-        card = self.perception.read(frame('captures/2026-11-20/key/card-select.png'))
+        card = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
         first = card.control('卡1')
         self.assertIsNotNone(first)
         self.assertIs(ControlKind.CARD, first.kind)

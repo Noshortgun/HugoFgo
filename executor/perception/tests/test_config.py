@@ -31,7 +31,7 @@ class ConfigTest(unittest.TestCase):
                 if control.anchor is not None:
                     names.add(control.anchor)
 
-        self.assertEqual(set(), names - set(self.templates))
+        self.assertEqual(set(cn.INTENSITY_PROBES), names - set(self.templates))
         self.assertEqual(set(), set(self.templates) - names)
 
     def test_control_boxes_stay_inside_the_base_frame(self) -> None:

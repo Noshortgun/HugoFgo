@@ -23,6 +23,25 @@ class Template:
     threshold: float
 
 
+@dataclass(frozen=True)
+class Evidence:
+    """一帧画面的全部同步证据：模板得分与亮度探针共享同一套 hit 判据。"""
+
+    scores: Mapping[str, float]
+    templates: Mapping[str, Template]
+    means: Mapping[str, float]
+
+    def hit(self, name: str) -> bool:
+        template = self.templates.get(name)
+        if template is not None:
+            return self.scores.get(name, 0.0) >= template.threshold
+        probe = cn.INTENSITY_PROBES.get(name)
+        return probe is not None and self.means.get(name, 0.0) >= probe[1]
+
+    def score(self, name: str) -> float:
+        return self.scores.get(name, self.means.get(name, 0.0))
+
+
 def decode_frame(frame: Frame) -> np.ndarray:
     """把设备帧解成 BGR24，并统一到 1280×720 基准。"""
     if frame.format is FrameFormat.BGR24:
@@ -86,3 +105,13 @@ def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict
         result = cv2.matchTemplate(roi, template.patch, cv2.TM_CCOEFF_NORMED)
         scores[name] = float(np.nan_to_num(result.max(), nan=0.0))
     return scores
+
+
+def measure_probes(gray: np.ndarray, probes=cn.INTENSITY_PROBES) -> dict[str, float]:
+    """颜色/亮度证据：例如换人按钮点亮前后的平均灰度差异。"""
+    means: dict[str, float] = {}
+    for name, (box, _minimum) in probes.items():
+        x1, y1, x2, y2 = box
+        region = gray[y1:y2, x1:x2]
+        means[name] = float(region.mean()) if region.size else 0.0
+    return means

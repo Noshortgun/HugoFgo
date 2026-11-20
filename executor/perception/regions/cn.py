@@ -85,6 +85,11 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
 # 覆盖层是模态的：出现时基页控件一律不可行动，只暴露覆盖层自己的控件。
 BLOCKING_OVERLAYS: frozenset[Overlay] = frozenset(Overlay)
 
+# 亮度探针：平均灰度达到下限才算命中，用于“按钮已点亮”这类颜色证据。
+INTENSITY_PROBES: dict[str, tuple[Box, float]] = {
+    'order_change_ready': ((478, 591, 803, 661), 150.0),
+}
+
 PAGE_CONTROLS: dict[BasePage, tuple[ControlSpec, ...]] = {
     BasePage.MENU: (),
     BasePage.SUPPORT: (
@@ -159,7 +164,7 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('候补第1位', ControlKind.TARGET, (651, 250, 844, 565)),
         ControlSpec('候补第2位', ControlKind.TARGET, (851, 250, 1044, 565)),
         ControlSpec('候补第3位', ControlKind.TARGET, (1051, 250, 1244, 565)),
-        ControlSpec('进行更替', ControlKind.BUTTON, (478, 591, 803, 661)),
+        ControlSpec('进行更替', ControlKind.BUTTON, (478, 591, 803, 661), anchor='order_change_ready'),
     ),
     Overlay.COMMAND_SPELL_MENU: (
         ControlSpec('宝具解放', ControlKind.BUTTON, (246, 296, 1033, 422)),
