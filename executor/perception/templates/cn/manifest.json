@@ -1,0 +1,262 @@
+{
+  "region": "cn",
+  "baseSize": [
+    1280,
+    720
+  ],
+  "templates": {
+    "menu": {
+      "file": "menu.png",
+      "source": "captures/2026-11-19-ember/key/01-daily-quest-list.png",
+      "roi": [
+        1032,
+        0,
+        1280,
+        84
+      ],
+      "threshold": 0.55
+    },
+    "support": {
+      "file": "support.png",
+      "source": "captures/2026-11-20/key/support-select-correct-ce.png",
+      "roi": [
+        1010,
+        0,
+        1280,
+        92
+      ],
+      "threshold": 0.6
+    },
+    "grand_support": {
+      "file": "grand_support.png",
+      "source": "captures/2026-11-20/key/163-grand-support.png",
+      "roi": [
+        78,
+        160,
+        183,
+        714
+      ],
+      "threshold": 0.7
+    },
+    "support_confirm": {
+      "file": "support_confirm.png",
+      "source": "captures/2026-11-20/key/support-list-update-confirm.png",
+      "roi": [
+        494,
+        310,
+        773,
+        407
+      ],
+      "threshold": 0.6
+    },
+    "team": {
+      "file": "team.png",
+      "source": "captures/2026-11-20/key/team-confirm.png",
+      "roi": [
+        1081,
+        629,
+        1252,
+        714
+      ],
+      "threshold": 0.6
+    },
+    "grand_team": {
+      "file": "grand_team.png",
+      "source": "captures/2026-11-20/key/165-grand-team.png",
+      "roi": [
+        580,
+        2,
+        700,
+        88
+      ],
+      "threshold": 0.62
+    },
+    "battle": {
+      "file": "battle.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        754,
+        0,
+        883,
+        65
+      ],
+      "threshold": 0.58
+    },
+    "attack": {
+      "file": "attack.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        1044,
+        539,
+        1221,
+        662
+      ],
+      "threshold": 0.6
+    },
+    "card": {
+      "file": "card.png",
+      "source": "captures/2026-11-20/key/card-select.png",
+      "roi": [
+        1059,
+        49,
+        1212,
+        127
+      ],
+      "threshold": 0.6
+    },
+    "result": {
+      "file": "result.png",
+      "source": "captures/2026-11-20/key/result.png",
+      "roi": [
+        504,
+        9,
+        774,
+        112
+      ],
+      "threshold": 0.62
+    },
+    "drops": {
+      "file": "drops.png",
+      "source": "captures/2026-11-20/key/drops.png",
+      "roi": [
+        130,
+        11,
+        360,
+        94
+      ],
+      "threshold": 0.6
+    },
+    "ap_recovery": {
+      "file": "ap_recovery.png",
+      "source": "captures/2026-11-20/key/ap-recovery.png",
+      "roi": [
+        546,
+        12,
+        734,
+        93
+      ],
+      "threshold": 0.6
+    },
+    "loading": {
+      "file": "loading.png",
+      "source": "captures/2026-11-20/key/12-battle-start.png",
+      "roi": [
+        902,
+        651,
+        1037,
+        720
+      ],
+      "threshold": 0.6
+    },
+    "repeat_dialog": {
+      "file": "repeat_dialog.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        447,
+        68,
+        823,
+        157
+      ],
+      "threshold": 0.6
+    },
+    "order_change": {
+      "file": "order_change.png",
+      "source": "captures/2026-11-20/key/61-order-change-select.png",
+      "roi": [
+        560,
+        581,
+        722,
+        669
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_repair": {
+      "file": "command_spell_repair.png",
+      "source": "captures/2026-11-20/key/70-command-spell-open.png",
+      "roi": [
+        263,
+        436,
+        440,
+        519
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_target": {
+      "file": "command_spell_target.png",
+      "source": "captures/2026-11-20/key/72-command-spell-target-select.png",
+      "roi": [
+        540,
+        146,
+        747,
+        241
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_use": {
+      "file": "command_spell_use.png",
+      "source": "captures/2026-11-20/key/72-command-spell-target-select.png",
+      "roi": [
+        429,
+        280,
+        617,
+        378
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_confirm": {
+      "file": "command_spell_confirm.png",
+      "source": "captures/2026-11-20/key/73-command-spell-confirm.png",
+      "roi": [
+        434,
+        283,
+        1009,
+        372
+      ],
+      "threshold": 0.62
+    },
+    "class_info": {
+      "file": "class_info.png",
+      "source": "captures/2026-11-20/key/09-class-filter.png",
+      "roi": [
+        360,
+        105,
+        483,
+        176
+      ],
+      "threshold": 0.62
+    },
+    "battle_menu": {
+      "file": "battle_menu.png",
+      "source": "captures/2026-11-20/key/55-battle-menu.png",
+      "roi": [
+        683,
+        340,
+        880,
+        420
+      ],
+      "threshold": 0.6
+    },
+    "master_skills": {
+      "file": "master_skills.png",
+      "source": "captures/2026-11-20/key/60-current-master-expanded.png",
+      "roi": [
+        1026,
+        254,
+        1143,
+        372
+      ],
+      "threshold": 0.6
+    },
+    "retreat_confirm": {
+      "file": "retreat_confirm.png",
+      "source": "captures/2026-11-19-mystic/key/12-retreat-confirm.png",
+      "roi": [
+        517,
+        235,
+        754,
+        337
+      ],
+      "threshold": 0.6
+    }
+  }
+}

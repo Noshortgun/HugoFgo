@@ -351,3 +351,13 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `LdplayerWindowDevice._ensure_visible`：首次采集发现父窗口客户区裁掉 `RenderWindow` 像素时，自动加高窗口（上限 16 px），之后每帧检查为空操作；无法加高或超过上限时报 `clipped`，不返回黑行。
 - `CaptureStats.window_adjustments` 与 CLI 统计显示修正次数。
 - 实机：首次采集修正 1 次（窗口 779→780），100 帧稳态约 13 ms、含首次调整 mean 14.96 ms / P95 15.84 ms；修正后末行与 adb 对比 mean_abs_diff 0.20 / max 7 / >8 像素 0，连续 10 帧末行均非黑。
+
+
+## 40. 画面感知适配器（票据 05A / #16，2026-11-20）
+
+- 新增 `executor/perception/`：`Perception.read(Frame) -> Observation` 是同步快路径，只做区域化模板匹配（国服锚点、必须出现/必须不出现、优先级），全程不调用 OCR；`read_fields(frame, names, timeout)` 才把 NP／面／回合／AP 交给后台单线程 OCR。
+- 观察契约：基页、版式变体（grand_support / grand_team）、可与基页并存的覆盖层（support_confirm、retreat_confirm、repeat_dialog、order_change、令咒三段、class_info、battle_menu、master_skills）、带 1280×720 基准坐标与可行动标记的控件、五态字段（not_applicable / not_read / pending / uncertain / confirmed）。覆盖层出现时基页控件一律不可行动；unknown / loading 不输出任何控件；第三张卡提交后的帧没有选卡控件，也没有攻击按钮。
+- 国服配置集中在 `regions/cn.py`，23 个锚点模板由 `python -m executor.perception.build_templates` 从已入库截图生成到 `templates/cn/`；不包含日服/台服规则。
+- 素材：新增 `captures/2026-11-20/key/` 28 屏（状态标签仍为 pending_review，作为开发/回归集，不代表留出验收）；`captures/2026-11-19/` 追加 3 张第三张卡之后的帧。跨会话断言覆盖 36 帧。
+- 验证：感知测试 29 项（28 屏逐屏断言、覆盖层与第三张卡安全、OCR 时效与帧绑定）；领域测试 14 项；`npm run replay` 36/36；`npm run build` 通过。离线 PNG 帧同步感知均值 20.6 ms、P95 22.8 ms（含 PNG 解码，不含设备采集）；端到端速度门槛仍由 #12 验收。
+- 未完成：判据冻结后采集的留出集、实机验收、`support_party_confirm`（无样本，规则未启用）、master_skills 锚点与当前御主礼装绑定（换礼装需重建模板）。未调用 adb、未读取作业、未实现状态机。

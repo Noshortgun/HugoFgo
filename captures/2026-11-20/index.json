@@ -1,0 +1,159 @@
+{
+  "device": {
+    "emulator": "LDPlayer 14",
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "quest": "每日任务 · 搜集种火<剑·骑篇> 上级（含冠位助战与令咒流程）",
+  "capturedAt": "2026-11-20",
+  "review": "pending_review",
+  "notes": [
+    "本组 28 张来自 .scratch/annotated/index.json，状态标签仍待审核，用作开发与回归集。",
+    "同一会话内既是模板来源也是回归集，不能当作留出验收或泛化证据。",
+    "跨会话证据来自 captures/2026-11-19* 的关键帧，见 executor/perception/fixtures/screens-cn.json。"
+  ],
+  "keyFrames": [
+    {
+      "source": "support-select-correct-ce.png",
+      "file": "key/support-select-correct-ce.png",
+      "state": "助战选择（目标行）"
+    },
+    {
+      "source": "support-select-wrong-ce.png",
+      "file": "key/support-select-wrong-ce.png",
+      "state": "助战选择（同为娄希、礼装不同的反例）"
+    },
+    {
+      "source": "support-list-update-confirm.png",
+      "file": "key/support-list-update-confirm.png",
+      "state": "列表更新确认弹窗"
+    },
+    {
+      "source": "team-confirm.png",
+      "file": "key/team-confirm.png",
+      "state": "队伍确认"
+    },
+    {
+      "source": "battle-wave1.png",
+      "file": "key/battle-wave1.png",
+      "state": "第一面战斗初始"
+    },
+    {
+      "source": "battle-target-enemy2.png",
+      "file": "key/battle-target-enemy2.png",
+      "state": "第一面：目标已切到敌方2"
+    },
+    {
+      "source": "battle-slot1-skill3-cooldown.png",
+      "file": "key/battle-slot1-skill3-cooldown.png",
+      "state": "2号位娄希 3技能已使用（剩余6回合）"
+    },
+    {
+      "source": "battle-after-cards.png",
+      "file": "key/battle-after-cards.png",
+      "state": "指令卡执行后（已进入第二面）"
+    },
+    {
+      "source": "64-order-change-done.png",
+      "file": "key/64-order-change-done.png",
+      "state": "换人完成（奥伯龙 → 玛修）"
+    },
+    {
+      "source": "card-select.png",
+      "file": "key/card-select.png",
+      "state": "指令卡选择"
+    },
+    {
+      "source": "card-np-selected.png",
+      "file": "key/card-np-selected.png",
+      "state": "宝具卡已选中"
+    },
+    {
+      "source": "result.png",
+      "file": "key/result.png",
+      "state": "战斗结果（牵绊）"
+    },
+    {
+      "source": "result-exp.png",
+      "file": "key/result-exp.png",
+      "state": "战斗结果（经验值）"
+    },
+    {
+      "source": "drops.png",
+      "file": "key/drops.png",
+      "state": "战利品"
+    },
+    {
+      "source": "repeat-dialog.png",
+      "file": "key/repeat-dialog.png",
+      "state": "连续出击弹窗"
+    },
+    {
+      "source": "ap-recovery-bronze.png",
+      "file": "key/ap-recovery-bronze.png",
+      "state": "AP 恢复（默认用青铜果实）"
+    },
+    {
+      "source": "ap-recovery.png",
+      "file": "key/ap-recovery.png",
+      "state": "AP 恢复（未滚动：圣晶石/黄金/白银）"
+    },
+    {
+      "source": "61-order-change-select.png",
+      "file": "key/61-order-change-select.png",
+      "state": "换人：选择下场 / 上场"
+    },
+    {
+      "source": "70-command-spell-open.png",
+      "file": "key/70-command-spell-open.png",
+      "state": "令咒菜单（只是打开，不使用）"
+    },
+    {
+      "source": "73-command-spell-confirm.png",
+      "file": "key/73-command-spell-confirm.png",
+      "state": "令咒确认弹窗（最后一步，决定=真的消耗）"
+    },
+    {
+      "source": "72-command-spell-target-select.png",
+      "file": "key/72-command-spell-target-select.png",
+      "state": "令咒目标从者选择（停在这里，不确认）"
+    },
+    {
+      "source": "09-class-filter.png",
+      "file": "key/09-class-filter.png",
+      "state": "职阶相性面板（助战筛选时弹出）"
+    },
+    {
+      "source": "55-battle-menu.png",
+      "file": "key/55-battle-menu.png",
+      "state": "战斗菜单（撤退/设置入口）"
+    },
+    {
+      "source": "60-current-master-expanded.png",
+      "file": "key/60-current-master-expanded.png",
+      "state": "御主技能展开（换人在这里）"
+    },
+    {
+      "source": "12-battle-start.png",
+      "file": "key/12-battle-start.png",
+      "state": "加载（小贴士）"
+    },
+    {
+      "source": "163-grand-support.png",
+      "file": "key/163-grand-support.png",
+      "state": "冠位助战（礼装在头像右侧，1-3 张平铺）"
+    },
+    {
+      "source": "164-current.png",
+      "file": "key/164-current.png",
+      "state": "冠位助战（同一状态，另一滚动位置，礼装 2 张）"
+    },
+    {
+      "source": "165-grand-team.png",
+      "file": "key/165-grand-team.png",
+      "state": "冠位战 队伍确认（与普通队伍同坐标，多“受限”）"
+    }
+  ]
+}
