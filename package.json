@@ -13,6 +13,8 @@
     "resources:update": "node scripts/resources.mjs update",
     "resources:verify": "node scripts/resources.mjs verify",
     "preflight": "node scripts/preflight.mjs",
+    "issues:check": "node scripts/issue-sync.mjs",
+    "issues:selftest": "node scripts/issue-sync.selftest.mjs",
     "replay": "node scripts/replay.mjs",
     "test": "node scripts/replay.mjs"
   },
