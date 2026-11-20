@@ -6,7 +6,7 @@ FGO 自动刷本桌面工具：Vue 3 + Vite 前端，Tauri 2 (Rust) 桌面壳，
 
 ### Issue tracker
 
-Issues、spec 与票据以本地 markdown 文件形式存放在 `.scratch/<feature-slug>/`，不使用外部平台。See `docs/agents/issue-tracker.md`.
+Issues 与票据发布到 `Noshortgun/HugoFgo` 的 GitHub Issues，使用 `gh` CLI 操作；本地 `.scratch/<feature-slug>/` 保留 spec、行为基线与票据草稿作为发布源。See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

@@ -1,32 +1,34 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Issues and specs for this repo live as GitHub issues in `Noshortgun/HugoFgo`. Use the `gh` CLI for all operations.
 
-选择理由：本项目没有 git remote，也不是 GitHub 仓库，由单人开发，因此使用本地 markdown 跟踪，不引入外部平台。
+本地 `.scratch/backend-rebuild/` 保留 spec、行为基线与票据草稿，作为发布源；已发布的票据以 GitHub issue 为准。
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
-- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- **Create an issue**: `gh issue create --title "..." --body-file <file>`。多行正文用文件，不用行内字符串。
+- **Read an issue**: `gh issue view <number> --json number,title,body,labels,comments`。
+- **List issues**: `gh issue list --state open --json number,title,body,labels`。
+- **Blocking**: 使用 GitHub 原生 issue 依赖。创建时 `gh issue create --blocked-by <n>,<n>`，或事后 `gh issue edit <child> --add-blocked-by <blocker>`。不可用时退化为正文顶部的 `Blocked by: #<n>` 行。
+- **Count open blockers**: `gh api repos/Noshortgun/HugoFgo/issues/<n> --jq .issue_dependencies_summary.blocked_by`。
+- **Comment**: `gh issue comment <number> --body "..."`。
+- **Labels**: `gh issue edit <number> --add-label "..."`。五个角色标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。
+- **Close**: 先 comment 结果，再 `gh issue close <number>`。
+
+票据编号与本地文件编号一致（`NN`），便于对照。
+
+## Pull requests as a triage surface
+
+**PRs as a request surface: no.**
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+Create a GitHub issue. 本地票据文件继续保留，作为内容源。
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+Read the GitHub issue by number；本地文件可用于查看未发布的修改。
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
-
-- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
-- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
-- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
-- **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+Used by `/wayfinder`。Map 是一个 issue，child 是 sub-issue；blocking 用原生依赖；frontier 为无 open blocker 且无 assignee 的 child。

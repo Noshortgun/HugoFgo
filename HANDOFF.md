@@ -312,3 +312,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 共享模块：`scripts/python-env.mjs`（解释器解析与 pip 安装命令）、`scripts/adb.mjs`（adb 定位与只读查询）、`scripts/automation-processes.mjs`（外部自动化进程扫描与匹配）由 `replay.mjs`、`device.mjs` 与预检共用。
 
 验证：`npm run replay` 36/36；`npm run build` 通过。手工覆盖分支阻断、确认继续、坏 adb 路径、非 Python 解释器、空虚拟环境缺依赖、offline 设备、外部进程检测与 `--live` 拦截。
+
+## 35. Issue tracker 切换到 GitHub（2026-11-19）
+
+- 安装 GitHub CLI 2.105.0，以 Noshortgun 登录。
+- 跟踪方式从本地 markdown 改为 GitHub Issues；`docs/agents/issue-tracker.md` 与 `AGENTS.md` 已更新，`.scratch/` 保留为发布源。
+- `scripts/publish-issues.mjs` 幂等发布 13 张票据：标题、正文、标签、原生 blocked-by 依赖；01、02 创建后关闭。
+- 结果：#1–#13。frontier 为 #3、#4、#9。
