@@ -344,3 +344,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - `issue-sync.selftest` 增加「直接创建的 issue（无发布抬头）与本地源对齐」用例。
 - AGENTS 明确：新施工从 `origin/main` 建 `ticket/*`；并行 PR 不在各自分支追加 HANDOFF，合入后统一追加。
 - CI 增加 informational 的 `npm run issues:check`（`continue-on-error`），不阻塞「本地源先改、后发布」的流程。
+
+
+## 39. 修复 LDPlayer 原始帧末行被裁（#20，2026-11-20）
+
+- `LdplayerWindowDevice._ensure_visible`：首次采集发现父窗口客户区裁掉 `RenderWindow` 像素时，自动加高窗口（上限 16 px），之后每帧检查为空操作；无法加高或超过上限时报 `clipped`，不返回黑行。
+- `CaptureStats.window_adjustments` 与 CLI 统计显示修正次数。
+- 实机：首次采集修正 1 次（窗口 779→780），100 帧稳态约 13 ms、含首次调整 mean 14.96 ms / P95 15.84 ms；修正后末行与 adb 对比 mean_abs_diff 0.20 / max 7 / >8 像素 0，连续 10 帧末行均非黑。
