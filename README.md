@@ -22,14 +22,16 @@ npm run build      # 类型检查 + 构建
 npm run tauri dev  # 桌面版
 ```
 
-Python 环境（回放与执行器需要）：
+Python 环境（回放与执行器需要，版本固定在 `cv/requirements.txt`）：
 
 ```bash
 python -m venv cv/.venv
-cv/.venv/Scripts/python.exe -m pip install opencv-python numpy rapidocr-onnxruntime
+cv/.venv/Scripts/python.exe -m pip install -r cv/requirements.txt   # Windows
+cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Linux
 ```
 
-也可用 `HUGOFGO_PYTHON` 指定解释器。
+也可用 `HUGOFGO_PYTHON` 指定解释器。`npm run replay` 会在运行用例前确认 `cv2`、`numpy`、
+`rapidocr_onnxruntime` 能真正导入；缺依赖时立即退出并打印上面的安装命令，不会生成半份回放报告。
 
 ## 预检
 
@@ -54,6 +56,21 @@ npm run replay     # 全部离线回放用例，当前 36 个；失败退出码�
 ```
 
 纪律：执行器任何改动必须回放全绿；每个实机故障补一条回放用例；未经实机验收不标记稳定。
+
+## 持续集成
+
+`.github/workflows/ci.yml` 在 `pull_request` 与 `push` 到 `main` 时运行（Node 20 + Python 3.12），步骤各自独立命名：
+
+1. Install Python replay dependencies：`python -m pip install -r cv/requirements.txt`
+2. Install frontend dependencies：`npm ci`
+3. Build frontend：`npm run build`
+4. Run executor domain unit tests：`python -m unittest discover -s executor/domain/tests -t .`
+5. Run replay：`npm run replay`
+
+失败时会按用例名输出 `::error` 标注，并把 `logs/replay/latest.json` 作为 `replay-report` 工件上传。
+本地复现 CI 就是按顺序执行同样命令——CI 调用的是同一个 `npm run replay` 入口。
+
+升级回放依赖：修改 `cv/requirements.txt` 的版本后必须先本地 `npm run replay` 全绿再提交。
 
 ## 资源数据
 
