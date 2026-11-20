@@ -111,6 +111,11 @@ class PerceptionFieldTest(unittest.TestCase):
         self.assertIn('圣晶石', unscrolled.fields['items'])
         self.assertNotIn('青铜果实', unscrolled.fields['items'])
 
+    def test_grand_ce_rotation_only_in_team_confirm(self):
+        # 助战界面的礼装是平铺，一帧能读全；队伍确认里才是 3 张轮播
+        self.assertNotIn('ce_rotating', observe('support-grand').fields)
+        self.assertTrue(observe('grand-team').fields.get('ce_rotating'))
+
     def test_card_slots_carry_crit_and_affinity(self):
         observation = observe('card-np-selected')
         self.assertEqual(5, len(observation.cards))

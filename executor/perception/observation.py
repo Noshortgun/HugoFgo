@@ -20,7 +20,7 @@ class ScreenState(str, Enum):
     SUPPORT_CONFIRM = 'support_confirm'
     SUPPORT_PARTY_CONFIRM = 'support_party_confirm'  # 助战编队确认屏，顶部有“冠位编队”切换按钮
     TEAM = 'team'
-    TEAM_GRAND = 'team_grand'  # 冠位战队伍确认：卡片更宽、顶部有“受限”
+    TEAM_GRAND = 'team_grand'  # 冠位战队伍确认：卡格同普通队伍，顶部多“受限”
     BATTLE = 'battle'
     CARD = 'card'
     RESULT = 'result'

@@ -368,9 +368,9 @@ def _fields_for(state: ScreenState, anchors: tuple[Anchor, ...],
                 if right:
                     fields['ap_cost'] = int(min(right, key=lambda a: a.box[0]).text.strip())
 
-    elif state is ScreenState.SUPPORT_GRAND:
-        # 冠位从者同时只能展示 1 张礼装，3 张循环播放：
-        # 单帧只能看到其中一张，要靠多帧采样或读礼装名才能确认。
+    elif state is ScreenState.TEAM_GRAND:
+        # 队伍确认里卡片上的礼装是 3 张轮播：单帧只能看到其中一张。
+        # 助战界面不是轮播，三张从上到下平铺，一帧就能全读到。
         fields['ce_rotating'] = True
 
     elif state is ScreenState.AP_RECOVERY:
