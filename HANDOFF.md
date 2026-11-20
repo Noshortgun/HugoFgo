@@ -329,3 +329,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - #16 评审：`integration/issue-5a-perception` 是每帧同步 OCR 的旧路线，与 ADR-0005 的快路径禁 OCR 冲突，且缺 drops/ap_recovery、覆盖层与字段状态；未合并，待按原型与 ADR-0005 重新实现。
 
 验证：合并后 main `npm run replay` 36/36、`npm run build`、设备自检 21/21、领域单测 14/14、`issues:selftest` 13/13；main CI 在三次合并后均通过。
+
+
+## 37. 票据单一发布源迁移（#24，2026-11-20）
+
+- `scripts/issue-sync.mjs` 比较改为「本地源去掉首行标题」对「远端 body 去掉发布器抬头」，使直接创建的 issue 与 `publish-issues.mjs` 发布的 issue 都能对齐；自检 13/13。
+- 迁移本地源：为 05A/05B/05C/19/22/23/24 建立 `NN-<slug>.md`（首行 `# NN: 标题`），6/7/12 以 GitHub 正文为准更新；`5/6/7/12/16/17/18/19` 的旧双份与错位副本移至 `.scratch/archive/legacy-issues/`，未删除内容。
+- `npm run issues:check`：无变化 18、阻塞漂移 0、结构错误 0，退出 0；仅 #3/#5 作为父/关闭票据的参考漂移。

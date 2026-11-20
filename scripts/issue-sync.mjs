@@ -5,8 +5,8 @@
  * 语义：
  * - GitHub issue 是权威内容；`.scratch/backend-rebuild/issues/NN-<slug>.md` 是本地唯一的
  *   手工编辑发布源。本脚本只做「拉取 + 比较 + 报告」：从不写 GitHub，也不删除任何文件。
- * - 本地待发布正文与 `scripts/publish-issues.mjs` 的拼装规则一致：两行来源说明 + 去掉首行
- *   `# NN: 标题` 后的正文。
+ * - 比较时去掉本地源首行 `# NN: 标题`，并忽略远端 body 可能带的发布抬头（`本地施工单：…` +
+ *   `Spec：…` 两行）；这样直接创建的 issue 与经 `publish-issues.mjs` 发布的 issue 都能对齐。
  * - 比较前做规范化（CRLF→LF、行尾空白、末尾空行），换行风格不同不算漂移。
  * - 票据编号取自 issue 标题前缀 `NN:`（可能带字母，如 `05A`），因为 GitHub issue 号与票据
  *   编号可能不一致（例：票据 19 是 issue #20）。
@@ -33,7 +33,6 @@ const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const DEFAULT_REPO = 'Noshortgun/HugoFgo';
 const ISSUES_REL = path.join('.scratch', 'backend-rebuild', 'issues');
 const CACHE_REL = path.join('.scratch', 'issue-cache');
-const SPEC_REL = '.scratch/backend-rebuild/spec.md';
 const GH =
   process.env.GH_BIN ??
   (process.platform === 'win32' ? 'C:\\Program Files\\GitHub CLI\\gh.exe' : 'gh');
@@ -188,14 +187,14 @@ function readLocalFiles(issuesDir) {
     });
 }
 
-function composePublishBody(entry) {
-  const body = [
-    `本地施工单：\`.scratch/backend-rebuild/issues/${entry.file}\``,
-    `Spec：\`${SPEC_REL}\``,
-    '',
-    ...entry.lines.slice(1),
-  ].join('\n');
-  return normalizeBody(body);
+function stripPublishHeader(text) {
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
+  if (/^本地施工单：/.test(lines[0] ?? '') && /^Spec：/.test(lines[1] ?? '')) {
+    let index = 2;
+    while (index < lines.length && lines[index].trim() === '') index += 1;
+    return lines.slice(index).join('\n');
+  }
+  return text;
 }
 
 function localStatus(entry) {
@@ -488,8 +487,8 @@ function main() {
       return result;
     }
 
-    const localBody = composePublishBody(source);
-    const remoteBody = normalizeBody(issue.body);
+    const localBody = normalizeBody(source.lines.slice(1).join('\n'));
+    const remoteBody = normalizeBody(stripPublishHeader(issue.body));
     if (localBody !== remoteBody) {
       result.status = 'modified';
       result.diff = diffStat(localBody, remoteBody);
