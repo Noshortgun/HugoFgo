@@ -163,5 +163,86 @@ class PerceptionFallbackTest(unittest.TestCase):
         self.assertEqual((), observation.buttons)
 
 
+class PerceptionRobustnessTest(unittest.TestCase):
+    """独立验证：扰动已有截图 + 用没参与模板制作的过程帧。
+
+    目的是避免「模板从哪裁、就用哪测」的循环论证。
+    """
+
+    def _encode(self, image: np.ndarray) -> Frame:
+        ok, buffer = cv2.imencode('.png', image)
+        assert ok
+        return Frame(image=buffer.tobytes(), width=image.shape[1],
+                     height=image.shape[0], captured_at=0.0)
+
+    def _variants(self, image: np.ndarray) -> dict[str, np.ndarray]:
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(float)
+        dim = hsv.copy()
+        dim[:, :, 2] *= 0.55
+        bright = hsv.copy()
+        bright[:, :, 2] = np.clip(bright[:, :, 2] * 1.35, 0, 255)
+        hue = hsv.copy()
+        hue[:, :, 0] = (hue[:, :, 0] + 12) % 180
+        return {
+            'dim': cv2.cvtColor(dim.astype(np.uint8), cv2.COLOR_HSV2BGR),
+            'bright': cv2.cvtColor(bright.astype(np.uint8), cv2.COLOR_HSV2BGR),
+            'hue': cv2.cvtColor(hue.astype(np.uint8), cv2.COLOR_HSV2BGR),
+        }
+
+    def test_state_survives_brightness_and_hue_changes(self):
+        samples = {
+            'battle-wave1': 'battle',
+            'card-select': 'card',
+            'support-select-correct-ce': 'support',
+            'team-confirm': 'team',
+            'result': 'result',
+            'drops': 'drops',
+            'repeat-dialog': 'repeat_dialog',
+            'ap-recovery-bronze': 'ap_recovery',
+        }
+        perception = Perception('cn')
+        for name, expected in samples.items():
+            source = cv2.imdecode(
+                np.fromfile(str(KEY_DIR / f'{name}.jpg'), dtype=np.uint8), cv2.IMREAD_COLOR)
+            for label, image in self._variants(source).items():
+                with self.subTest(screen=name, variant=label):
+                    observation = perception.read(self._encode(image))
+                    self.assertEqual(expected, observation.state.value)
+
+    def test_animation_frames_stay_unknown(self):
+        """宝具/攻击演出帧没有稳定 UI，应当判 unknown 而不是硬分类。"""
+        perception = Perception('cn')
+        for name in ('26-wave1-attack', '121-wave1-np-again'):
+            path = ROOT / '.scratch/live-20261120' / f'{name}.png'
+            if not path.exists():
+                self.skipTest(f'本机过程帧不存在：{name}')
+            with self.subTest(screen=name):
+                observation = perception.read(Frame(
+                    image=path.read_bytes(), width=1280, height=720, captured_at=0.0))
+                self.assertIs(ScreenState.UNKNOWN, observation.state)
+                self.assertTrue(observation.uncertain)
+
+    def test_process_frames_from_other_stages(self):
+        """这些帧来自别的关卡/别的 wave，没有参与模板制作。"""
+        samples = {
+            '13-wave1': 'battle',
+            '79-oberon-first-skill': 'battle',
+            '146-wave2-finish': 'battle',   # 敌人死亡演出，攻击按钮不在
+            '157-wave1-third-again': 'battle',
+            '159-after-attack': 'battle',
+            '160-missing': 'command_spell_confirm',
+        }
+        perception = Perception('cn')
+        for name, expected in samples.items():
+            path = ROOT / '.scratch/live-20261120' / f'{name}.png'
+            if not path.exists():
+                self.skipTest(f'本机过程帧不存在：{name}')
+            with self.subTest(screen=name):
+                observation = perception.read(Frame(
+                    image=path.read_bytes(), width=1280, height=720, captured_at=0.0))
+                self.assertEqual(expected, observation.state.value)
+
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -598,16 +598,6 @@
     },
     {
      "kind": "text-exists",
-     "expect": "攻击",
-     "area": [
-      1020,
-      540,
-      1240,
-      700
-     ]
-    },
-    {
-     "kind": "text-exists",
      "expect": "敌方单位",
      "area": null
     },
@@ -742,6 +732,20 @@
     "battle-slot1-skill3-cooldown.png",
     "battle-after-cards.png",
     "64-order-change-done.png"
+   ],
+   "field_areas": [
+    [
+     770,
+     0,
+     990,
+     120
+    ],
+    [
+     240,
+     180,
+     520,
+     300
+    ]
    ]
   },
   "card": {
@@ -899,6 +903,14 @@
    "screens": [
     "card-select.png",
     "card-np-selected.png"
+   ],
+   "field_areas": [
+    [
+     40,
+     335,
+     1280,
+     425
+    ]
    ]
   },
   "result": {
@@ -1055,6 +1067,14 @@
    ],
    "screens": [
     "repeat-dialog.png"
+   ],
+   "field_areas": [
+    [
+     440,
+     280,
+     930,
+     375
+    ]
    ]
   },
   "ap_recovery": {
@@ -1157,6 +1177,14 @@
    "screens": [
     "ap-recovery-bronze.png",
     "ap-recovery.png"
+   ],
+   "field_areas": [
+    [
+     430,
+     105,
+     1000,
+     570
+    ]
    ]
   },
   "order_change": {

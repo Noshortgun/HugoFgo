@@ -55,17 +55,13 @@ REQUIRED_FIELDS: dict[ScreenState, tuple[str, ...]] = {
 
 # 御主技能展开靠三个图标槽的亮度判断（文字无法区分）
 MASTER_SKILL_SLOTS = ((868, 275, 945, 352), (957, 275, 1034, 352), (1046, 274, 1123, 352))
-MASTER_SKILL_MIN_VALUE = 150.0
+# 用「技能槽 / 左侧背景」的亮度比判断是否展开：绝对值会被整体亮度带偏
+MASTER_SKILL_REFERENCE = (760, 275, 860, 352)
+MASTER_SKILL_MIN_RATIO = 1.10
 
 AP_ITEMS = ('圣晶石', '黄金果实', '白银果实', '青铜果实', '赤铜果实')
 
-# 每个状态只需要读这几块区域，不需要整屏 OCR
-FIELD_AREAS: dict[ScreenState, tuple[tuple[int, int, int, int], ...]] = {
-    ScreenState.BATTLE: ((770, 0, 990, 120), (240, 180, 520, 300)),
-    ScreenState.CARD: ((40, 335, 1280, 425),),
-    ScreenState.REPEAT_DIALOG: ((440, 280, 930, 375),),
-    ScreenState.AP_RECOVERY: ((430, 105, 1000, 570),),
-}
+# 字段读取区域统一在 cn.json 的 field_areas，不在代码里另写一套
 
 _ocr_engine: Any | None = None
 SKILL_BAND = (0, 530, 940, 650)
@@ -122,6 +118,42 @@ def _load_templates() -> dict[ScreenState, tuple[np.ndarray, tuple[int, int, int
     return _templates
 
 
+def _read_full(image: np.ndarray) -> tuple[Anchor, ...]:
+    result, _ = _ocr()(image)
+    anchors = []
+    for box, text, score in result or []:
+        if float(score) < OCR_THRESHOLD:
+            continue
+        xs = [float(point[0]) for point in box]
+        ys = [float(point[1]) for point in box]
+        anchors.append(Anchor(
+            text=text.strip(),
+            box=(round(min(xs)), round(min(ys)), round(max(xs)), round(max(ys))),
+            score=round(float(score), 3),
+        ))
+    return tuple(anchors)
+
+
+def _match_criteria(anchors: tuple[Anchor, ...], states: dict) -> ScreenState:
+    """模板低分时的回退：按标注的文字判据重新判一次。"""
+    for state in ORDER:
+        spec = states.get(state.value)
+        if spec is None or state is ScreenState.MASTER_SKILLS:
+            continue
+        ok = True
+        for criterion in spec['criteria']:
+            found = _find(anchors, criterion['expect'], criterion.get('area'))
+            if criterion['kind'] == 'text-exists' and found is None:
+                ok = False
+                break
+            if criterion['kind'] == 'text-absent' and found is not None:
+                ok = False
+                break
+        if ok:
+            return state
+    return ScreenState.UNKNOWN
+
+
 def _template_score(image: np.ndarray, state: ScreenState) -> float:
     template, box = _load_templates()[state]
     x1, y1, x2, y2 = box
@@ -155,7 +187,9 @@ def _detect_state(image: np.ndarray) -> tuple[ScreenState, float]:
 def _master_skills_open(image: np.ndarray) -> bool:
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     values = [float(hsv[y1:y2, x1:x2, 2].mean()) for x1, y1, x2, y2 in MASTER_SKILL_SLOTS]
-    return sum(values) / len(values) >= MASTER_SKILL_MIN_VALUE
+    x1, y1, x2, y2 = MASTER_SKILL_REFERENCE
+    reference = float(hsv[y1:y2, x1:x2, 2].mean())
+    return (sum(values) / len(values)) / max(reference, 1.0) >= MASTER_SKILL_MIN_RATIO
 
 
 def _int_in(text: str) -> int | None:
@@ -254,8 +288,16 @@ def _fields_for(state: ScreenState, anchors: tuple[Anchor, ...],
     if state is ScreenState.BATTLE:
         wave = _find(anchors, '/3', [850, 0, 990, 50])
         if wave:
-            fields['wave'] = _int_in(wave.text.split('/')[0] or '')
-            fields['wave_total'] = _int_in(wave.text.split('/')[-1] or '')
+            match = re.search(r'(\d+)\s*/\s*(\d+)', wave.text)
+            if match:
+                fields['wave'] = int(match.group(1))
+                fields['wave_total'] = int(match.group(2))
+        if fields.get('wave') is None:
+            # OCR 会把 “2/3” 读成 “213”，放大后再解析一次
+            match = re.search(r'(\d+)\s*/\s*(\d+)', _zoom_text(image, (850, 0, 990, 50), 6))
+            if match:
+                fields['wave'] = int(match.group(1))
+                fields['wave_total'] = int(match.group(2))
         turn = _find(anchors, '回合', [850, 75, 990, 120])
         if turn:
             fields['turn'] = _int_in(turn.text)
@@ -399,6 +441,9 @@ class Perception:
 
         image = _decode(frame)
         state, score = _detect_state(image)
+        if state is ScreenState.UNKNOWN:
+            # 模板没把握时按文字判据复核，不直接把画面丢掉
+            state = _match_criteria(_read_full(image), self._config['states'])
         if state is ScreenState.BATTLE and _master_skills_open(image):
             state = ScreenState.MASTER_SKILLS
         if state is ScreenState.UNKNOWN:
@@ -409,7 +454,8 @@ class Perception:
         spec = self._config['states'][state.value]
         buttons = {item['label']: Button(label=item['label'], box=tuple(item['box']))
                    for item in spec['buttons']}
-        anchors = _read_regions(image, FIELD_AREAS.get(state, ()))
+        areas = tuple(tuple(area) for area in spec.get('field_areas', []))
+        anchors = _read_regions(image, areas)
         fields, cards = _fields_for(state, anchors, buttons, image)
 
         missing = [name for name in REQUIRED_FIELDS.get(state, ())
