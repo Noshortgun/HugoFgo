@@ -42,8 +42,11 @@ async function prepareNode(root) {
     fs.writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
     const result = spawnSync('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-Command',
-      'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force', archive, extracted,
-    ], { stdio: 'inherit' });
+      'Expand-Archive -LiteralPath $env:HUGOFGO_NODE_ARCHIVE -DestinationPath $env:HUGOFGO_NODE_EXTRACT -Force',
+    ], {
+      stdio: 'inherit',
+      env: { ...process.env, HUGOFGO_NODE_ARCHIVE: archive, HUGOFGO_NODE_EXTRACT: extracted },
+    });
     if (result.status !== 0) throw new Error('无法解压 Node.js 运行时');
     fs.mkdirSync(output, { recursive: true });
     fs.copyFileSync(path.join(unpacked, 'node.exe'), path.join(output, 'node.exe'));
@@ -66,7 +69,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const config = JSON.parse(fs.readFileSync(path.join(root, 'src-tauri/tauri.conf.json'), 'utf8'));
   validateDesktopConfig(config, root);
   await prepareNode(root);
-  run(root, ['run', 'build']);
-  run(root, ['run', 'replay']);
-  run(root, ['run', 'tauri', 'build']);
+  if (!process.argv.includes('--prepare-only')) {
+    run(root, ['run', 'build']);
+    run(root, ['run', 'replay']);
+    run(root, ['run', 'tauri', 'build']);
+  }
 }
