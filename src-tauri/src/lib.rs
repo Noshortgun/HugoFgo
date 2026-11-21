@@ -1,4 +1,5 @@
 mod device;
+mod history;
 mod resources;
 mod run;
 mod settings;
@@ -119,6 +120,9 @@ pub fn run() {
             run::start_run,
             run::stop_run,
             run::get_run_state,
+            history::list_run_history,
+            history::get_run_record,
+            history::open_run_artifacts,
             list_jobs,
             read_job,
             save_job,

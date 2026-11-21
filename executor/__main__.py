@@ -14,6 +14,7 @@ from executor.device import DeviceConfig, FakeDevice, open_device
 from executor.domain import compile_job
 from executor.perception import Perception
 from executor.session import JsonlEventSink, RunControl, RunEvent
+from executor.session.history import RunHistoryRecorder
 
 
 class StdoutEventSink:
@@ -118,16 +119,22 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, 'reconfigure'):
             stream.reconfigure(encoding='utf-8')
     args = parser().parse_args(argv)
-    events = TeeEventSink(StdoutEventSink())
     run_dir = Path(args.run_dir) if args.run_dir else Path('logs/farm') / datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     run_dir.mkdir(parents=True, exist_ok=True)
+    history = RunHistoryRecorder(run_dir, job_name=Path(args.job).stem, job_file=args.job,
+                                 serial=args.serial, region=args.region)
+    events = TeeEventSink(StdoutEventSink(), history)
     control = RunControl()
     threading.Thread(target=listen_for_stop, args=(control,), daemon=True).start()
     emit(events, 'run_started', serial=args.serial, region=args.region, job=str(Path(args.job).resolve()),
          run_dir=str(run_dir.resolve()), fake=args.fake)
 
     try:
-        compiled = compile_job(Path(args.job).read_text(encoding='utf-8'))
+        job_text = Path(args.job).read_text(encoding='utf-8')
+        job_data = json.loads(job_text)
+        if isinstance(job_data.get('name'), str) and job_data['name'].strip():
+            history.job_name = job_data['name'].strip()
+        compiled = compile_job(job_text)
         if compiled.plan is None:
             diagnostics = [{'path': item.path, 'message': item.message,
                             'wave': item.wave, 'turn': item.turn} for item in compiled.diagnostics]
