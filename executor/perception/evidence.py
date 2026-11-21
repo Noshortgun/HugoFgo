@@ -135,7 +135,8 @@ def load_emblems(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Emblem]:
     return emblems
 
 
-def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
+def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
+                     card_box: tuple[int, int, int, int]) -> bool:
     """卡种纹章：卡面下部一块足够宽、尺寸在合理范围的纯色图形（绿/蓝/红）。
 
     只取每种颜色的最大连通域：技能动画的巨型效果环会明显超出宝具卡纹章尺寸。
@@ -145,6 +146,7 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
     hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     low_ratio, high_ratio = cn.NP_EMBLEM_Y_RANGE
+    card_top, card_height = card_box[1], card_box[3] - card_box[1]
     for index, hues in enumerate(cn.NP_EMBLEM_HUES):
         mask = np.zeros_like(hue, dtype=np.uint8)
         for low, high in hues:
@@ -165,8 +167,12 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
         # 纹章是“宽扁”的卡种图形；职阶图标/人物色块多为竖长，用长宽比排除。
         if h and width / h < 1.15:
             continue
-        center_y = y + h / 2
-        if low_ratio * height < center_y < high_ratio * height:
+        top = y + y1
+        center_y = top + h / 2
+        if top + h > cn.NP_EMBLEM_MAX_BOTTOM:
+            continue
+        ratio = (center_y - card_top) / card_height if card_height else 0
+        if low_ratio <= ratio <= high_ratio:
             return True
     return False
 
@@ -186,7 +192,7 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
             result = cv2.matchTemplate(roi, emblem.patch, cv2.TM_CCOEFF_NORMED)
             best = max(best, float(np.nan_to_num(result.max(), nan=0.0)))
         scores[slot] = best
-        blobs[slot] = _has_card_emblem(image, box)
+        blobs[slot] = _has_card_emblem(image, box, cn.NP_SLOTS[slot])
     return scores, blobs
 
 

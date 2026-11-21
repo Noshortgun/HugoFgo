@@ -170,6 +170,12 @@ class SafetyTest(unittest.TestCase):
                 for first, second in zip(rows, rows[1:]):
                     self.assertEqual(first.box[3], second.box[1])
 
+    def test_effect_text_does_not_create_np_cards(self) -> None:
+        observation = self.read('captures/2026-11-21/key/card-np-effect-text.png')
+
+        self.assertEqual(['宝具卡1'], [item.name for item in observation.controls
+                                       if item.name.startswith('宝具卡')])
+
     def test_small_arts_np_card_is_detected(self) -> None:
         observation = self.read('captures/2026-11-21/key/card-np-arts-small.png')
 

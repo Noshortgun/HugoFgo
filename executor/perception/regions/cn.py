@@ -186,8 +186,9 @@ NP_EMBLEM_BOUNDS: tuple[tuple[float, float, float, float], ...] = (
     (1400, 80, 9000, 260),    # Arts 蓝星
     (1400, 80, 9000, 260),    # Buster 红色
 )
-# 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记。
-NP_EMBLEM_Y_RANGE = (0.15, 0.80)
+# 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记和技能特效文字。
+NP_EMBLEM_Y_RANGE = (0.30, 1.10)
+NP_EMBLEM_MAX_BOTTOM = 370
 NP_EMBLEM_HUES: tuple[tuple[tuple[int, int], ...], ...] = (
     ((35, 90),),             # Quick 绿
     ((90, 140),),            # Arts 蓝

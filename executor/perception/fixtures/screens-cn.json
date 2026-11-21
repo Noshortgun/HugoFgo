@@ -950,6 +950,21 @@
         "宝具卡2"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-21/key/card-np-effect-text.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "宝具卡1"
+      ],
+      "absentControls": [
+        "宝具卡2",
+        "宝具卡3"
+      ],
+      "basis": "annotated"
     }
   ]
 }
