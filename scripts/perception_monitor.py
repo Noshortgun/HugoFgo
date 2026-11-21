@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import collections
+import dataclasses
 import importlib
 import json
 import sys
@@ -111,6 +113,7 @@ def main() -> int:
     print('监控启动：只读截图，不发送输入。窗口按 q 退出，s 保存。', flush=True)
 
     rules_stamp = rules_mtime()
+    np_history: collections.deque = collections.deque(maxlen=3)
     reload_count = 0
     last_reload = 0.0
     try:
@@ -155,6 +158,16 @@ def main() -> int:
                 started = time.perf_counter()
                 bgr = evidence.decode_frame(frame)
                 observation = perception.read(frame)
+                # 宝具卡用最近 3 帧投票：特效遮挡导致的单帧闪烁/漏检不再直接画出来。
+                present = {c.reason.split(':')[-1] for c in observation.controls
+                           if c.name.startswith('宝具卡') and c.reason.startswith('np_slot:')}
+                np_history.append(present)
+                stable = {slot for slot in ('A', 'B', 'C')
+                          if sum(slot in item for item in np_history) >= 2}
+                controls = tuple(c for c in observation.controls
+                                 if not c.name.startswith('宝具卡')
+                                 or c.reason.split(':')[-1] in stable)
+                observation = dataclasses.replace(observation, controls=controls)
                 ms = (time.perf_counter() - started) * 1000
                 last_frame, last_observation = bgr, observation
                 image = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))

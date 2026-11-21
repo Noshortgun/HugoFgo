@@ -167,7 +167,7 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
         _x, y, width, h = cv2.boundingRect(largest)
         if not (bounds['min_width'] <= width <= bounds['max_width']):
             continue
-        if h and width / h < bounds['min_aspect']:
+        if h and not (bounds['min_aspect'] <= width / h <= bounds['max_aspect']):
             continue
         if h and area / (width * h) < bounds['min_fill']:
             continue

@@ -170,6 +170,12 @@ class SafetyTest(unittest.TestCase):
                 for first, second in zip(rows, rows[1:]):
                     self.assertEqual(first.box[3], second.box[1])
 
+    def test_selected_np_pair_is_detected(self) -> None:
+        observation = self.read('captures/2026-11-21/key/card-np-selected-pair.png')
+
+        self.assertEqual(['宝具卡1', '宝具卡2'],
+                         [item.name for item in observation.controls if item.name.startswith('宝具卡')])
+
     def test_buster_np_card_is_detected(self) -> None:
         observation = self.read('captures/2026-11-21/key/card-np-buster.png')
 
