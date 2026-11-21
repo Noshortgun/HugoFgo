@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from executor.core.ap_policy import CONTROL_NAMES, select_recovery
+from executor.core.ap_policy import CONTROL_NAMES, RecoveryItem, select_recovery
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
@@ -164,6 +164,8 @@ class Runner:
         self.confirming_job_action = False
         self.run_settled = False
         self.draining = False
+        self.recovery_scrolled = False
+        self.recovery_scroll_since: float | None = None
         self.starting_next_run = False
         self.result_seen = False
         self.awaiting_attack_end = False
@@ -521,11 +523,31 @@ class Runner:
         if self.tap_stable(observation, '结算推进', now):
             self.wait_for_pages(now, BasePage.RESULT, BasePage.DROPS)
 
+    def scroll_recovery(self, observation: Observation, now: float) -> bool:
+        if self.recovery_scroll_since is None:
+            self.recovery_scroll_since = now
+            return False
+        if now - self.recovery_scroll_since + 1e-9 < self.options.stable_seconds:
+            return False
+        self.check_stop()
+        self.device.swipe(640, 560, 640, 260, 200)
+        self.emit('action', now, control='AP 恢复列表向下', x=640, y=560, x2=640, y2=260,
+                  reason='recovery_scroll')
+        self.recovery_scrolled = True
+        self.recovery_scroll_since = None
+        self.reset_stability()
+        return True
+
     def handle_ap_recovery(self, observation: Observation, now: float) -> RunResult | None:
         available = tuple(control.name for control in observation.controls
                           if control.kind is ControlKind.ITEM and control.actionable)
         item = select_recovery(self.options.recovery, available)
         if item is None:
+            offscreen = {RecoveryItem.BRONZE, RecoveryItem.COPPER}
+            if (available and not self.recovery_scrolled
+                    and self.options.recovery.allowed & offscreen):
+                self.scroll_recovery(observation, now)
+                return None
             self.emit('failed', now, reason='ap_recovery_no_allowed_item', available=available)
             return self.result(RunStatus.STOPPED, 'ap_recovery')
         if self.tap_stable(observation, CONTROL_NAMES[item], now):
@@ -633,6 +655,9 @@ class Runner:
                 return self.result(RunStatus.FAILED, 'device_error')
             now = frame.captured_at
             page = observation.base_page
+            if page is not BasePage.AP_RECOVERY:
+                self.recovery_scrolled = False
+                self.recovery_scroll_since = None
             if page in {BasePage.RESULT, BasePage.DROPS}:
                 self.result_seen = True
             if page is BasePage.BATTLE and self.battle_since is None:

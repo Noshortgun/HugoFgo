@@ -8,7 +8,7 @@ from unittest import mock
 from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run as core_run
-from executor.core.ap_policy import RecoveryPolicy
+from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
 from executor.device.base import DeviceError
 from executor.device.fake import FakeDevice
 from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
@@ -869,6 +869,24 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, len(used))
         self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
 
+    def test_default_policy_scrolls_once_to_find_bronze(self) -> None:
+        top = observe(BasePage.AP_RECOVERY,
+                      Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
+                      Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),
+                      Control('白银果实', ControlKind.ITEM, (315, 414, 981, 559), True))
+        bottom = observe(BasePage.AP_RECOVERY,
+                         Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True))
+        team = observe(BasePage.TEAM)
+        device, perception = scripted([top, top, bottom, bottom, team], [0.0, 0.5, 0.6, 1.1, 1.2])
+        events = MemoryEventSink()
+
+        run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(['swipe', 'tap'], [action['action'] for action in device.actions])
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual('AP 恢复列表向下', actions[0].data['control'])
+        self.assertEqual(1, len([event for event in events.events if event.type == 'recovery_used']))
+
     def test_ap_recovery_stops_without_using_items(self) -> None:
         recovery = observe(BasePage.AP_RECOVERY,
                            Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
@@ -884,12 +902,13 @@ class RunnerTest(unittest.TestCase):
 
     def test_non_whitelisted_items_are_not_used(self) -> None:
         recovery = observe(BasePage.AP_RECOVERY,
-                           Control('黄金果实', ControlKind.ITEM, (100, 100, 300, 200), True),
-                           Control('圣晶石', ControlKind.ITEM, (100, 200, 300, 300), True))
+                           Control('白银果实', ControlKind.ITEM, (100, 100, 300, 200), True),
+                           Control('青铜果实', ControlKind.ITEM, (100, 200, 300, 300), True))
         device, perception = scripted([recovery], [0.0])
         events = MemoryEventSink()
 
-        result = run(single_wave_plan(), device, perception, events)
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.GOLD}))))
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual([], device.actions)

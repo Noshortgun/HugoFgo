@@ -265,6 +265,7 @@ svg { flex: 0 0 auto; }
 .run-overlay-heading button { width: 24px; height: 24px; display: grid; place-items: center; border: 0; color: #879ba5; background: transparent; }
 .run-overlay > p { margin-top: 5px; color: #8a9ba5; font-size: 9px; }
 .run-overlay-progress { display: flex; justify-content: space-between; margin-top: 13px; padding: 9px; border-radius: 5px; color: #64818d; background: #edf4f5; font-size: 9px; }
+.run-recovery-count { display: flex; justify-content: space-between; margin-top: 7px; color: #64818d; font-size: 9px; }
 .run-current { display: flex; align-items: center; gap: 9px; margin-top: 13px; }
 .run-current .action-icon { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 7px; color: #3f7582; background: #e4eff1; }
 .run-current strong { display: block; font-size: 10px; }
@@ -292,6 +293,20 @@ svg { flex: 0 0 auto; }
 .history-row > span:last-child { color: #579079; font-size: 9px; }
 .utility-note { margin: 15px 0 0 !important; text-align: center; }
 .ready-text { color: #4e8b73; font-size: 9px; }
+
+.run-settings { margin-bottom: 14px; padding: 12px 14px; border: 1px solid #d9e4e7; border-radius: 8px; background: #fff; }
+.run-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.run-settings-heading strong { display: block; font-size: 11px; }
+.run-settings-heading small, .run-settings fieldset > small { display: block; margin-top: 4px; color: #8a9ba5; font-size: 8px; }
+.run-settings-heading button { height: 30px; padding: 0 12px; border: 0; border-radius: 5px; color: #fff; background: #357683; font-size: 9px; }
+.run-settings fieldset { margin: 12px 0 0; padding: 0; border: 0; }
+.run-settings-battles { display: flex; align-items: center; justify-content: space-between; color: #4e6b79; font-size: 9px; }
+.run-settings-battles input { width: 80px; height: 30px; padding: 0 8px; border: 1px solid #d5e1e5; border-radius: 5px; color: #4e6b79; background: #f8fbfb; }
+.run-settings-recovery { display: flex; flex-wrap: wrap; gap: 9px 14px; margin-top: 12px; color: #4e6b79; font-size: 9px; }
+.run-settings-recovery > span { width: 100%; color: #8a9ba5; }
+.run-settings-recovery label, .run-settings-drain { display: flex; align-items: center; gap: 5px; }
+.run-settings-drain { margin-top: 12px; color: #4e6b79; font-size: 9px; }
+.run-settings-message { margin: 8px 0 0; color: #357585; font-size: 9px; }
 
 /* Device control (Tauri only) */
 .device-panel { padding: 12px 14px; border: 1px solid #d9e4e7; border-radius: 8px; background: #fff; }

@@ -325,7 +325,7 @@ def check_executor_repeat_support():
 
 def check_executor_recovery():
     from executor.core import RunOptions
-    from executor.core.ap_policy import RecoveryPolicy
+    from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
     from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
     from executor.perception import BasePage, Control, ControlKind, Observation, Overlay
 
@@ -345,11 +345,26 @@ def check_executor_recovery():
     add_report('executor:recovery-whitelist-and-counts', AP_RECOVERY_IMAGE, expected, used,
                'tap', f'taps={device.actions}; reason={result.reason}', ok, simulated_ocr=True)
 
-    valuable = Observation(base_page=BasePage.AP_RECOVERY, controls=(
+    top = Observation(base_page=BasePage.AP_RECOVERY, controls=(
         Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
         Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),
+        Control('白银果实', ControlKind.ITEM, (315, 414, 981, 559), True),
     ))
-    result, device, events = run_core_scenario([valuable], [0.0], plan)
+    result, device, events = run_core_scenario(
+        [top, top, bronze, bronze, team], [0.0, 0.5, 0.6, 1.1, 1.2], plan)
+    actions = [action['action'] for action in device.actions]
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    ok = actions == ['swipe', 'tap'] and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-scrolls-to-bronze', AP_RECOVERY_IMAGE, ['swipe', 'tap'], actions,
+               'tap', f'recovery={used}', ok, simulated_ocr=True)
+
+    valuable = Observation(base_page=BasePage.AP_RECOVERY, controls=(
+        Control('白银果实', ControlKind.ITEM, (315, 143, 981, 267), True),
+        Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True),
+    ))
+    result, device, events = run_core_scenario(
+        [valuable], [0.0], plan,
+        options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.GOLD})), write_evidence=False))
     ok = result.reason == 'ap_recovery' and not device.actions
     add_report('executor:recovery-non-whitelist-stops', AP_RECOVERY_IMAGE, 'ap_recovery', result.reason,
                'stop', f'taps={device.actions}', ok, simulated_ocr=True)
