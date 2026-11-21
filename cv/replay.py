@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from dataclasses import replace
 import sys
 from datetime import datetime
@@ -389,6 +390,29 @@ def check_executor_recovery():
                simulated_ocr=True)
 
 
+def check_executor_process():
+    with TemporaryDirectory() as directory:
+        base = [sys.executable, '-m', 'executor', str(ROOT / 'examples/sample-job.json'),
+                '--serial', 'fake', '--region', 'CN', '--battles', '1',
+                '--recovery', 'bronze', '--fake']
+        completed = subprocess.run(
+            [*base, '--run-dir', str(Path(directory) / 'complete'), '--fake-interval', '0'],
+            cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20)
+        stopped = subprocess.Popen(
+            [*base, '--run-dir', str(Path(directory) / 'stop'), '--fake-interval', '5'],
+            cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding='utf-8')
+        stdout, _ = stopped.communicate('stop\n', timeout=20)
+        finished_rows = [json.loads(line) for line in completed.stdout.splitlines()]
+        stopped_rows = [json.loads(line) for line in stdout.splitlines()]
+        actual = f"complete={completed.returncode}:{finished_rows[-1]['type']}; stop={stopped.returncode}:{stopped_rows[-1]['type']}"
+        ok = (completed.returncode == 0 and finished_rows[-1]['type'] == 'finished'
+              and stopped.returncode == 1 and stopped_rows[-1]['type'] == 'stopped'
+              and not any(row['type'] == 'action' for row in stopped_rows))
+        add_report('executor:process-jsonl-and-stop', LOADING_IMAGE, 'complete=0:finished; stop=1:stopped',
+                   actual, 'stop', 'UTF-8 JSON Lines；停止后无动作', ok, simulated_ocr=True)
+
+
 def check_executor_safety():
     from executor.core import RunOptions
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
@@ -620,6 +644,7 @@ def run(output: Path):
     check_executor_self_target()
     check_executor_repeat_support()
     check_executor_recovery()
+    check_executor_process()
     check_executor_safety()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))
