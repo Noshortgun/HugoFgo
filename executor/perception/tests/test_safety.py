@@ -3,18 +3,13 @@ from __future__ import annotations
 
 import unittest
 
-from executor.perception import Perception
-from executor.perception.tests.fixtures import load_frame
+from executor.perception.tests.fixtures import isolated_perception, load_frame
 
 
 class SafetyTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.perception = Perception(ocr_reader=None)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.perception.close()
+        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=None)
 
     def read(self, relative: str):
         return self.perception.read(load_frame(relative))

@@ -6,9 +6,9 @@ import unittest
 
 import numpy as np
 
-from executor.perception import Field, FieldStatus, Perception, StaleFrameError
+from executor.perception import Field, FieldStatus, StaleFrameError
 from executor.perception.ocr import OcrLine, OcrWorker
-from executor.perception.tests.fixtures import load_frame
+from executor.perception.tests.fixtures import isolated_perception, load_frame
 
 
 class GatedReader:
@@ -35,13 +35,12 @@ class GatedReader:
 class FieldTest(unittest.TestCase):
     def setUp(self) -> None:
         self.reader = GatedReader()
-        self.perception = Perception(ocr_reader=self.reader)
+        self.perception = isolated_perception(self.addCleanup, ocr_reader=self.reader)
         self.battle = load_frame('captures/2026-11-20/key/battle-wave1.png')
         self.card = load_frame('captures/2026-11-20/key/card-select.png')
 
     def tearDown(self) -> None:
         self.reader.release.set()
-        self.perception.close()
 
     def test_fields_are_pending_until_ocr_finishes(self) -> None:
         self.perception.read(self.battle)

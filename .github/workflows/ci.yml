@@ -37,7 +37,14 @@ jobs:
         run: npm ci
 
       - name: Run full verification
-        run: npm run verify
+        run: |
+          mkdir -p logs
+          set -o pipefail
+          npm run verify 2>&1 | tee logs/verify.log
+
+      - name: Summarize verification failure
+        if: failure()
+        run: node scripts/report-ci-failure.mjs logs/verify.log
 
       - name: Check ticket sources
         env:
