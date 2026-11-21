@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -97,7 +98,8 @@ def main() -> int:
             for control in card['controls']
         )
         source = Path(card['file'])
-        src = str(Path('../../../') / source) if not source.is_absolute() else source.as_uri()
+        absolute = ROOT / source if not source.is_absolute() else source
+        src = Path(os.path.relpath(absolute, out.parent)).as_posix()
         sections.append(f'''
 <div class="card">
   <div class="name">{card['file']}</div>
