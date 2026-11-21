@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
@@ -31,6 +31,7 @@ class Evidence:
     templates: Mapping[str, Template]
     means: Mapping[str, float]
     edges: Mapping[str, float]
+    slots: Mapping[str, float] = field(default_factory=dict)
 
     def hit(self, name: str) -> bool:
         template = self.templates.get(name)
@@ -39,11 +40,14 @@ class Evidence:
         frame = cn.FRAME_EDGE_PROBES.get(name)
         if frame is not None:
             return self.edges.get(name, 0.0) >= frame.threshold
+        slot = cn.SLOT_PROBES.get(name)
+        if slot is not None:
+            return self.slots.get(name, 0.0) >= slot.threshold
         probe = cn.INTENSITY_PROBES.get(name)
         return probe is not None and self.means.get(name, 0.0) >= probe[1]
 
     def score(self, name: str) -> float:
-        return self.scores.get(name, self.means.get(name, self.edges.get(name, 0.0)))
+        return self.scores.get(name, self.means.get(name, self.edges.get(name, self.slots.get(name, 0.0))))
 
 
 def decode_frame(frame: Frame) -> np.ndarray:
@@ -108,6 +112,22 @@ def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict
             continue
         result = cv2.matchTemplate(roi, template.patch, cv2.TM_CCOEFF_NORMED)
         scores[name] = float(np.nan_to_num(result.max(), nan=0.0))
+    return scores
+
+
+def measure_slots(image: np.ndarray, gray: np.ndarray, probes=cn.SLOT_PROBES) -> dict[str, float]:
+    """槽位存在性：技能看边缘像素数，敌人看红色血条像素数。"""
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    scores: dict[str, float] = {}
+    for name, probe in probes.items():
+        x1, y1, x2, y2 = probe.box
+        if probe.mode == 'edge':
+            edges = cv2.Canny(gray[y1:y2, x1:x2], 50, 150)
+            scores[name] = float((edges > 0).sum())
+        else:
+            h, sat, val = hsv[y1:y2, x1:x2, 0], hsv[y1:y2, x1:x2, 1], hsv[y1:y2, x1:x2, 2]
+            red = ((h < 10) | (h > 170)) & (sat > 120) & (val > 120)
+            scores[name] = float(red.sum())
     return scores
 
 

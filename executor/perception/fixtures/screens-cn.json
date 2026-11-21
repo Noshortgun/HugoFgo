@@ -232,6 +232,9 @@
       "absentControls": [
         "进行更替",
         "攻击"
+      ],
+      "actionableControls": [
+        "关闭"
       ]
     },
     {
@@ -305,6 +308,7 @@
       "actionable": true,
       "basis": "annotated",
       "actionableControls": [
+        "关闭",
         "撤退",
         "战利品一览"
       ]
@@ -629,7 +633,13 @@
       "basis": "annotated",
       "actionableControls": [
         "从者1技能1",
-        "敌方1"
+        "敌方2"
+      ],
+      "absentControls": [
+        "从者2技能1",
+        "从者3技能1",
+        "敌方1",
+        "敌方3"
       ]
     },
     {
@@ -692,7 +702,10 @@
         "order_change"
       ],
       "actionable": true,
-      "basis": "inferred"
+      "basis": "inferred",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/06-swap-out-selected.png",
@@ -702,7 +715,10 @@
         "order_change"
       ],
       "actionable": true,
-      "basis": "inferred"
+      "basis": "inferred",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/07-swap-in-selected.png",
@@ -712,7 +728,10 @@
         "order_change"
       ],
       "actionable": true,
-      "basis": "inferred"
+      "basis": "inferred",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/08-swap-result.png",

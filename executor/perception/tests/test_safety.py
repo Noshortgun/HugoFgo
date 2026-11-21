@@ -93,6 +93,16 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual((), observation.controls)
         self.assertFalse(observation.actionable)
 
+    def test_only_existing_servants_and_enemies_are_listed(self) -> None:
+        solo = self.read('captures/2026-11-19/07-battle-loading.png')
+
+        self.assertEqual('battle', solo.base_page.value)
+        listed = {item.name for item in solo.controls}
+        self.assertTrue({'从者1技能1', '从者1技能2', '从者1技能3', '敌方2'} <= listed)
+        self.assertEqual(set(), {name for name in listed if name.startswith(('从者2', '从者3'))})
+        self.assertNotIn('敌方1', listed)
+        self.assertNotIn('敌方3', listed)
+
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
         ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')

@@ -115,6 +115,23 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
             for index, box in enumerate(_support_rows(gray), start=1):
                 controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected'))
 
+        if page is BasePage.BATTLE:
+            for slot in (1, 2, 3):
+                if not evidence.hit(f'servant_slot_{slot}'):
+                    continue
+                x1, _y1, _x2, _y2 = cn.SLOT_PROBES[f'servant_slot_{slot}'].box
+                for skill, offset in enumerate(cn.SKILL_ICON_OFFSETS, start=1):
+                    left = x1 + offset
+                    box = (left, cn.SKILL_ICON_BOX[1], left + cn.SKILL_ICON_BOX[2] - cn.SKILL_ICON_BOX[0],
+                           cn.SKILL_ICON_BOX[3])
+                    controls.append(Control(f'从者{slot}技能{skill}', ControlKind.SKILL, box, True,
+                                            f'slot_visible:{slot}'))
+            for slot in (1, 2, 3):
+                if evidence.hit(f'enemy_slot_{slot}'):
+                    controls.append(Control(f'敌方{slot}', ControlKind.ENEMY,
+                                            cn.SLOT_PROBES[f'enemy_slot_{slot}'].box, True,
+                                            'enemy_hp_bar'))
+
         if page is BasePage.AP_RECOVERY:
             layout = 'ap_stone' if evidence.hit('ap_stone') else 'ap_bronze'
             for spec in cn.AP_ITEM_LAYOUTS[layout]:
@@ -197,7 +214,9 @@ class Perception:
         scores = evidence.match_templates(gray, self._templates)
         means = evidence.measure_probes(gray)
         edges = evidence.measure_frame_edges(gray)
-        frame_evidence = Evidence(scores=scores, templates=self._templates, means=means, edges=edges)
+        slots = evidence.measure_slots(image, gray)
+        frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
+                                  edges=edges, slots=slots)
         page, variants, overlays, confidence = _classify(frame_evidence)
         return Observation(
             base_page=page,
@@ -207,7 +226,7 @@ class Perception:
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
-            evidence={name: round(value, 4) for name, value in {**scores, **means, **edges}.items()},
+            evidence={name: round(value, 4) for name, value in {**scores, **means, **edges, **slots}.items()},
         )
 
     def _with_ocr(self, observation: Observation) -> Observation:

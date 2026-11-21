@@ -113,6 +113,15 @@ OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
 }
 
 @dataclass(frozen=True)
+class SlotProbe:
+    """按画面内容判断某个槽位是否存在：技能图标数边缘，敌人信息条数红色血条。"""
+
+    box: Box
+    mode: str  # 'edge' | 'red'
+    threshold: float
+
+
+@dataclass(frozen=True)
 class FrameEdgeProbe:
     """卡框探针：只数长直线边缘，不看卡面图案，因此与御主礼装、从者立绘无关。"""
 
@@ -128,6 +137,19 @@ FRAME_EDGE_PROBES: dict[str, FrameEdgeProbe] = {
         threshold=250.0,
     ),
 }
+
+# 从者技能槽与敌方信息槽：人数随编队变化，逐帧判断槽位是否存在，不固定 9 技能 3 敌人。
+# 实测：有技能时边缘像素 4980–6057，无技能 0；有敌人时红色血条像素 1395–2436，无敌人 0。
+SLOT_PROBES: dict[str, SlotProbe] = {
+    'servant_slot_1': SlotProbe((43, 540, 278, 615), 'edge', 2500),
+    'servant_slot_2': SlotProbe((365, 540, 600, 615), 'edge', 2500),
+    'servant_slot_3': SlotProbe((675, 540, 913, 615), 'edge', 2500),
+    'enemy_slot_1': SlotProbe((5, 0, 258, 108), 'red', 400),
+    'enemy_slot_2': SlotProbe((262, 0, 498, 108), 'red', 400),
+    'enemy_slot_3': SlotProbe((505, 0, 745, 108), 'red', 400),
+}
+
+BATTLE_SLOTS: tuple[str, ...] = tuple(SLOT_PROBES)
 
 # 亮度探针：平均灰度达到下限才算命中，用于“按钮已点亮 / 未置灰”这类颜色证据。
 INTENSITY_PROBES: dict[str, tuple[Box, float]] = {
@@ -195,12 +217,6 @@ PAGE_CONTROLS: dict[BasePage, tuple[ControlSpec, ...]] = {
                     hide_when_missing=True),
         ControlSpec('令咒', ControlKind.BUTTON, (1000, 20, 1122, 133), anchor='battle_chrome',
                     hide_when_missing=True),
-        *(ControlSpec(f'从者{slot}技能{skill}', ControlKind.SKILL,
-                      (x, 548, x + 61, 610), anchor='battle_chrome', hide_when_missing=True)
-          for slot, base_x in ((1, 43), (2, 365), (3, 675))
-          for skill, x in ((1, base_x), (2, base_x + 87), (3, base_x + 174))),
-        *(ControlSpec(f'敌方{i}', ControlKind.ENEMY, box, anchor='battle_chrome', hide_when_missing=True)
-          for i, box in enumerate([(5, 0, 258, 108), (262, 0, 498, 108), (505, 0, 745, 108)], start=1)),
     ),
     BasePage.CARD: (
         *(ControlSpec(f'卡{i}', ControlKind.CARD, box) for i, box in enumerate([
@@ -280,6 +296,7 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518)),
     ),
     Overlay.ORDER_CHANGE: (
+        ControlSpec('关闭', ControlKind.BUTTON, (1185, 94, 1260, 174)),
         ControlSpec('先发第1位', ControlKind.TARGET, (36, 250, 229, 565)),
         ControlSpec('先发第2位', ControlKind.TARGET, (236, 250, 429, 565)),
         ControlSpec('先发第3位', ControlKind.TARGET, (436, 250, 629, 565)),
@@ -308,6 +325,7 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('职阶星图分值效果', ControlKind.BUTTON, (673, 531, 932, 589)),
     ),
     Overlay.BATTLE_MENU: (
+        ControlSpec('关闭', ControlKind.BUTTON, (1136, 65, 1219, 153)),
         ControlSpec('撤退', ControlKind.BUTTON, (752, 214, 1077, 283)),
         ControlSpec('开关技能使用确认', ControlKind.BUTTON, (866, 355, 932, 405)),
         ControlSpec('开关宝具动画匀速', ControlKind.BUTTON, (1093, 355, 1159, 405)),
@@ -321,6 +339,10 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('御主技能3', ControlKind.BUTTON, (1046, 274, 1123, 352)),
     ),
 }
+
+# 从者技能槽内的三个技能图标（相对 1280×720 基准的绝对坐标）。
+SKILL_ICON_OFFSETS: tuple[int, ...] = (0, 87, 174)
+SKILL_ICON_BOX = (0, 548, 61, 610)
 
 # 助战卡片行的动态检测参数：卡片比背景亮，按行平均亮度分段。
 SUPPORT_ROW_REGION: Box = (40, 150, 1216, 720)

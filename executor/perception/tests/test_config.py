@@ -27,6 +27,7 @@ class ConfigTest(unittest.TestCase):
         for rule in cn.VARIANT_RULES:
             names.update(rule.anchors)
         names.update(cn.AP_ITEM_LAYOUTS)
+        names.update(cn.BATTLE_SLOTS)
         layouts = (*cn.PAGE_CONTROLS.values(), *cn.OVERLAY_CONTROLS.values(),
                    *cn.VARIANT_CONTROLS.values(), *cn.VARIANT_EXTRA_CONTROLS.values(),
                    *cn.AP_ITEM_LAYOUTS.values())
@@ -35,7 +36,7 @@ class ConfigTest(unittest.TestCase):
                 if control.anchor is not None:
                     names.add(control.anchor)
 
-        self.assertEqual(set(cn.INTENSITY_PROBES) | set(cn.FRAME_EDGE_PROBES),
+        self.assertEqual(set(cn.INTENSITY_PROBES) | set(cn.FRAME_EDGE_PROBES) | set(cn.SLOT_PROBES),
                          names - set(self.templates))
         self.assertEqual(set(), set(self.templates) - names)
 
