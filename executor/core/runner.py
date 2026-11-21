@@ -201,6 +201,7 @@ class Runner:
         self.support_stage = 'idle'
         self.support_refreshes = 0
         self.support_scrolls = 0
+        self.support_confirm_since: float | None = None
         self.support_search_signature: tuple | None = None
         self.support_search_since: float | None = None
         self.support_previous_rows: tuple | None = None
@@ -330,11 +331,21 @@ class Runner:
         if self.support_stage == 'refresh_confirm' and Overlay.SUPPORT_CONFIRM in observation.overlays:
             if self.tap_stable(observation, '是', now):
                 self.support_refreshes += 1
-                self.support_stage = 'idle'
-                self.support_previous_rows = None
+                self.support_stage = 'refresh_wait'
+                self.support_confirm_since = now
                 self.reset_support_search()
-                self.wait_for_page(BasePage.SUPPORT, now)
             return None
+        if self.support_stage == 'refresh_wait':
+            if Overlay.SUPPORT_CONFIRM in observation.overlays:
+                if (self.support_confirm_since is not None
+                        and now - self.support_confirm_since >= self.options.action_timeout):
+                    self.emit('failed', now, reason='support_refresh_timeout')
+                    return self.result(RunStatus.STOPPED, 'support_refresh_timeout')
+                return None
+            self.support_stage = 'idle'
+            self.support_previous_rows = None
+            self.reset_support_search()
+            self.wait_for_page(BasePage.SUPPORT, now)
         requirement = next((slot for slot in self.plan.formation if slot.support_required), None)
         control = next((item for item in observation.controls
                         if item.support is not None and item.actionable
@@ -812,7 +823,8 @@ class Runner:
                 unexpected = unexpected | (observation.overlays & {Overlay.COMMAND_SPELL_MENU,
                                                                    Overlay.COMMAND_SPELL_TARGET,
                                                                    Overlay.COMMAND_SPELL_CONFIRM})
-            if Overlay.SUPPORT_CONFIRM in observation.overlays and self.support_stage != 'refresh_confirm':
+            if (Overlay.SUPPORT_CONFIRM in observation.overlays
+                    and self.support_stage not in {'refresh_confirm', 'refresh_wait'}):
                 unexpected = unexpected | {Overlay.SUPPORT_CONFIRM}
             if unexpected:
                 self.emit('failed', now, reason='unexpected_overlay',

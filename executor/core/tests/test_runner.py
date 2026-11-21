@@ -126,6 +126,40 @@ class RunnerTest(unittest.TestCase):
                          controls)
         self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions[:2]])
 
+    def test_support_refresh_tolerates_confirmation_still_visible(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        confirm = Observation(base_page=BasePage.SUPPORT,
+                              overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
+                              controls=(button('是', (708, 534, 969, 592)),))
+        candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+        match = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=candidate))
+        team = observe(BasePage.TEAM, button('开始任务'))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        observations = [wrong, wrong, wrong, wrong, wrong, wrong, confirm, confirm,
+                        confirm, confirm, match, match, match, team, team, battle, battle, wrong_cards]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3,
+                 2.5, 2.9, 3.0, 3.5, 4.0, 4.1, 4.6, 4.7, 5.2, 5.3]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        controls = [event.data['control'] for event in events.events if event.type == 'action']
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第1行', '开始任务', '攻击'],
+                         controls)
+
     def test_friend_request_is_closed_before_support_selection(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
