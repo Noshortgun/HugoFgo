@@ -43,6 +43,7 @@ class Overlay(str, Enum):
     """叠加在基页之上的面板或弹窗；可与基页并存，覆盖基页的可操作性。"""
 
     SUPPORT_CONFIRM = 'support_confirm'
+    SUPPORT_REFRESH_COOLDOWN = 'support_refresh_cooldown'
     SUPPORT_PARTY_CONFIRM = 'support_party_confirm'
     REPEAT_DIALOG = 'repeat_dialog'
     ORDER_CHANGE = 'order_change'
@@ -50,6 +51,7 @@ class Overlay(str, Enum):
     COMMAND_SPELL_TARGET = 'command_spell_target'
     COMMAND_SPELL_CONFIRM = 'command_spell_confirm'
     CLASS_INFO = 'class_info'
+    BATTLE_STATUS_CHANGE_DETAIL = 'battle_status_change_detail'
     BATTLE_MENU = 'battle_menu'
     MASTER_SKILLS = 'master_skills'
     RETREAT_CONFIRM = 'retreat_confirm'

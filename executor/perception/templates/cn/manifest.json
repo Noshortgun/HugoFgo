@@ -49,6 +49,17 @@
       ],
       "threshold": 0.6
     },
+    "support_refresh_cooldown": {
+      "file": "support_refresh_cooldown.png",
+      "source": "captures/2026-11-22/key/support-refresh-cooldown.png",
+      "roi": [
+        525,
+        54,
+        754,
+        154
+      ],
+      "threshold": 0.6
+    },
     "team": {
       "file": "team.png",
       "source": "captures/2026-11-20/key/team-confirm.png",
@@ -224,6 +235,17 @@
         176
       ],
       "threshold": 0.62
+    },
+    "battle_status_change_detail": {
+      "file": "battle_status_change_detail.png",
+      "source": "captures/2026-11-22/key/battle-status-change-detail.png",
+      "roi": [
+        510,
+        144,
+        770,
+        241
+      ],
+      "threshold": 0.6
     },
     "battle_menu": {
       "file": "battle_menu.png",

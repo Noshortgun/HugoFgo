@@ -194,6 +194,6 @@ export interface HugoFgoJob {
   strategyByWave?: Record<number, FallbackStrategy | null>;
   waves: JobWave[];
   warnings?: string[];
-  /** 测试用途：导入时保留但运行时不读取，导出不会写回。 */
+  /** 测试用途：导入与再次保存时保留，但运行时不读取。 */
   provenance?: unknown;
 }

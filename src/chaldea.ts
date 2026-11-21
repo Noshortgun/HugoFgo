@@ -390,7 +390,7 @@ export function convertChaldeaTeam(
       source: 'chaldea',
       teamId: team.id,
       questId: team.questId,
-      note: '测试用途：原始记录仅作对照，HugoFgo 运行时不读取，导出不会写回',
+      note: '测试用途：原始记录仅作对照，HugoFgo 运行时不读取',
       actions: data.actions,
       delegate: data.delegate ?? {},
     },

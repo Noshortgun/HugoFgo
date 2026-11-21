@@ -87,6 +87,7 @@ const runOverlayVisible = ref(false);
 const runStarting = ref(false);
 const selectedSerial = ref('');
 const currentJobPath = ref('');
+const loadedJob = ref<HugoFgoJob | null>(null);
 const utility = ref<'jobs' | 'history' | 'settings' | null>(null);
 const importSource = ref('');
 const jobFileInput = ref<HTMLInputElement | null>(null);
@@ -150,7 +151,7 @@ function resolveMemberAssets(member: Servant, limitCount: number): Servant {
   return {
     ...member,
     limitCount,
-    npId: noblePhantasm?.id,
+    npId: noblePhantasm?.id ?? member.npId,
     noblePhantasm,
     image: atlasServants.value.length ? ascension?.face ?? asset?.face ?? member.image : '',
     art: atlasServants.value.length ? ascension?.card ?? asset?.card ?? member.art : '',
@@ -224,7 +225,7 @@ function currentJob(snapshot: PlanSnapshot) {
   const strategyByWave = Object.fromEntries(
     Object.entries(fallbackByWave.value).map(([wave, value]) => [wave, value ? normalizeServantOrder(value, members.value) : null]),
   );
-  return buildJobFile({ members: members.value, mystic: mystic.value, fallback: strategy, fallbackByWave: strategyByWave, snapshot, name: jobName.value });
+  return buildJobFile({ members: members.value, mystic: mystic.value, fallback: strategy, fallbackByWave: strategyByWave, snapshot, name: jobName.value, base: loadedJob.value ?? undefined });
 }
 async function refreshJobLibrary() {
   jobLibraryLoading.value = true;
@@ -383,6 +384,7 @@ function applySupportSlot(slot: number | null) {
 }
 function commitImport(pending: { job: HugoFgoJob; members: Servant[]; warnings: string[] }, supportNote = '') {
   const { job } = pending;
+  loadedJob.value = job;
   members.value = pending.members;
   const warnings = [...pending.warnings, ...(job.warnings ?? [])];
   const code = lookupMysticCodes.value.find((item) => item.id === job.mysticId);

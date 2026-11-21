@@ -147,6 +147,7 @@ export function buildJobFile(input: {
   fallbackByWave: Record<number, FallbackStrategy | null>;
   snapshot: PlanSnapshot;
   name?: string;
+  base?: HugoFgoJob;
 }): HugoFgoJob {
   const { members, mystic, fallback, fallbackByWave, snapshot } = input;
   const waves: JobWave[] = [1, 2, 3].map((waveNumber) => {
@@ -182,13 +183,14 @@ export function buildJobFile(input: {
   });
 
   return {
+    ...input.base,
     version: 1,
     name: input.name,
     mysticId: mystic.id,
     enemyCount: snapshot.enemyCount,
     formation: toJobFormation(members),
-    strategy: fallback,
-    ...(Object.keys(strategyByWave).length ? { strategyByWave } : {}),
+    strategy: { ...input.base?.strategy, ...fallback },
+    strategyByWave: Object.keys(strategyByWave).length ? strategyByWave : undefined,
     waves,
   };
 }
@@ -355,7 +357,7 @@ export function applyFormation(
           art: ascension?.card ?? asset?.card ?? known.art,
           memberInstanceId: nextInstanceId(),
           limitCount: entry.limitCount ?? 4,
-          npId: noblePhantasm?.id,
+          npId: noblePhantasm?.id ?? entry.npId,
           noblePhantasm,
 
           support: entry.support ?? false,
@@ -375,7 +377,7 @@ export function applyFormation(
         members[entry.slot] = {
           memberInstanceId: nextInstanceId(),
           limitCount: entry.limitCount ?? 4,
-          npId: noblePhantasm?.id,
+          npId: noblePhantasm?.id ?? entry.npId,
           noblePhantasm,
 
           name: entry.name,

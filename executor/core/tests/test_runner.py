@@ -126,6 +126,41 @@ class RunnerTest(unittest.TestCase):
                          controls)
         self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions[:2]])
 
+    def test_support_refresh_cooldown_closes_and_resumes_after_wait(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        cooldown = Observation(base_page=BasePage.SUPPORT,
+                               overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
+                               controls=(button('关闭', (508, 531, 772, 599)),))
+        candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+        match = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=candidate))
+        unknown = observe(BasePage.UNKNOWN)
+        observations = [wrong, wrong, wrong, wrong, wrong, wrong, cooldown, cooldown,
+                        wrong, match, match, unknown, unknown]
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        close = next(action for action in device.actions if action['action'] == 'tap'
+                     and (action['x'], action['y']) == (640, 565))
+        self.assertEqual((640, 565), (close['x'], close['y']))
+        self.assertEqual(9.5, next(event.timestamp for event in events.events
+                                   if event.type == 'action' and event.data['control'] == '助战卡片第1行'))
+
     def test_support_refresh_tolerates_confirmation_still_visible(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
@@ -409,6 +444,30 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('card_mismatch', result.reason)
         self.assertEqual(['敌方2', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, result.progress.action_index)
+
+    def test_enemy_status_detail_closes_before_battle_continues(self) -> None:
+        target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         *(Control(f'敌方{index}', ControlKind.ENEMY,
+                                   (index * 250, 20, index * 250 + 200, 100), True)
+                           for index in range(1, 4)))
+        detail = Observation(base_page=BasePage.BATTLE,
+                             overlays=frozenset({Overlay.BATTLE_STATUS_CHANGE_DETAIL}),
+                             controls=(button('关闭', (990, 640, 1010, 660)),))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, detail, detail, battle, battle, wrong_cards],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((target,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['敌方2', '关闭', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual((1000, 650), (device.actions[1]['x'], device.actions[1]['y']))
         self.assertEqual(1, result.progress.action_index)
 
     def test_master_skill_two_uses_the_planned_target(self) -> None:
