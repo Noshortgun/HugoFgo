@@ -126,6 +126,25 @@ class SafetyTest(unittest.TestCase):
             self.assertLessEqual(abs((x2 - x1) - (command[2] - command[0])), 60, control.name)
             self.assertLessEqual(abs((y2 - y1) - (command[3] - command[1])), 60, control.name)
 
+    def test_live_session_screens(self) -> None:
+        friend = self.read('captures/2026-11-21/key/friend-request.png')
+        bond = self.read('captures/2026-11-21/key/result-bond.png')
+        repeat = self.read('captures/2026-11-21/key/repeat-over-support.png')
+
+        self.assertEqual('support', friend.base_page.value)
+        self.assertEqual(frozenset(), friend.variants)
+        self.assertEqual({'friend_request'}, {item.value for item in friend.overlays})
+        self.assertEqual(['结束'], [item.name for item in friend.controls])
+
+        self.assertEqual('result', bond.base_page.value)
+        self.assertEqual({'bond'}, {item.value for item in bond.variants})
+        self.assertEqual((), bond.controls)
+
+        # 弹窗盖住了底下的好友申请页：基页未知，但弹窗按钮必须可用。
+        self.assertEqual('unknown', repeat.base_page.value)
+        actionable = {item.name for item in repeat.controls if item.actionable}
+        self.assertTrue({'连续出击', '关闭'} <= actionable)
+
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
         ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')

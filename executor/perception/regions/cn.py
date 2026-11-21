@@ -64,6 +64,8 @@ PAGE_RULES: tuple[PageRule, ...] = (
     PageRule(BasePage.AP_RECOVERY, ('ap_recovery',)),
     PageRule(BasePage.DROPS, ('drops',)),
     PageRule(BasePage.RESULT, ('result',)),
+    # 牵绊结算面板没有“战斗结果”标题，靠“与从者的牵绊”识别为同一基页。
+    PageRule(BasePage.RESULT, ('result_bond',)),
     PageRule(BasePage.SUPPORT, ('support',)),
     PageRule(BasePage.TEAM, ('team',)),
     PageRule(BasePage.CARD, ('card',)),
@@ -94,6 +96,7 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.SUPPORT_CONFIRM, ('support_confirm',)),
     OverlayRule(Overlay.SUPPORT_PARTY_CONFIRM, ('support_party_confirm',)),
     OverlayRule(Overlay.MASTER_EQUIPMENT, ('master_equipment',)),
+    OverlayRule(Overlay.FRIEND_REQUEST, ('friend_request',)),
     OverlayRule(Overlay.RETREAT_CONFIRM, ('retreat_confirm',)),
     OverlayRule(Overlay.REPEAT_DIALOG, ('repeat_dialog',)),
     OverlayRule(Overlay.COMMAND_SPELL_CONFIRM, ('command_spell_confirm',)),
@@ -110,7 +113,16 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
 OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
     Overlay.SUPPORT_PARTY_CONFIRM: BasePage.SUPPORT,
     Overlay.MASTER_EQUIPMENT: BasePage.TEAM,
+    Overlay.FRIEND_REQUEST: BasePage.SUPPORT,
 }
+
+# 模态覆盖层按优先级从高到低：只输出最高优先级那一层的控件。
+MODAL_OVERLAYS: tuple[Overlay, ...] = (
+    Overlay.REPEAT_DIALOG,
+    Overlay.SUPPORT_CONFIRM,
+    Overlay.RETREAT_CONFIRM,
+    Overlay.COMMAND_SPELL_CONFIRM,
+)
 
 @dataclass(frozen=True)
 class SlotProbe:
@@ -308,6 +320,10 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
     ),
     Overlay.MASTER_EQUIPMENT: (
         ControlSpec('关闭', ControlKind.BUTTON, (6, 9, 172, 78)),
+    ),
+    # 好友申请页：自动化只走「结束」，不点「申请好友」。
+    Overlay.FRIEND_REQUEST: (
+        ControlSpec('结束', ControlKind.BUTTON, (166, 600, 493, 698)),
     ),
     Overlay.RETREAT_CONFIRM: (
         # 按钮框按亮区实测，中心即文字中心。

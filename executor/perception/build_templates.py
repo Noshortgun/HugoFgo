@@ -58,6 +58,7 @@ SOURCES: tuple[AnchorSource, ...] = (
     AnchorSource('result_exp', 'captures/2026-11-20/key/result-exp.png', (651, 186, 831, 225), 30, 0.6),
     AnchorSource('ap_stone', 'captures/2026-11-20/key/ap-recovery.png', (456, 130, 544, 164), 30, 0.6),
     AnchorSource('ap_bronze', 'captures/2026-11-20/key/ap-recovery-bronze.png', (455, 299, 574, 340), 30, 0.6),
+    AnchorSource('friend_request', 'captures/2026-11-21/key/friend-request.png', (509, 207, 757, 244), 25, 0.6),
     AnchorSource('retreat_confirm', 'captures/2026-11-19-mystic/key/12-retreat-confirm.png', (552, 270, 719, 302), 35, 0.6),
 )
 

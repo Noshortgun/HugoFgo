@@ -40,6 +40,7 @@ def _classify(evidence: Evidence):
         and not any(evidence.hit(anchor) for anchor in rule.absent)
     )
 
+    direct = True
     for rule in cn.PAGE_RULES:
         if all(evidence.hit(anchor) for anchor in rule.anchors):
             page = rule.page
@@ -47,6 +48,7 @@ def _classify(evidence: Evidence):
             break
     else:
         page = BasePage.UNKNOWN
+        direct = False
         confidence = max(evidence.scores.values(), default=0.0)
 
     if page is BasePage.UNKNOWN:
@@ -56,7 +58,7 @@ def _classify(evidence: Evidence):
                 break
 
     variants = set()
-    for rule in cn.VARIANT_RULES:
+    for rule in cn.VARIANT_RULES if direct else ():
         if rule.page is not page:
             continue
         if rule.variant is Variant.BATTLE_ANIMATION and overlays:
@@ -99,8 +101,22 @@ def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Contr
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
               evidence: Evidence, gray: np.ndarray) -> tuple[Control, ...]:
+    modal = next((item for item in cn.MODAL_OVERLAYS if item in overlays), None)
+
     if page in (BasePage.UNKNOWN, BasePage.LOADING) or Variant.BATTLE_ANIMATION in variants:
-        return ()
+        # 未知页面上只放行已识别的模态弹窗按钮（按钮本身是确认过存在的）。
+        if modal is None:
+            return ()
+        return tuple(
+            control for spec in cn.OVERLAY_CONTROLS.get(modal, ())
+            if (control := _make_control(spec, evidence, False, f'overlay:{modal.value}')) is not None
+        )
+
+    if modal is not None:
+        return tuple(
+            control for spec in cn.OVERLAY_CONTROLS.get(modal, ())
+            if (control := _make_control(spec, evidence, False, f'overlay:{modal.value}')) is not None
+        )
 
     blocked = bool(overlays & cn.BLOCKING_OVERLAYS) or bool(variants & cn.BLOCKING_VARIANTS)
     controls: list[Control] = []

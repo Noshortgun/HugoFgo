@@ -53,6 +53,7 @@ class Overlay(str, Enum):
     MASTER_SKILLS = 'master_skills'
     RETREAT_CONFIRM = 'retreat_confirm'
     MASTER_EQUIPMENT = 'master_equipment'
+    FRIEND_REQUEST = 'friend_request'
 
 
 class ControlKind(str, Enum):

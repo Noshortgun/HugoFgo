@@ -866,6 +866,43 @@
         "令咒",
         "御主技能"
       ]
+    },
+    {
+      "file": "captures/2026-11-21/key/friend-request.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [
+        "friend_request"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "结束"
+      ],
+      "basis": "inferred"
+    },
+    {
+      "file": "captures/2026-11-21/key/result-bond.png",
+      "base": "result",
+      "variants": [
+        "bond"
+      ],
+      "overlays": [],
+      "actionable": false,
+      "basis": "inferred"
+    },
+    {
+      "file": "captures/2026-11-21/key/repeat-over-support.png",
+      "base": "unknown",
+      "variants": [],
+      "overlays": [
+        "repeat_dialog"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "连续出击",
+        "关闭"
+      ],
+      "basis": "inferred"
     }
   ]
 }
