@@ -165,7 +165,7 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
     """逐槽判断宝具卡：Quick 看绿环（面积+宽度），Arts 看蓝星模板。"""
     scores: dict[str, float] = {}
     blobs: dict[str, bool] = {}
-    for slot, box in cn.NP_SLOTS.items():
+    for slot, box in cn.NP_SEARCH.items():
         x1, y1, x2, y2 = box
         roi = gray[y1:y2, x1:x2]
         best = 0.0

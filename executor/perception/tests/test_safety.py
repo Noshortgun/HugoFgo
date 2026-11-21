@@ -119,6 +119,13 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual('np_slot:B', quick.control('宝具卡1').reason)
         self.assertEqual('np_slot:A', arts.control('宝具卡1').reason)
 
+        # 宝具卡的框必须和指令卡差不多大，不能把搜索窗当输出框。
+        command = quick.control('卡1').box
+        for control in (quick.control('宝具卡1'), arts.control('宝具卡1')):
+            x1, y1, x2, y2 = control.box
+            self.assertLessEqual(abs((x2 - x1) - (command[2] - command[0])), 60, control.name)
+            self.assertLessEqual(abs((y2 - y1) - (command[3] - command[1])), 60, control.name)
+
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
         ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')

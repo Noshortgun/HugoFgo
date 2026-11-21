@@ -38,7 +38,7 @@ class EmblemTest(unittest.TestCase):
     def test_small_or_low_red_marker_is_not_a_card_emblem(self) -> None:
         image = canvas()
         draw_blob(image, (412, 380), (50, 45), (0, 0, 220))
-        draw_blob(image, (640, 190), (150, 90), (0, 0, 220))
+        draw_blob(image, (640, 75), (150, 90), (0, 0, 220))
 
         _, blobs = measure(image)
 
