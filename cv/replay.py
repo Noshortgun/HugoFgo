@@ -102,7 +102,8 @@ def check_perception_identities():
 
     perception = Perception()
     perception.bind_formation((
-        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                          ce='迦勒底午茶时光', ce_id=9403520),
         FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
         FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
     ))
@@ -119,10 +120,13 @@ def check_perception_identities():
         wrong_support = perception.read(Frame(image=wrong_support_path.read_bytes(), width=1280,
                                               height=720, captured_at=0.0))
         wrong_candidate = wrong_support.control('助战卡片第2行').support
+        other_candidate = wrong_support.control('助战卡片第1行').support
         actual = ((wrong_candidate.svt_id, wrong_candidate.ce_id)
                   if wrong_candidate is not None else None)
+        ok = (actual == (705000, 9400480)
+              and (other_candidate is None or other_candidate.svt_id is None))
         add_report('perception:identity:support-wrong-ce', wrong_support_path, (705000, 9400480), actual,
-                   'observe', '同从者不同概念礼装不得混淆', actual == (705000, 9400480))
+                   'observe', '同从者不同概念礼装不得混淆；无关从者不加载', ok)
 
         card_path = ROOT / 'captures/2026-11-20/key/card-select.png'
         card = perception.read(Frame(image=card_path.read_bytes(), width=1280, height=720, captured_at=0.0))

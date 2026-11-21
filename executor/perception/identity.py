@@ -19,7 +19,7 @@ class IdentityTemplate:
 
 
 class IdentityMatcher:
-    _catalog_cache: dict[tuple[str, str], list[IdentityTemplate]] = {}
+    _catalog_cache: dict[tuple[str, str, frozenset[int] | None], list[IdentityTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or cn.PROJECT_ROOT / 'data'
@@ -30,15 +30,24 @@ class IdentityMatcher:
         self._command_templates: list[IdentityTemplate] | None = None
         self._support_tag: np.ndarray | None = None
         self._formation_slots: dict[tuple[int, bool], int] = {}
+        self._required_face_ids: frozenset[int] | None = None
+        self._required_ce_ids: frozenset[int] | None = None
 
     def bind_formation(self, formation) -> None:
         slots: dict[tuple[int, bool], int] = {}
+        support = [member for member in formation if member.support]
         for member in formation:
             if member.svt_id is None:
                 continue
             key = (member.svt_id, member.support)
             slots[key] = member.slot if key not in slots else -1
         self._formation_slots = slots
+        self._required_face_ids = frozenset(member.svt_id for member in support
+                                            if member.svt_id is not None)
+        self._required_ce_ids = frozenset(member.ce_id for member in support
+                                          if member.ce_id is not None)
+        self._face_templates = None
+        self._ce_templates = None
 
     def _metadata(self, name: str) -> dict[int, dict]:
         path = self._root / name
@@ -53,20 +62,25 @@ class IdentityMatcher:
         return cv2.imdecode(data, cv2.IMREAD_GRAYSCALE) if data.size else None
 
     def _load(self, kind: str) -> list[IdentityTemplate]:
-        cache_key = (str(self._root), kind)
+        required = self._required_face_ids if kind == 'face' else self._required_ce_ids
+        cache_key = (str(self._root), kind, required)
         if cache_key in self._catalog_cache:
             return self._catalog_cache[cache_key]
         directory = self._root / 'assets/atlas' / ('faces' if kind == 'face' else 'ce')
         builtin = cn.TEMPLATE_DIR / 'identities' / ('faces' if kind == 'face' else 'ce')
-        paths = {path.stem: path for path in builtin.glob('*.png')}
-        if directory.exists():
-            paths.update({path.stem: path for path in directory.glob('*.png')})
-        templates = []
-        for name, path in paths.items():
-            try:
-                entity_id = int(name.split('-', 1)[0])
-            except ValueError:
+        paths: dict[str, tuple[int, Path]] = {}
+        for source in (builtin, directory):
+            if not source.exists():
                 continue
+            for path in source.glob('*.png'):
+                try:
+                    entity_id = int(path.stem.split('-', 1)[0])
+                except ValueError:
+                    continue
+                if required is None or entity_id in required or source == builtin:
+                    paths[path.stem] = (entity_id, path)
+        templates = []
+        for name, (entity_id, path) in paths.items():
             patch = self._read(path)
             if patch is None:
                 continue

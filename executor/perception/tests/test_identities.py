@@ -38,6 +38,36 @@ class IdentityTest(unittest.TestCase):
                              and control.support.svt_id == 705000
                              and control.support.ce_id == 9403520
                              for control in observation.controls))
+    def test_bound_support_skips_unneeded_catalog_identities(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                              ce='迦勒底午茶时光', ce_id=9403520),
+        ))
+        observation = self.perception.read(
+            load_frame('captures/2026-11-20/key/support-select-wrong-ce.png'))
+
+        candidate = observation.control('助战卡片第2行').support
+        other = observation.control('助战卡片第1行').support
+        self.assertEqual(705000, candidate.svt_id)
+        self.assertTrue(other is None or other.svt_id is None)
+
+    def test_rebinding_support_reloads_target_and_clears_frame_cache(self) -> None:
+        frame = load_frame('captures/2026-11-20/key/support-select-wrong-ce.png')
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True, ce_id=9403520),
+        ))
+        first = self.perception.read(frame)
+        other = first.control('助战卡片第1行').support
+        self.assertTrue(other is None or other.svt_id is None)
+
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='因陀罗', svt_id=305900, support=True, ce_id=9300520),
+        ))
+        second = self.perception.read(frame)
+
+        candidate = second.control('助战卡片第1行').support
+        self.assertEqual((305900, 9300520), (candidate.svt_id, candidate.ce_id))
+
     def test_command_cards_include_servant_type_and_support_identity(self) -> None:
         self.perception.bind_formation((
             FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
