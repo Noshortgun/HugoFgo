@@ -34,6 +34,7 @@ SOURCES: tuple[AnchorSource, ...] = (
     # 冠位从者的徽记随滚动出现在不同行，纵向给足余量；只取文字本体，不带卡片背景。
     AnchorSource('grand_support', 'captures/2026-11-20/key/163-grand-support.png', (110, 560, 153, 574), (32, 400, 30, 140), 0.7, pad=0),
     AnchorSource('support_confirm', 'captures/2026-11-20/key/support-list-update-confirm.png', (524, 340, 743, 377), 30, 0.6),
+    AnchorSource('support_refresh_cooldown', 'captures/2026-11-22/key/support-refresh-cooldown.png', (555, 84, 724, 124), 30, 0.6),
     AnchorSource('team', 'captures/2026-11-20/key/team-confirm.png', (1106, 654, 1227, 689), 25, 0.6),
     AnchorSource('grand_team', 'captures/2026-11-20/key/165-grand-team.png', (605, 27, 675, 63), 25, 0.62),
     AnchorSource('battle', 'captures/2026-11-20/key/battle-wave1.png', (784, 12, 853, 35), 30, 0.58),
@@ -50,6 +51,7 @@ SOURCES: tuple[AnchorSource, ...] = (
     AnchorSource('command_spell_use', 'captures/2026-11-20/key/72-command-spell-target-select.png', (459, 310, 587, 348), 30, 0.6),
     AnchorSource('command_spell_confirm', 'captures/2026-11-20/key/73-command-spell-confirm.png', (459, 308, 984, 347), 25, 0.62),
     AnchorSource('class_info', 'captures/2026-11-20/key/09-class-filter.png', (385, 130, 458, 151), 25, 0.62),
+    AnchorSource('battle_status_change_detail', 'captures/2026-11-22/key/battle-status-change-detail.png', (540, 174, 740, 211), 30, 0.6),
     AnchorSource('battle_menu', 'captures/2026-11-20/key/55-battle-menu.png', (708, 365, 855, 395), 25, 0.6),
         AnchorSource('battle_chrome', 'captures/2026-11-20/key/battle-wave1.png', (1141, 162, 1245, 250), 25, 0.6),
     AnchorSource('support_party_confirm', 'captures/2026-11-19-ember/34-grand-support-confirm.png', (965, 12, 1267, 57), 25, 0.6),

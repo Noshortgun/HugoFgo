@@ -23,6 +23,7 @@
     "replay": "node scripts/replay.mjs",
     "test": "node scripts/replay.mjs",
     "test:run-state": "node scripts/run-state.selftest.mjs",
+    "test:job-roundtrip": "node scripts/job-roundtrip.selftest.mjs",
     "desktop:selftest": "node scripts/desktop-package.selftest.mjs",
     "desktop:prepare": "node scripts/desktop-package.mjs --prepare-only",
     "package:windows": "node scripts/desktop-package.mjs"

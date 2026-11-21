@@ -146,6 +146,13 @@ def skill_plan() -> ExecutionPlan:
     return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
 
 
+def target_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+    turn = replace(plan.waves[0].turns[0], actions=(target,))
+    return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
+
+
 def load_frames(case: ReplayCase) -> list[Frame]:
     times = case.times or tuple(index * 0.5 for index in range(len(case.frames)))
     if len(times) != len(case.frames):
@@ -313,6 +320,50 @@ CASES = (
         states=('support', 'unknown'),
         event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
         completed_runs=0,
+    ),
+    ReplayCase(
+        name='support-refresh-cooldown',
+        frames=(
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            'captures/2026-11-22/key/support-refresh-cooldown.png',
+            'captures/2026-11-22/key/support-refresh-cooldown.png',
+            FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0),
+        actions=('助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='battle-status-detail',
+        frames=(
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            'captures/2026-11-22/key/battle-status-change-detail.png',
+            'captures/2026-11-22/key/battle-status-change-detail.png',
+            FULL_LOOP + 'battle-target-enemy2.png', FULL_LOOP + 'battle-target-enemy2.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('敌方2', '关闭', '攻击', '卡1', '卡2', '卡4',
+                 '结算推进', '结算推进', '下一步'),
+        states=('battle', 'card', 'result', 'drops'),
+        event_types=('state_changed', 'action', 'action', 'action', 'finished'),
+        plan_factory=target_plan,
+        confirmed_start=(1, 1),
     ),
     ReplayCase(
         name='repeat-two-runs',

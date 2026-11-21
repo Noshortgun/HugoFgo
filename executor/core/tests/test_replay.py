@@ -49,6 +49,27 @@ class ExecutorReplayTest(unittest.TestCase):
         self.assertEqual(['swipe', 'swipe', 'tap', 'tap', 'tap'],
                          [action['action'] for action in report.device.actions])
 
+    def test_support_refresh_cooldown_closes_then_resumes_search(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_case(get_case('support-refresh-cooldown'), Path(directory))
+
+        self.assertEqual('unknown_timeout', report.result.reason)
+        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'],
+                         [event.data['control'] for event in report.events.events
+                          if event.type == 'action'])
+        self.assertEqual((640, 565), (report.device.actions[3]['x'], report.device.actions[3]['y']))
+
+    def test_battle_status_detail_closes_then_target_action_finishes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_case(get_case('battle-status-detail'), Path(directory))
+
+        self.assertEqual('completed', report.result.reason)
+        self.assertEqual(['敌方2', '关闭', '攻击', '卡1', '卡2', '卡4',
+                          '结算推进', '结算推进', '下一步'],
+                         [event.data['control'] for event in report.events.events
+                          if event.type == 'action'])
+        self.assertEqual((1000, 650), (report.device.actions[1]['x'], report.device.actions[1]['y']))
+
     def test_two_runs_repeat_once_and_never_tap_after_last_dialog(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('repeat-two-runs'), Path(directory))

@@ -98,6 +98,7 @@ BLOCKING_OVERLAYS: frozenset[Overlay] = frozenset(overlay for overlay in Overlay
 
 OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.SUPPORT_CONFIRM, ('support_confirm',)),
+    OverlayRule(Overlay.SUPPORT_REFRESH_COOLDOWN, ('support_refresh_cooldown',), absent=('support_confirm',)),
     OverlayRule(Overlay.SUPPORT_PARTY_CONFIRM, ('support_party_confirm',)),
     OverlayRule(Overlay.MASTER_EQUIPMENT, ('master_equipment',)),
     OverlayRule(Overlay.FRIEND_REQUEST, ('friend_request',)),
@@ -108,6 +109,7 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.COMMAND_SPELL_TARGET, ('command_spell_target', 'command_spell_use')),
     OverlayRule(Overlay.COMMAND_SPELL_MENU, ('command_spell_repair',)),
     OverlayRule(Overlay.CLASS_INFO, ('class_info',)),
+    OverlayRule(Overlay.BATTLE_STATUS_CHANGE_DETAIL, ('battle_status_change_detail',)),
     OverlayRule(Overlay.BATTLE_MENU, ('battle_menu',), absent=('retreat_confirm',)),
     OverlayRule(Overlay.ORDER_CHANGE, ('order_change',)),
     # 御主技能面板只可能叠在战斗上，同时要求战斗 HUD 在场，避免助战卡片被误判成技能卡。
@@ -340,6 +342,9 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('是', ControlKind.BUTTON, (708, 534, 969, 592)),
         ControlSpec('否', ControlKind.BUTTON, (313, 534, 572, 592)),
     ),
+    Overlay.SUPPORT_REFRESH_COOLDOWN: (
+        ControlSpec('关闭', ControlKind.BUTTON, (508, 531, 772, 599)),
+    ),
     # 这两个界面正常流程不会出现，只需要能关掉。
     Overlay.SUPPORT_PARTY_CONFIRM: (
         ControlSpec('关闭', ControlKind.BUTTON, (6, 9, 172, 78)),
@@ -399,6 +404,9 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
     Overlay.CLASS_INFO: (
         ControlSpec('关闭', ControlKind.BUTTON, (348, 532, 607, 590)),
         ControlSpec('职阶星图分值效果', ControlKind.BUTTON, (673, 531, 932, 589)),
+    ),
+    Overlay.BATTLE_STATUS_CHANGE_DETAIL: (
+        ControlSpec('关闭', ControlKind.BUTTON, (990, 640, 1010, 660)),
     ),
     Overlay.BATTLE_MENU: (
         ControlSpec('关闭', ControlKind.BUTTON, (1136, 65, 1219, 153)),

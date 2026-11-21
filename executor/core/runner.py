@@ -16,12 +16,16 @@ from executor.session import EventSink, RunControl, RunEvent
 from executor.session.evidence import RunEvidence
 
 
+SUPPORT_REFRESH_COOLDOWN_SECONDS = 5.0
+
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
     Overlay.CLASS_INFO,
+    Overlay.BATTLE_STATUS_CHANGE_DETAIL,
     Overlay.SUPPORT_PARTY_CONFIRM,
     Overlay.MASTER_EQUIPMENT,
     Overlay.SUPPORT_CONFIRM,
+    Overlay.SUPPORT_REFRESH_COOLDOWN,
     Overlay.REPEAT_DIALOG,
     Overlay.ORDER_CHANGE,
     Overlay.COMMAND_SPELL_MENU,
@@ -202,6 +206,7 @@ class Runner:
         self.support_refreshes = 0
         self.support_scrolls = 0
         self.support_confirm_since: float | None = None
+        self.support_refresh_cooldown_until: float | None = None
         self.support_search_signature: tuple | None = None
         self.support_search_since: float | None = None
         self.support_previous_rows: tuple | None = None
@@ -328,6 +333,14 @@ class Runner:
         self.wait_for_page(BasePage.SUPPORT, now)
 
     def handle_support(self, observation: Observation, now: float) -> RunResult | None:
+        if self.support_stage == 'cooldown':
+            if (self.support_refresh_cooldown_until is not None
+                    and now < self.support_refresh_cooldown_until):
+                return None
+            self.support_stage = 'idle'
+            self.support_refresh_cooldown_until = None
+            self.support_previous_rows = None
+            self.reset_support_search()
         if self.support_stage == 'refresh_confirm' and Overlay.SUPPORT_CONFIRM in observation.overlays:
             if self.tap_stable(observation, '是', now):
                 self.support_refreshes += 1
@@ -663,8 +676,10 @@ class Runner:
 
     def incidental_control(self, observation: Observation) -> tuple[Overlay, str] | None:
         for overlay, name in (
+            (Overlay.SUPPORT_REFRESH_COOLDOWN, '关闭'),
             (Overlay.FRIEND_REQUEST, '结束'),
             (Overlay.CLASS_INFO, '关闭'),
+            (Overlay.BATTLE_STATUS_CHANGE_DETAIL, '关闭'),
             (Overlay.SUPPORT_PARTY_CONFIRM, '关闭'),
             (Overlay.MASTER_EQUIPMENT, '关闭'),
         ):
@@ -845,6 +860,15 @@ class Runner:
                     return self.result(RunStatus.STOPPED, reason)
                 if not self.incidental_tapped and self.tap_stable(observation, control, now):
                     self.incidental_tapped = True
+                    if overlay is Overlay.SUPPORT_REFRESH_COOLDOWN:
+                        self.support_stage = 'cooldown'
+                        self.support_refresh_cooldown_until = now + SUPPORT_REFRESH_COOLDOWN_SECONDS
+                        self.pending_pages = None
+                        self.pending_since = None
+                        self.pending_frame_hash = None
+                        self.pending_variant = None
+                        self.pending_overlay = None
+                        self.reset_support_search()
                 time.sleep(self.options.poll_interval)
                 continue
             self.incidental_overlay = None

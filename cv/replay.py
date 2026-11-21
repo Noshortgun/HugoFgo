@@ -859,6 +859,42 @@ def check_executor_safety():
     add_report('executor:repeat-on-support-stops', SUPPORT_IMAGE, 'unexpected_overlay', result.reason,
                'stop', f'taps={device.actions}', ok, simulated_ocr=True)
 
+    wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+    wrong_support = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
+    ))
+    cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
+                           controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
+    result, device, events = run_core_scenario(
+        [wrong_support, wrong_support, wrong_support, wrong_support, wrong_support, wrong_support,
+         cooldown, cooldown, wrong_support, support, support, Observation(base_page=BasePage.UNKNOWN),
+         Observation(base_page=BasePage.UNKNOWN)],
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0],
+        make_plan(support_required=True))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
+    add_report('executor:support-refresh-cooldown', ROOT / 'captures/2026-11-22/key/support-refresh-cooldown.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               controls == expected and (device.actions[3]['x'], device.actions[3]['y']) == (640, 565),
+               simulated_ocr=True)
+
+    target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+    target_battle = replace(battle(), controls=(*battle().controls, *(
+        Control(f'敌方{index}', ControlKind.ENEMY, (index * 250, 20, index * 250 + 200, 100), True)
+        for index in range(1, 4))))
+    detail = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.BATTLE_STATUS_CHANGE_DETAIL}),
+                         controls=(Control('关闭', ControlKind.BUTTON, (990, 640, 1010, 660), True),))
+    result, device, events = run_core_scenario(
+        [target_battle, target_battle, detail, detail, target_battle, target_battle, wrong],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8], make_plan((target,)))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['敌方2', '关闭', '攻击']
+    add_report('executor:battle-status-change-detail', ROOT / 'captures/2026-11-22/key/battle-status-change-detail.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               controls == expected and (device.actions[1]['x'], device.actions[1]['y']) == (1000, 650),
+               simulated_ocr=True)
+
 
 def check_result_action(name, rows, expected_action, expected_tap=None):
     taps, tap = recorder()

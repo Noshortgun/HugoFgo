@@ -1119,6 +1119,39 @@
         "取消"
       ],
       "basis": "holdout"
+    },
+    {
+      "file": "captures/2026-11-22/key/support-refresh-cooldown.png",
+      "base": "support",
+      "variants": [],
+      "overlays": [
+        "support_refresh_cooldown"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "关闭"
+      ],
+      "absentControls": [
+        "列表更新"
+      ],
+      "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-22/key/battle-status-change-detail.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "battle_status_change_detail"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "关闭"
+      ],
+      "absentControls": [
+        "攻击",
+        "敌方1"
+      ],
+      "basis": "annotated"
     }
   ]
 }
