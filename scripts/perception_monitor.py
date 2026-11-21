@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 import time
@@ -26,6 +27,34 @@ from executor.perception import Perception, evidence
 from executor.perception.__main__ import describe
 
 OUT = ROOT / 'logs' / 'perception-monitor'
+PERCEPTION_ROOT = ROOT / 'executor' / 'perception'
+RELOAD_MODULES = (
+    'executor.perception.observation',
+    'executor.perception.regions.cn',
+    'executor.perception.evidence',
+    'executor.perception.ocr',
+    'executor.perception.recognizer',
+    'executor.perception',
+)
+
+
+def rules_mtime() -> float:
+    latest = 0.0
+    for path in PERCEPTION_ROOT.rglob('*'):
+        if '__pycache__' in path.parts or path.suffix in ('.pyc', '.pyo'):
+            continue
+        if path.is_file():
+            latest = max(latest, path.stat().st_mtime)
+    return latest
+
+
+def reload_perception(perception):
+    for name in RELOAD_MODULES:
+        if name in sys.modules:
+            importlib.reload(sys.modules[name])
+    perception.close()
+    print('识别规则已热加载', flush=True)
+    return sys.modules['executor.perception'].Perception()
 WINDOW = 'HugoFgo perception monitor'
 FONT = ImageFont.truetype('C:/Windows/Fonts/msyh.ttc', 15)
 FONT_BIG = ImageFont.truetype('C:/Windows/Fonts/msyh.ttc', 19)
@@ -39,7 +68,8 @@ def make_device(use_adb: bool):
     return open_device(config)
 
 
-def panel(image: Image.Image, observation, ms: float, paused: bool, saved: int) -> Image.Image:
+def panel(image: Image.Image, observation, ms: float, paused: bool, saved: int,
+          reload_count: int = 0) -> Image.Image:
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     draw.rectangle([0, 0, 470, 152], fill=(0, 0, 0, 175))
@@ -55,6 +85,8 @@ def panel(image: Image.Image, observation, ms: float, paused: bool, saved: int) 
     draw.text((8, 100), f'字段 {fields}', font=FONT, fill=(180, 200, 255))
     hint = 'q 退出  s 保存  空格暂停' if not paused else '已暂停（空格继续）'
     draw.text((8, 124), hint, font=FONT, fill=(160, 160, 160))
+    if reload_count:
+        draw.text((340, 126), f'规则 v{reload_count}', font=FONT, fill=(120, 255, 120))
 
     for control in observation.controls:
         x1, y1, x2, y2 = control.box
@@ -78,8 +110,22 @@ def main() -> int:
     last_observation = None
     print('监控启动：只读截图，不发送输入。窗口按 q 退出，s 保存。', flush=True)
 
+    rules_stamp = rules_mtime()
+    reload_count = 0
+    last_reload = 0.0
     try:
         while True:
+            now = time.time()
+            if now - last_reload > 1.0:
+                last_reload = now
+                stamp = rules_mtime()
+                if stamp != rules_stamp:
+                    rules_stamp = stamp
+                    try:
+                        perception = reload_perception(perception)
+                        reload_count += 1
+                    except Exception as error:
+                        print(f'热加载失败：{error}（继续用旧规则）', flush=True)
             key = cv2.waitKey(20) & 0xFF
             if key in (ord('q'), 27):
                 break
@@ -98,7 +144,7 @@ def main() -> int:
 
             if paused and last_frame is not None and last_observation is not None:
                 image = Image.fromarray(cv2.cvtColor(last_frame, cv2.COLOR_BGR2RGB))
-                canvas = panel(image, last_observation, 0.0, paused, saved)
+                canvas = panel(image, last_observation, 0.0, paused, saved, reload_count)
                 cv2.imshow(WINDOW, cv2.cvtColor(np.array(canvas), cv2.COLOR_RGB2BGR))
                 continue
 
@@ -112,7 +158,7 @@ def main() -> int:
                 ms = (time.perf_counter() - started) * 1000
                 last_frame, last_observation = bgr, observation
                 image = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
-                canvas = panel(image, observation, ms, paused, saved)
+                canvas = panel(image, observation, ms, paused, saved, reload_count)
                 cv2.imshow(WINDOW, cv2.cvtColor(np.array(canvas), cv2.COLOR_RGB2BGR))
 
                 now = time.time()
