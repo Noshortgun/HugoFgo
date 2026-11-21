@@ -288,11 +288,22 @@ svg { flex: 0 0 auto; }
 .difficulty { padding: 3px 6px; border-radius: 3px; color: #8c6b35; background: #f5ead6; font-size: 8px; }
 .utility-secondary { height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 11px; border: 1px dashed #c7d6dc; border-radius: 5px; color: #708994; background: transparent; font-size: 9px; }
 .history-row, .resource-row { display: flex; align-items: center; gap: 10px; padding: 13px 5px; border-bottom: 1px solid #e1e8eb; }
-.history-success { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #60a189; }
+.history-result { width: 29px; height: 29px; flex: 0 0 29px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #60a189; }
+.history-result.history-stopped { background: #9a8d68; }
+.history-result.history-failed { background: #b87575; }
 .history-row div, .resource-row div { flex: 1; }
 .history-row strong, .resource-row strong { display: block; font-size: 10px; }
 .history-row small, .resource-row small { display: block; margin-top: 4px; color: #8a9ba5; font-size: 8px; }
 .history-row > span:last-child { color: #579079; font-size: 9px; }
+.history-row > .history-result-label.history-stopped { color: #8c7b4d; }
+.history-row > .history-result-label.history-failed { color: #a86465; }
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: #82949f; font-size: 9px; }
+.history-heading button, .history-artifacts-button { border: 0; color: #357683; background: transparent; font-size: 9px; }
+.history-heading button { padding: 6px 10px; border: 1px solid #d8e3e7; border-radius: 4px; }
+.history-artifacts-button { margin-top: 7px; padding: 0; }
+.history-artifacts { padding: 7px 9px; border-radius: 5px; background: #f4f7f8; overflow-wrap: anywhere; }
+.history-empty { padding: 24px 0; text-align: center; color: #8a9ba5; font-size: 10px; }
+.history-error { color: #a86465 !important; }
 .utility-note { margin: 15px 0 0 !important; text-align: center; }
 .ready-text { color: #4e8b73; font-size: 9px; }
 

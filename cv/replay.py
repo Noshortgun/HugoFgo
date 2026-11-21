@@ -714,19 +714,22 @@ def check_executor_process():
                 '--serial', 'fake', '--region', 'CN', '--battles', '1',
                 '--recovery', 'bronze', '--fake']
         completed = subprocess.run(
-            [*base, '--run-dir', str(Path(directory) / 'complete'), '--fake-interval', '0'],
+            [*base, '--run-dir', str(Path(directory) / 'logs/farm/complete'), '--fake-interval', '0'],
             cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20)
         stopped = subprocess.Popen(
-            [*base, '--run-dir', str(Path(directory) / 'stop'), '--fake-interval', '5'],
+            [*base, '--run-dir', str(Path(directory) / 'logs/farm/stop'), '--fake-interval', '5'],
             cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding='utf-8')
         stdout, _ = stopped.communicate('stop\n', timeout=20)
         finished_rows = [json.loads(line) for line in completed.stdout.splitlines()]
         stopped_rows = [json.loads(line) for line in stdout.splitlines()]
-        actual = f"complete={completed.returncode}:{finished_rows[-1]['type']}; stop={stopped.returncode}:{stopped_rows[-1]['type']}"
+        history = [json.loads(line) for line in
+                   (Path(directory) / 'logs/run-history.jsonl').read_text(encoding='utf-8').splitlines()]
+        actual = f"complete={completed.returncode}:{finished_rows[-1]['type']}; stop={stopped.returncode}:{stopped_rows[-1]['type']}; history={[row['result'] for row in history]}"
         ok = (completed.returncode == 0 and finished_rows[-1]['type'] == 'finished'
               and stopped.returncode == 1 and stopped_rows[-1]['type'] == 'stopped'
-              and not any(row['type'] == 'action' for row in stopped_rows))
+              and not any(row['type'] == 'action' for row in stopped_rows)
+              and [row['result'] for row in history] == ['completed', 'stopped'])
         add_report('executor:process-jsonl-and-stop', LOADING_IMAGE, 'complete=0:finished; stop=1:stopped',
                    actual, 'stop', 'UTF-8 JSON Lines；停止后无动作', ok, simulated_ocr=True)
 
