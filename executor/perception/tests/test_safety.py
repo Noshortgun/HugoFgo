@@ -126,6 +126,17 @@ class SafetyTest(unittest.TestCase):
             self.assertLessEqual(abs((x2 - x1) - (command[2] - command[0])), 60, control.name)
             self.assertLessEqual(abs((y2 - y1) - (command[3] - command[1])), 60, control.name)
 
+    def test_story_and_skip_dialog(self) -> None:
+        story = self.read('captures/2026-11-21/key/story.png')
+        dialog = self.read('captures/2026-11-21/key/story-skip-confirm.png')
+
+        self.assertEqual('story', story.base_page.value)
+        self.assertTrue(story.control('跳过').actionable)
+        self.assertEqual('story', dialog.base_page.value)
+        self.assertEqual({'story_skip_confirm'}, {item.value for item in dialog.overlays})
+        self.assertTrue(dialog.control('是').actionable)
+        self.assertTrue(dialog.control('否').actionable)
+
     def test_live_session_screens(self) -> None:
         friend = self.read('captures/2026-11-21/key/friend-request.png')
         bond = self.read('captures/2026-11-21/key/result-bond.png')

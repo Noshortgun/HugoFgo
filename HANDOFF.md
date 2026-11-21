@@ -554,3 +554,10 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 同时把 Buster 长宽比上限收紧到 1.5，防止把指令卡的力击图标当成宝具卡（反例长宽比 1.67）。
 - `card-np-buster-selected` 输出 B+C 两张；`11-np` 没有新增误报。
 - 感知测试 50 项、回放 114/114。
+
+
+## 63. 剧情页与跳过弹窗（#16，2026-11-21）
+
+- 新增基页 `story`：靠右上「跳过」按钮识别，输出该按钮控件。
+- 新增覆盖层 `story_skip_confirm`（“是否跳过该段剧情？”）：与 story 基页并存，输出「是/否」两个按钮；属模态，盖住基页控件。
+- 感知测试 51 项、回放 116/116。

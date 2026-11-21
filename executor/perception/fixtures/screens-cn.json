@@ -1066,6 +1066,31 @@
         "宝具卡3"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-21/key/story.png",
+      "base": "story",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "跳过"
+      ],
+      "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-21/key/story-skip-confirm.png",
+      "base": "story",
+      "variants": [],
+      "overlays": [
+        "story_skip_confirm"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "是",
+        "否"
+      ],
+      "basis": "annotated"
     }
   ]
 }

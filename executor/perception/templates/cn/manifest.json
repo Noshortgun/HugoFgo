@@ -335,6 +335,28 @@
       ],
       "threshold": 0.6
     },
+    "story_skip": {
+      "file": "story_skip.png",
+      "source": "captures/2026-11-21/key/story.png",
+      "roi": [
+        1139,
+        2,
+        1243,
+        79
+      ],
+      "threshold": 0.6
+    },
+    "story_skip_confirm": {
+      "file": "story_skip_confirm.png",
+      "source": "captures/2026-11-21/key/story-skip-confirm.png",
+      "roi": [
+        433,
+        275,
+        834,
+        364
+      ],
+      "threshold": 0.6
+    },
     "friend_request": {
       "file": "friend_request.png",
       "source": "captures/2026-11-21/key/friend-request.png",

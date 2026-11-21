@@ -73,6 +73,7 @@ PAGE_RULES: tuple[PageRule, ...] = (
     PageRule(BasePage.CARD, ('card',)),
     PageRule(BasePage.BATTLE, ('battle',)),
     PageRule(BasePage.MENU, ('menu',)),
+    PageRule(BasePage.STORY, ('story_skip',)),
 )
 
 VARIANT_RULES: tuple[VariantRule, ...] = (
@@ -99,6 +100,7 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.SUPPORT_PARTY_CONFIRM, ('support_party_confirm',)),
     OverlayRule(Overlay.MASTER_EQUIPMENT, ('master_equipment',)),
     OverlayRule(Overlay.FRIEND_REQUEST, ('friend_request',)),
+    OverlayRule(Overlay.STORY_SKIP_CONFIRM, ('story_skip_confirm',)),
     OverlayRule(Overlay.RETREAT_CONFIRM, ('retreat_confirm',)),
     OverlayRule(Overlay.REPEAT_DIALOG, ('repeat_dialog',)),
     OverlayRule(Overlay.COMMAND_SPELL_CONFIRM, ('command_spell_confirm',)),
@@ -291,6 +293,9 @@ PAGE_CONTROLS: dict[BasePage, tuple[ControlSpec, ...]] = {
         ControlSpec('关闭', ControlKind.BUTTON, (527, 589, 753, 647)),
     ),
     BasePage.LOADING: (),
+    BasePage.STORY: (
+        ControlSpec('跳过', ControlKind.BUTTON, (1126, 12, 1272, 66)),
+    ),
     BasePage.UNKNOWN: (),
 }
 
@@ -340,6 +345,10 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('关闭', ControlKind.BUTTON, (6, 9, 172, 78)),
     ),
     # 好友申请页：「结束」可点；「申请好友」在本样本中已置灰（对方申请上限），标为不可点。
+    Overlay.STORY_SKIP_CONFIRM: (
+        ControlSpec('是', ControlKind.BUTTON, (698, 530, 954, 598)),
+        ControlSpec('否', ControlKind.BUTTON, (326, 530, 582, 598)),
+    ),
     Overlay.FRIEND_REQUEST: (
         ControlSpec('结束', ControlKind.BUTTON, (167, 582, 493, 649)),
         ControlSpec('申请好友', ControlKind.BUTTON, (790, 582, 1110, 649), always_disabled=True),

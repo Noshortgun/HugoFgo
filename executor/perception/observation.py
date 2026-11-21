@@ -23,6 +23,7 @@ class BasePage(str, Enum):
     DROPS = 'drops'
     AP_RECOVERY = 'ap_recovery'
     LOADING = 'loading'
+    STORY = 'story'
     UNKNOWN = 'unknown'
 
 
@@ -54,6 +55,7 @@ class Overlay(str, Enum):
     RETREAT_CONFIRM = 'retreat_confirm'
     MASTER_EQUIPMENT = 'master_equipment'
     FRIEND_REQUEST = 'friend_request'
+    STORY_SKIP_CONFIRM = 'story_skip_confirm'
 
 
 class ControlKind(str, Enum):
