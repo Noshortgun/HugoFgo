@@ -167,7 +167,8 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
                     controls.append(Control(f'从者{slot}技能{skill}', ControlKind.SKILL, box, True,
                                             f'slot_visible:{slot}'))
             for index, (x, y, w, h) in enumerate(find_enemy_bars(image), start=1):
-                box = (max(0, x - 120), max(0, y - 40), min(1280, x + w + 80), y + h + 45)
+                # 面板相对血条的实测几何：左 80、上 37、右 32、下 57，贴近标注区域。
+                box = (max(0, x - 80), max(0, y - 37), min(1280, x + w + 32), min(720, y + h + 57))
                 controls.append(Control(f'敌方{index}', ControlKind.ENEMY, box, True, 'enemy_hp_bar'))
 
         if page is BasePage.CARD:
