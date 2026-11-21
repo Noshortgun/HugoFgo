@@ -1,6 +1,6 @@
 # 回放与执行器的 Python 依赖，固定版本（CPython 3.12）。
 # 安装：python -m pip install -r cv/requirements.txt
-# 升级任一版本后必须重跑 npm run replay（当前 100/100）。
+# 升级任一版本后必须重跑 npm run replay。
 opencv-python==5.1.0.95
 numpy==2.5.5
 rapidocr-onnxruntime==1.4.4

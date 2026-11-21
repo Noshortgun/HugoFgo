@@ -34,5 +34,6 @@ captures/**/*.png
 # 游戏内图像素材：不随公开仓库分发
 public/assets/
 
-# 票据同步缓存：由 npm run issues:check 从 GitHub 派生，不入库
-.scratch/issue-cache/
+# 本地实验、调试与评审产物默认不入库；backend-rebuild 保留已跟踪的票据源、重构规格与行为基线
+.scratch/*
+!.scratch/backend-rebuild/
