@@ -28,6 +28,7 @@ SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/key/02-support-select.png"
 GRAND_SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/34-grand-support-confirm.png"
 TEAM_IMAGE = ROOT / "captures/2026-11-19-ember/key/03-team-confirm.png"
 DROPS_IMAGE = ROOT / "captures/2026-11-19-ember/key/14-drops.png"
+AP_RECOVERY_IMAGE = ROOT / "captures/2026-11-20/key/ap-recovery-bronze.png"
 LOADING_IMAGE = ROOT / "captures/2026-11-19/07-battle-loading.png"
 
 SUPPORT_ROWS = [
@@ -322,6 +323,57 @@ def check_executor_repeat_support():
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
 
+def check_executor_recovery():
+    from executor.core import RunOptions
+    from executor.core.ap_policy import RecoveryPolicy
+    from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, Control, ControlKind, Observation, Overlay
+
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    bronze = Observation(base_page=BasePage.AP_RECOVERY, controls=(
+        Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True),))
+    team = Observation(base_page=BasePage.TEAM)
+    result, device, events = run_core_scenario(
+        [bronze, bronze, team, bronze, bronze], [0.0, 0.5, 0.6, 0.7, 1.2], plan)
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = [{'item': 'bronze', 'count': 1}, {'item': 'bronze', 'count': 2}]
+    ok = len(device.actions) == 2 and used == expected and result.progress.recovery_used == {'bronze': 2}
+    add_report('executor:recovery-whitelist-and-counts', AP_RECOVERY_IMAGE, expected, used,
+               'tap', f'taps={device.actions}; reason={result.reason}', ok, simulated_ocr=True)
+
+    valuable = Observation(base_page=BasePage.AP_RECOVERY, controls=(
+        Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
+        Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),
+    ))
+    result, device, events = run_core_scenario([valuable], [0.0], plan)
+    ok = result.reason == 'ap_recovery' and not device.actions
+    add_report('executor:recovery-non-whitelist-stops', AP_RECOVERY_IMAGE, 'ap_recovery', result.reason,
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [bronze], [0.0], plan,
+        options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset()), write_evidence=False))
+    ok = result.reason == 'ap_recovery' and not device.actions
+    add_report('executor:recovery-empty-whitelist-stops', AP_RECOVERY_IMAGE, 'ap_recovery', result.reason,
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    repeat = Observation(base_page=BasePage.DROPS, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                         controls=(Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True),))
+    result, device, events = run_core_scenario(
+        [repeat, repeat, bronze], [0.0, 0.5, 0.6], plan,
+        options=RunOptions(recovery=RecoveryPolicy(drain_after_turns=True), write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.status.value == 'completed' and result.reason == 'ap_drained'
+          and controls == ['连续出击'] and not result.progress.recovery_used)
+    add_report('executor:recovery-drain-stops-without-items', AP_RECOVERY_IMAGE, 'ap_drained', result.reason,
+               'complete', f'controls={controls}; recovery={result.progress.recovery_used}', ok,
+               simulated_ocr=True)
+
+
 def check_executor_safety():
     from executor.core import RunOptions
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
@@ -552,6 +604,7 @@ def run(output: Path):
     check_executor_core()
     check_executor_self_target()
     check_executor_repeat_support()
+    check_executor_recovery()
     check_executor_safety()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))

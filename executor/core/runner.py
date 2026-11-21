@@ -6,10 +6,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
+from executor.core.ap_policy import CONTROL_NAMES, select_recovery
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
-from executor.perception import BasePage, Control, Observation, Overlay, SupportCandidate, Variant
+from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate, Variant
 from executor.session import EventSink, RunControl, RunEvent
 from executor.session.evidence import RunEvidence
 
@@ -162,6 +163,7 @@ class Runner:
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
         self.run_settled = False
+        self.draining = False
         self.starting_next_run = False
         self.result_seen = False
         self.awaiting_attack_end = False
@@ -519,14 +521,31 @@ class Runner:
         if self.tap_stable(observation, '结算推进', now):
             self.wait_for_pages(now, BasePage.RESULT, BasePage.DROPS)
 
+    def handle_ap_recovery(self, observation: Observation, now: float) -> RunResult | None:
+        available = tuple(control.name for control in observation.controls
+                          if control.kind is ControlKind.ITEM and control.actionable)
+        item = select_recovery(self.options.recovery, available)
+        if item is None:
+            self.emit('failed', now, reason='ap_recovery_no_allowed_item', available=available)
+            return self.result(RunStatus.STOPPED, 'ap_recovery')
+        if self.tap_stable(observation, CONTROL_NAMES[item], now):
+            count = self.progress.recovery_used.get(item.value, 0) + 1
+            self.progress.recovery_used[item.value] = count
+            self.emit('recovery_used', now, item=item.value, count=count)
+            self.wait_for_pages(now, BasePage.SUPPORT, BasePage.TEAM, BasePage.DROPS)
+        return None
+
     def handle_drops(self, observation: Observation, now: float) -> RunResult | None:
         if Overlay.REPEAT_DIALOG in observation.overlays:
             if not self.run_settled:
                 self.progress.completed_runs += 1
                 self.run_settled = True
-            if self.progress.completed_runs >= self.options.run_count:
-                self.emit('finished', now, completed_runs=self.progress.completed_runs)
-                return self.result(RunStatus.COMPLETED, 'completed')
+            if not self.draining and self.progress.completed_runs >= self.options.run_count:
+                if not self.options.recovery.drain_after_turns:
+                    self.emit('finished', now, completed_runs=self.progress.completed_runs)
+                    return self.result(RunStatus.COMPLETED, 'completed')
+                self.draining = True
+                self.emit('drain_started', now, completed_runs=self.progress.completed_runs)
             if self.tap_stable(observation, '连续出击', now):
                 self.starting_next_run = True
                 self.wait_for_pages(now, BasePage.TEAM, BasePage.SUPPORT)
@@ -653,8 +672,20 @@ class Runner:
             self.loading_since = None
 
             if page is BasePage.AP_RECOVERY:
-                self.emit('failed', now, reason='ap_recovery')
-                return self.result(RunStatus.STOPPED, 'ap_recovery')
+                if self.draining:
+                    self.emit('finished', now, completed_runs=self.progress.completed_runs,
+                              reason='ap_drained', recovery_used=dict(self.progress.recovery_used))
+                    return self.result(RunStatus.COMPLETED, 'ap_drained')
+                if self.pending_pages is not None:
+                    if self.pending_since is not None and now - self.pending_since >= self.options.action_timeout:
+                        self.emit('failed', now, reason='action_confirmation_timeout', actual=page.value)
+                        return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
+                else:
+                    result = self.handle_ap_recovery(observation, now)
+                    if result is not None:
+                        return result
+                time.sleep(self.options.poll_interval)
+                continue
 
             if self.startup:
                 observation, result = self.resume(observation, frame, now)
