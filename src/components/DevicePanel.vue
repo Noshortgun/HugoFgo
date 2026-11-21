@@ -4,8 +4,10 @@ import AppIcon from './AppIcon.vue';
 import { deviceApi, isTauri } from '../device';
 import type { CapturedFrame, DeviceInfo, DeviceMetrics } from '../device';
 
+const props = withDefaults(defineProps<{ modelValue?: string }>(), { modelValue: '' });
+const emit = defineEmits<{ 'update:modelValue': [serial: string] }>();
 const devices = ref<DeviceInfo[]>([]);
-const serial = ref('');
+const serial = computed({ get: () => props.modelValue, set: (value: string) => emit('update:modelValue', value) });
 const metrics = ref<DeviceMetrics | null>(null);
 const frame = ref<CapturedFrame | null>(null);
 const busy = ref('');

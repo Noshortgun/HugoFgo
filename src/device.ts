@@ -30,15 +30,6 @@ export interface TapResult {
   norm_y: number;
 }
 
-export interface RunStatus {
-  running: boolean;
-  run_id: string;
-  serial: string;
-  job_name: string;
-  started_at_ms: number;
-  status: string;
-}
-
 type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 function tauriInvoke(): TauriInvoke | undefined {
@@ -61,7 +52,4 @@ export const deviceApi = {
   captureFrame: (serial: string) => invoke<CapturedFrame>('capture_frame', { serial }),
   tapNormalized: (serial: string, x: number, y: number, width?: number, height?: number) =>
     invoke<TapResult>('tap_normalized', { serial, x, y, width, height }),
-  startRun: (serial: string, jobName: string) =>
-    invoke<RunStatus>('start_run', { serial, jobName }),
-  stopRun: () => invoke<RunStatus>('stop_run'),
 };

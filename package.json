@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vue-tsc --noEmit && vite build",
-
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "resources:check": "node scripts/resources.mjs check",
@@ -22,9 +21,11 @@
     "verify": "node scripts/verify.mjs",
     "verify:selftest": "node scripts/verify.selftest.mjs",
     "replay": "node scripts/replay.mjs",
-    "test": "node scripts/replay.mjs"
+    "test": "node scripts/replay.mjs",
+    "test:run-state": "node scripts/run-state.selftest.mjs"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.5",
     "vue": "^3.5.13"
   },
   "devDependencies": {
