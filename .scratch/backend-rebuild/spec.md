@@ -1,5 +1,7 @@
 # Spec: HugoFgo 后端重构 —— 统一执行器并接入桌面端
 
+> 本文是重构票据的原始规格快照。当前产品需求以 `docs/requirements.md` 为准，当前实现状态以 `docs/status.md` 为准。
+
 Status: ready-for-agent
 
 汇总版本（2026-11-19 `/to-spec` 汇总）。取代本文件此前草案；最终决策已与用户逐轮确认，记录于 `docs/requirements.md` 第 7 节与 `docs/adr/0001–0004`。

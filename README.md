@@ -1,28 +1,28 @@
 # HugoFgo
 
-FGO 自动刷本桌面工具：可视化编队与作业编排，一键让模拟器按作业刷本。支持国服，日服/台服在后续阶段。
+HugoFgo 是一个 FGO 自动刷本桌面工具：用可视化界面编队、编排作业，并由执行器驱动安卓模拟器完成战斗。项目使用 Vue 3、TypeScript、Tauri 2 和 Python。
 
-- 前端：Vue 3 + TypeScript + Vite（保留）
-- 桌面壳：Tauri 2 / Rust（复用）
-- 执行器：Python + OpenCV + RapidOCR（重写中，见 `.scratch/backend-rebuild/`）
-
-## 环境要求
-
-- Node.js 20+
-- Python 3.11+
-- adb（安卓 platform-tools，或设置 `HUGOFGO_ADB` 指向 adb.exe）
-- 安卓模拟器，1280×720（当前实测 LDPlayer）
+当前仍在重构。编队与作业编辑可用，但桌面 UI 尚未接入新的自动执行流程，不能作为已完成的一键刷本工具使用。具体能力与限制见 [当前状态](docs/status.md)。
 
 ## 快速开始
 
+环境要求：
+
+- Node.js 20+
+- Rust 工具链（运行 Tauri 桌面版）
+- Python 3.11+（回放与执行器）
+- adb 和安卓模拟器（设备功能）
+
 ```bash
 npm install
-npm run dev        # 浏览器预览
-npm run build      # 类型检查 + 构建
-npm run tauri dev  # 桌面版
+npm run resources:update   # 首次克隆后下载图库与元数据
+npm run dev                # 浏览器预览
+npm run tauri dev          # 桌面版
 ```
 
-Python 环境（回放与执行器需要，版本固定在 `cv/requirements.txt`）：
+浏览器预览不支持设备命令。作业保存和资源任务目前依赖 Vite 开发服务；打包后的完整使用流程尚未接通。
+
+Python 回放环境：
 
 ```bash
 python -m venv cv/.venv
@@ -30,69 +30,29 @@ cv/.venv/Scripts/python.exe -m pip install -r cv/requirements.txt   # Windows
 cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Linux
 ```
 
-也可用 `HUGOFGO_PYTHON` 指定解释器。`npm run replay` 会在运行用例前确认 `cv2`、`numpy`、
-`rapidocr_onnxruntime` 能真正导入；缺依赖时立即退出并打印上面的安装命令，不会生成半份回放报告。
+也可用 `HUGOFGO_PYTHON` 指定解释器。
 
-## 预检
+## 文档
 
-任何实施或实机会话开始前运行一次，判断当前环境是否适合继续：
+从 [文档地图](docs/README.md) 进入：
 
-```bash
-npm run preflight                    # 实机会话前：分支 + 回放依赖 + adb 设备 + 外部自动化进程
-npm run preflight -- --offline       # 只做代码：跳过设备与进程检查
-npm run preflight -- --live          # 实机会话：外部进程与设备问题改为阻断；预检本身不发送输入
-npm run preflight -- --allow-branch  # 确认在非施工分支（如原型分支）上继续
-```
+- [使用指南](docs/user-guide.md)：资源、编队、作业和设备预览。
+- [当前状态](docs/status.md)：已实现能力、限制和后续工作。
+- [作业格式](docs/job-format.md)：作业 JSON v1 字段与示例。
+- [开发指南](docs/development.md)：环境、预检、构建、分支和 issue。
+- [测试与验收](docs/testing.md)：单元测试、离线回放、素材和实机验收。
+- [需求基线](docs/requirements.md) 与 [目标架构](docs/architecture.md)：产品和系统设计。
+- [领域术语](GLOSSARY.md) 与 [架构决策](docs/adr/)：统一用词和关键取舍。
 
-- 退出码：`0` 无阻断项（警告不阻断）、`1` 存在阻断项、`2` 参数错误。
-- 阻断项附可直接执行的修复命令；`--json` 输出机器可读结果。
-- 非施工分支（`main`、`prototype/*` 等）默认阻断，确认后加 `--allow-branch`。
-- 预检本身完全只读，不发送任何实机输入（实机操作只走 Python 执行器）；`--live` 表示进入实机会话，外部自动化冲突、进程扫描失败、多设备未指定或设备未就绪都会阻断。
-
-## 测试
+## 常用验证
 
 ```bash
-npm run replay     # 全部离线回放用例，当前 36 个；失败退出码非 0
+npm run preflight -- --offline
+npm run build
+npm run replay
 ```
 
-纪律：执行器任何改动必须回放全绿；每个实机故障补一条回放用例；未经实机验收不标记稳定。
-
-## 持续集成
-
-`.github/workflows/ci.yml` 在 `pull_request` 与 `push` 到 `main` 时运行（Node 20 + Python 3.12），步骤各自独立命名：
-
-1. Install Python replay dependencies：`python -m pip install -r cv/requirements.txt`
-2. Install frontend dependencies：`npm ci`
-3. Build frontend：`npm run build`
-4. Run executor domain unit tests：`python -m unittest discover -s executor/domain/tests -t .`
-5. Run replay：`npm run replay`
-
-失败时会按用例名输出 `::error` 标注，并把 `logs/replay/latest.json` 作为 `replay-report` 工件上传。
-本地复现 CI 就是按顺序执行同样命令——CI 调用的是同一个 `npm run replay` 入口。
-
-升级回放依赖：修改 `cv/requirements.txt` 的版本后必须先本地 `npm run replay` 全绿再提交。
-
-## 资源数据
-
-```bash
-npm run resources:check    # 检查远端是否有新版本
-npm run resources:update   # 增量下载元数据与图库，并校验
-npm run resources:verify   # 校验本地文件 SHA-256
-```
-
-图库与原始元数据不入库，首次克隆后需执行一次 `resources:update`。
-
-## 文档地图
-
-| 文件 | 内容 |
-| --- | --- |
-| `docs/requirements.md` | 需求基线与已确认决策 |
-| `docs/architecture.md` | 目标架构、模块接口与缝 |
-| `GLOSSARY.md` | 领域术语 |
-| `docs/adr/` | 架构决策记录 |
-| `docs/agents/` | issue tracker、标签、领域文档规则 |
-| `.scratch/backend-rebuild/` | 现状分析、spec、重构票据 |
-| `HANDOFF.md` | 逐阶段进展流水 |
+完整验证命令见 [测试与验收](docs/testing.md)。执行器或图像识别行为变更必须同步更新离线回放，实机验收完成前不得标记为稳定。
 
 ## 免责声明
 
@@ -103,8 +63,4 @@ npm run resources:verify   # 校验本地文件 SHA-256
 - 图库与从者数据在运行时从 Atlas Academy 获取，不随本仓库分发。
 - 请勿将游戏素材用于商业用途；因使用本工具导致的账号风险由使用者自行承担。
 
-## 素材入库规则
-
-- `captures/*/key/` 关键帧与 `index.json` 入库。
-- 被回放直接引用的故障截图入库（在 `.gitignore` 中有显式允许列表，新增用例时同步添加）。
-- 过程调试图、`logs/` 运行产物不入库。
+截图与运行产物的入库规则见 [测试与验收](docs/testing.md#3-验证素材与运行产物)。

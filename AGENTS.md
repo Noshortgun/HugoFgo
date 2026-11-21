@@ -10,7 +10,7 @@ Issues 与票据发布到 `Noshortgun/HugoFgo` 的 GitHub Issues，使用 `gh` C
 
 ### Triage labels
 
-使用五个默认角色标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`，记录在每张票据的 `Status:` 行。See `docs/agents/triage-labels.md`.
+使用五个默认角色标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`，已发布票据以 GitHub 标签为准。See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
@@ -18,6 +18,8 @@ Single-context：根目录 `GLOSSARY.md` + `docs/adr/`。See `docs/agents/domain
 
 ## 工作约定
 
+- 文档入口是 `docs/README.md`；当前能力变化时更新 `docs/status.md`，需求、架构、术语分别只在对应权威文档维护。
+- `.scratch/` 默认存放本地实验产物；只有 `.scratch/backend-rebuild/` 中已跟踪的票据源、重构规格与行为基线入库，需要长期保留的新资产应转入正式目录。
 - 任何实施或实机会话开始前跑 `npm run preflight`（只做代码加 `--offline`）；非施工分支需 `--allow-branch` 显式确认，实机会话需 `--live` 显式确认。
 - 新施工从 `origin/main` 建 `ticket/NN-slug` 分支；prototype 分支只保留原型证据，不在上面提交新票据工作。
 - 多个 PR 并行时不在各自分支追加 `HANDOFF.md`；合并后由收尾提交统一追加，避免章节编号冲突。
