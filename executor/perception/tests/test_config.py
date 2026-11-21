@@ -26,7 +26,11 @@ class ConfigTest(unittest.TestCase):
             names.update(rule.absent)
         for rule in cn.VARIANT_RULES:
             names.update(rule.anchors)
-        for spec in (*cn.PAGE_CONTROLS.values(), *cn.OVERLAY_CONTROLS.values()):
+        names.update(cn.AP_ITEM_LAYOUTS)
+        layouts = (*cn.PAGE_CONTROLS.values(), *cn.OVERLAY_CONTROLS.values(),
+                   *cn.VARIANT_CONTROLS.values(), *cn.VARIANT_EXTRA_CONTROLS.values(),
+                   *cn.AP_ITEM_LAYOUTS.values())
+        for spec in layouts:
             for control in spec:
                 if control.anchor is not None:
                     names.add(control.anchor)
@@ -59,8 +63,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(ROOT / 'executor/perception/templates/cn', cn.TEMPLATE_DIR)
         self.assertEqual({'cn'}, {path.name for path in cn.TEMPLATE_DIR.parent.iterdir()})
 
-    def test_overlays_are_blocking(self) -> None:
-        self.assertEqual(frozenset(Overlay), cn.BLOCKING_OVERLAYS)
+    def test_overlays_are_blocking_except_master_skills(self) -> None:
+        # 御主技能展开时从者技能、攻击、敌人、战斗菜单、令咒仍然可点（人工核对）。
+        self.assertEqual(frozenset(Overlay) - {Overlay.MASTER_SKILLS}, cn.BLOCKING_OVERLAYS)
 
 
 if __name__ == '__main__':

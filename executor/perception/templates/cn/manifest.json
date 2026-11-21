@@ -247,6 +247,83 @@
       ],
       "threshold": 0.6
     },
+    "battle_chrome": {
+      "file": "battle_chrome.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        1116,
+        137,
+        1270,
+        275
+      ],
+      "threshold": 0.6
+    },
+    "support_party_confirm": {
+      "file": "support_party_confirm.png",
+      "source": "captures/2026-11-19-ember/34-grand-support-confirm.png",
+      "roi": [
+        940,
+        0,
+        1280,
+        82
+      ],
+      "threshold": 0.6
+    },
+    "master_equipment": {
+      "file": "master_equipment.png",
+      "source": "captures/2026-11-19-mystic/key/01-mystic-combat.png",
+      "roi": [
+        1024,
+        0,
+        1280,
+        86
+      ],
+      "threshold": 0.6
+    },
+    "result_bond": {
+      "file": "result_bond.png",
+      "source": "captures/2026-11-20/key/result.png",
+      "roi": [
+        50,
+        139,
+        330,
+        235
+      ],
+      "threshold": 0.6
+    },
+    "result_exp": {
+      "file": "result_exp.png",
+      "source": "captures/2026-11-20/key/result-exp.png",
+      "roi": [
+        621,
+        156,
+        861,
+        255
+      ],
+      "threshold": 0.6
+    },
+    "ap_stone": {
+      "file": "ap_stone.png",
+      "source": "captures/2026-11-20/key/ap-recovery.png",
+      "roi": [
+        426,
+        100,
+        574,
+        194
+      ],
+      "threshold": 0.6
+    },
+    "ap_bronze": {
+      "file": "ap_bronze.png",
+      "source": "captures/2026-11-20/key/ap-recovery-bronze.png",
+      "roi": [
+        425,
+        269,
+        604,
+        370
+      ],
+      "threshold": 0.6
+    },
     "retreat_confirm": {
       "file": "retreat_confirm.png",
       "source": "captures/2026-11-19-mystic/key/12-retreat-confirm.png",

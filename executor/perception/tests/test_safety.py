@@ -28,6 +28,8 @@ class SafetyTest(unittest.TestCase):
             with self.subTest(relative=relative):
                 observation = self.read(relative)
                 self.assertEqual('battle', observation.base_page.value)
+                self.assertEqual({'animation'}, {item.value for item in observation.variants})
+                self.assertEqual((), observation.controls)
                 for name in ('卡1', '卡2', '卡3', '卡4', '卡5', '攻击'):
                     control = observation.control(name)
                     self.assertTrue(control is None or not control.actionable,
@@ -45,9 +47,12 @@ class SafetyTest(unittest.TestCase):
         skill = self.read('captures/2026-11-19-ember/key/09-skill-target.png')
         spell = self.read('captures/2026-11-20/key/72-command-spell-target-select.png')
 
+        self.assertEqual({'skill_target'}, {item.value for item in skill.variants})
         self.assertNotIn('command_spell_target', {item.value for item in skill.overlays})
         self.assertIn('command_spell_target', {item.value for item in spell.overlays})
-        self.assertIsNone(skill.control('目标从者1'))
+        self.assertEqual(frozenset(), spell.variants)
+        for name in ('目标从者1', '目标从者2', '目标从者3'):
+            self.assertTrue(skill.control(name).actionable, name)
 
     def test_result_page_keeps_battle_residue_out_of_controls(self) -> None:
         observation = self.read('captures/2026-11-20/key/result.png')
@@ -57,13 +62,20 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual((), observation.controls)
         self.assertFalse(observation.actionable)
 
-    def test_overlay_blocks_base_controls(self) -> None:
+    def test_master_skills_does_not_block_battle_controls(self) -> None:
         observation = self.read('captures/2026-11-20/key/60-current-master-expanded.png')
 
         self.assertEqual('battle', observation.base_page.value)
-        for name in ('攻击', '战斗菜单', '御主技能', '令咒'):
-            self.assertFalse(observation.control(name).actionable, name)
-        self.assertTrue(observation.control('御主技能3').actionable)
+        for name in ('攻击', '战斗菜单', '令咒', '从者1技能1', '敌方1', '御主技能3'):
+            self.assertTrue(observation.control(name).actionable, name)
+
+    def test_modal_overlay_hides_base_controls(self) -> None:
+        observation = self.read('captures/2026-11-20/key/70-command-spell-open.png')
+
+        for name in ('攻击', '战斗菜单', '令咒', '从者1技能1'):
+            self.assertIsNone(observation.control(name), name)
+        for name in ('宝具解放', '灵基修复', '关闭'):
+            self.assertTrue(observation.control(name).actionable, name)
 
     def test_card_page_only_offers_confirmed_cards(self) -> None:
         observation = self.read('captures/2026-11-20/key/card-select.png')
@@ -73,13 +85,13 @@ class SafetyTest(unittest.TestCase):
         self.assertTrue(all(control.actionable for control in cards))
         self.assertTrue(all(control.center[1] > 400 for control in cards))
 
-    def test_battle_without_attack_anchor_is_not_clickable(self) -> None:
+    def test_attack_animation_exposes_no_controls(self) -> None:
         observation = self.read('captures/2026-11-19-ember/36-attack-animation.png')
 
         self.assertEqual('battle', observation.base_page.value)
-        attack = observation.control('攻击')
-        self.assertIsNotNone(attack)
-        self.assertFalse(attack.actionable)
+        self.assertEqual({'animation'}, {item.value for item in observation.variants})
+        self.assertEqual((), observation.controls)
+        self.assertFalse(observation.actionable)
 
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')

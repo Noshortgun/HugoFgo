@@ -50,12 +50,14 @@ class ContractTest(unittest.TestCase):
         self.assertIs(FieldStatus.NOT_READ, battle.field('np').status)
 
     def test_unknown_and_loading_expose_no_controls(self) -> None:
-        for relative, expected in (
-            ('captures/2026-11-20/key/12-battle-start.png', BasePage.LOADING),
-            ('captures/2026-11-19-ember/34-grand-support-confirm.png', BasePage.UNKNOWN),
+        black = Frame(image=bytes(2 * 2 * 3), width=2, height=2, captured_at=0.0,
+                      format=FrameFormat.BGR24)
+        for label, sample, expected in (
+            ('loading', load_frame('captures/2026-11-20/key/12-battle-start.png'), BasePage.LOADING),
+            ('unknown', black, BasePage.UNKNOWN),
         ):
-            with self.subTest(relative=relative):
-                observation = self.perception.read(load_frame(relative))
+            with self.subTest(label=label):
+                observation = self.perception.read(sample)
                 self.assertIs(expected, observation.base_page)
                 self.assertEqual((), observation.controls)
                 self.assertFalse(observation.actionable)

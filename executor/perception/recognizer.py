@@ -11,6 +11,7 @@ from collections import OrderedDict, deque
 from typing import Iterable, Mapping
 
 import cv2
+import numpy as np
 
 from executor.device.base import Frame
 from executor.perception import evidence
@@ -19,6 +20,7 @@ from executor.perception.evidence import Evidence, Template
 from executor.perception.observation import (
     BasePage,
     Control,
+    ControlKind,
     Field,
     FieldStatus,
     Observation,
@@ -32,6 +34,12 @@ __all__ = ['Perception', 'StaleFrameError']
 
 
 def _classify(evidence: Evidence):
+    overlays = frozenset(
+        rule.overlay for rule in cn.OVERLAY_RULES
+        if all(evidence.hit(anchor) for anchor in rule.anchors)
+        and not any(evidence.hit(anchor) for anchor in rule.absent)
+    )
+
     for rule in cn.PAGE_RULES:
         if all(evidence.hit(anchor) for anchor in rule.anchors):
             page = rule.page
@@ -41,43 +49,90 @@ def _classify(evidence: Evidence):
         page = BasePage.UNKNOWN
         confidence = max(evidence.scores.values(), default=0.0)
 
-    variants = frozenset(
-        rule.variant for rule in cn.VARIANT_RULES
-        if rule.page is page and all(evidence.hit(anchor) for anchor in rule.anchors)
-    )
-    overlays = frozenset(
-        rule.overlay for rule in cn.OVERLAY_RULES
-        if all(evidence.hit(anchor) for anchor in rule.anchors)
-        and not any(evidence.hit(anchor) for anchor in rule.absent)
-    )
-    return page, variants, overlays, confidence
+    if page is BasePage.UNKNOWN:
+        for overlay, fallback in cn.OVERLAY_BASE_FALLBACK.items():
+            if overlay in overlays:
+                page = fallback
+                break
+
+    variants = set()
+    for rule in cn.VARIANT_RULES:
+        if rule.page is not page:
+            continue
+        if rule.variant is Variant.BATTLE_ANIMATION and overlays:
+            continue
+        if not all(evidence.hit(anchor) for anchor in rule.anchors):
+            continue
+        if any(evidence.hit(anchor) for anchor in rule.absent):
+            continue
+        variants.add(rule.variant)
+    return page, frozenset(variants), overlays, confidence
+
+
+def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """助战卡片随行滚动，按“卡片比背景亮”的行平均亮度分段定位，不写死行坐标。"""
+    x1, y1, x2, y2 = cn.SUPPORT_ROW_REGION
+    profile = gray[y1:y2, x1:x2].astype(np.float32).mean(axis=1)
+    boxes = []
+    start = None
+    for index, on in enumerate(profile > cn.SUPPORT_ROW_MIN_MEAN):
+        if on and start is None:
+            start = index
+        elif not on and start is not None:
+            if index - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
+                boxes.append((x1, max(0, start + y1 - 4), x2, index + y1 + 4))
+            start = None
+    if start is not None and len(profile) - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
+        boxes.append((x1, max(0, start + y1 - 4), x2, y2))
+    return boxes
+
+
+def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Control | None:
+    if spec.anchor is not None and not evidence.hit(spec.anchor):
+        if spec.hide_when_missing:
+            return None
+        return Control(spec.name, spec.kind, spec.box, False, f'anchor_missing:{spec.anchor}')
+    if blocked:
+        return Control(spec.name, spec.kind, spec.box, False, 'blocked_by_overlay')
+    return Control(spec.name, spec.kind, spec.box, True, reason)
 
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
-              evidence: Evidence) -> tuple[Control, ...]:
-    if page in (BasePage.UNKNOWN, BasePage.LOADING):
+              evidence: Evidence, gray: np.ndarray) -> tuple[Control, ...]:
+    if page in (BasePage.UNKNOWN, BasePage.LOADING) or Variant.BATTLE_ANIMATION in variants:
         return ()
 
-    variant = next((item for item in variants if item in cn.VARIANT_CONTROLS), None)
-    specs = cn.VARIANT_CONTROLS[variant] if variant is not None else cn.PAGE_CONTROLS[page]
-    blocked = bool(overlays & cn.BLOCKING_OVERLAYS)
-    controls = []
-    for spec in specs:
-        if blocked:
-            actionable, reason = False, 'blocked_by_overlay'
-        elif spec.anchor is not None and not evidence.hit(spec.anchor):
-            actionable, reason = False, f'anchor_missing:{spec.anchor}'
-        else:
-            actionable, reason = True, 'visible'
-        controls.append(Control(spec.name, spec.kind, spec.box, actionable, reason))
+    blocked = bool(overlays & cn.BLOCKING_OVERLAYS) or bool(variants & cn.BLOCKING_VARIANTS)
+    controls: list[Control] = []
+    # 被模态覆盖时基页控件一律不输出，而不是列一堆“不可点”。
+    if not blocked:
+        variant = next((item for item in variants if item in cn.VARIANT_CONTROLS), None)
+        specs = cn.VARIANT_CONTROLS[variant] if variant is not None else cn.PAGE_CONTROLS[page]
+        controls = [control for spec in specs
+                    if (control := _make_control(spec, evidence, False, 'visible')) is not None]
+
+        if page is BasePage.SUPPORT:
+            for index, box in enumerate(_support_rows(gray), start=1):
+                controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected'))
+
+        if page is BasePage.AP_RECOVERY:
+            layout = 'ap_stone' if evidence.hit('ap_stone') else 'ap_bronze'
+            for spec in cn.AP_ITEM_LAYOUTS[layout]:
+                control = _make_control(spec, evidence, False, 'visible')
+                if control is not None:
+                    controls.append(control)
+
+    for item in variants:
+        for spec in cn.VARIANT_EXTRA_CONTROLS.get(item, ()):
+            control = _make_control(spec, evidence, False, f'variant:{item.value}')
+            if control is not None:
+                controls.append(control)
 
     for overlay in sorted(overlays, key=lambda item: item.value):
         for spec in cn.OVERLAY_CONTROLS.get(overlay, ()):
-            if spec.anchor is not None and not evidence.hit(spec.anchor):
-                actionable, reason = False, f'anchor_missing:{spec.anchor}'
-            else:
-                actionable, reason = True, f'overlay:{overlay.value}'
-            controls.append(Control(spec.name, spec.kind, spec.box, actionable, reason))
+            control = _make_control(spec, evidence, False, f'overlay:{overlay.value}')
+            if control is not None:
+                controls.append(control)
     return tuple(controls)
 
 
@@ -147,7 +202,7 @@ class Perception:
             base_page=page,
             variants=variants,
             overlays=overlays,
-            controls=_controls(page, variants, overlays, frame_evidence),
+            controls=_controls(page, variants, overlays, frame_evidence, gray),
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),

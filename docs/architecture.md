@@ -52,7 +52,8 @@
 - **观察内容**：基页（`menu / support / team / battle / card / result / drops / ap_recovery / loading / unknown`）、版式变体（普通/冠位助战、普通/冠位队伍）、覆盖层（可与基页并存）、带基准坐标的控件、以及每个控件的可行动标记。`battle` 不代表攻击按钮可用，`card` 不代表还能选卡；`unknown / loading` 永远不输出可行动控件。
 - **字段状态**：`not_applicable / not_read / pending / uncertain / confirmed`，不把"不需要读"和"读取失败"混成一个 `uncertain`。
 - **区服**：识别配置按区服隔离（当前只有 `executor/perception/regions/cn.py` 与 `templates/cn/`）；缺配置时报"该区服未支持"，不允许误识别后继续。
-- **注意**：观察必须能表达"不确定"，而不是强行给一个状态；覆盖层出现时基页控件一律不可行动。
+- **注意**：观察必须能表达"不确定"，而不是强行给一个状态。被模态覆盖层或目标选择变体盖住时，基页控件**不输出**（而不是列一堆不可点）；御主技能展开是非模态，攻击、从者技能、敌人、战斗菜单、令咒此时仍可点。
+- **中间态与变体**：攻击/技能/换人动画归为 `battle + animation`，不输出任何控件；结算分 `bond / exp / loot`，己方单体技能选目标为 `skill_target` 变体。随滚动变化的助战卡片行、AP 道具行不写死坐标，逐帧检测或按锚点选布局。
 
 
 ### 2.4 执行器核心 Executor

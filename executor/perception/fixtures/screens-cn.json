@@ -6,14 +6,28 @@
       "base": "support",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶筛选1",
+        "职阶情报",
+        "列表更新",
+        "助战卡片第1行"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/support-select-wrong-ce.png",
       "base": "support",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶筛选1",
+        "职阶情报",
+        "列表更新",
+        "助战卡片第1行"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/support-list-update-confirm.png",
@@ -22,84 +36,146 @@
       "overlays": [
         "support_confirm"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "是",
+        "否"
+      ],
+      "absentControls": [
+        "列表更新"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/team-confirm.png",
       "base": "team",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者卡第1位",
+        "从者卡第6位",
+        "开始任务",
+        "自动编队"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/battle-wave1.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "从者1技能1",
+        "从者3技能3",
+        "敌方1",
+        "战斗菜单"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/battle-target-enemy2.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "从者1技能1",
+        "敌方2"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/battle-slot1-skill3-cooldown.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/battle-after-cards.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/64-order-change-done.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/card-select.png",
       "base": "card",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-20/key/card-np-selected.png",
       "base": "card",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-20/key/result.png",
       "base": "result",
-      "variants": [],
+      "variants": [
+        "bond"
+      ],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-20/key/result-exp.png",
       "base": "result",
-      "variants": [],
+      "variants": [
+        "exp"
+      ],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-20/key/drops.png",
       "base": "drops",
-      "variants": [],
+      "variants": [
+        "loot"
+      ],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "下一步",
+        "显示切换"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/repeat-dialog.png",
@@ -108,21 +184,41 @@
       "overlays": [
         "repeat_dialog"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "连续出击",
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/ap-recovery-bronze.png",
       "base": "ap_recovery",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "白银果实",
+        "青铜果实",
+        "关闭"
+      ],
+      "absentControls": [
+        "赤铜果实"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/ap-recovery.png",
       "base": "ap_recovery",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "圣晶石",
+        "黄金果实",
+        "白银果实"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/61-order-change-select.png",
@@ -132,8 +228,10 @@
         "order_change"
       ],
       "actionable": true,
+      "basis": "annotated",
       "absentControls": [
-        "进行更替"
+        "进行更替",
+        "攻击"
       ]
     },
     {
@@ -143,7 +241,17 @@
       "overlays": [
         "command_spell_menu"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "宝具解放",
+        "灵基修复",
+        "关闭"
+      ],
+      "absentControls": [
+        "攻击",
+        "战斗菜单"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/73-command-spell-confirm.png",
@@ -152,7 +260,12 @@
       "overlays": [
         "command_spell_confirm"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "决定",
+        "取消"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/72-command-spell-target-select.png",
@@ -161,7 +274,12 @@
       "overlays": [
         "command_spell_target"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "目标从者1",
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/09-class-filter.png",
@@ -170,7 +288,12 @@
       "overlays": [
         "class_info"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "关闭",
+        "职阶星图分值效果"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/55-battle-menu.png",
@@ -179,7 +302,12 @@
       "overlays": [
         "battle_menu"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "撤退",
+        "战利品一览"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/60-current-master-expanded.png",
@@ -188,14 +316,24 @@
       "overlays": [
         "master_skills"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "战斗菜单",
+        "令咒",
+        "御主技能3",
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/12-battle-start.png",
       "base": "loading",
       "variants": [],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-20/key/163-grand-support.png",
@@ -204,7 +342,18 @@
         "grand_support"
       ],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶筛选1",
+        "职阶筛选3",
+        "职阶筛选10",
+        "助战卡片第1行"
+      ],
+      "absentControls": [
+        "职阶筛选2",
+        "职阶筛选4"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/164-current.png",
@@ -213,7 +362,18 @@
         "grand_support"
       ],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶筛选1",
+        "职阶筛选3",
+        "职阶筛选10",
+        "助战卡片第1行"
+      ],
+      "absentControls": [
+        "职阶筛选2",
+        "职阶筛选4"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/165-grand-team.png",
@@ -222,7 +382,12 @@
         "grand_team"
       ],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者卡第1位",
+        "开始任务"
+      ]
     }
   ],
   "crossSession": [
@@ -231,37 +396,60 @@
       "base": "menu",
       "variants": [],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-ember/key/02-support-select.png",
       "base": "support",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶情报",
+        "助战卡片第1行"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/03-team-confirm.png",
       "base": "team",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者卡第1位",
+        "自动编队",
+        "开始任务"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/04-battle-wave1.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/05-skill.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
-        "攻击"
+        "攻击",
+        "战斗菜单",
+        "令咒",
+        "御主技能"
       ]
     },
     {
@@ -269,28 +457,48 @@
       "base": "card",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-ember/key/07-battle-wave2.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/08-battle-wave3.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/09-skill-target.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "skill_target"
+      ],
       "overlays": [],
       "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "目标从者1",
+        "目标从者2",
+        "目标从者3",
+        "关闭"
+      ],
       "absentControls": [
         "攻击"
       ]
@@ -300,65 +508,90 @@
       "base": "card",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-19-ember/key/11-np-selected.png",
       "base": "card",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-19-ember/key/12-battle-result-bond.png",
       "base": "result",
-      "variants": [],
+      "variants": [
+        "bond"
+      ],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-19-ember/key/13-battle-result-exp.png",
       "base": "result",
-      "variants": [],
+      "variants": [
+        "exp"
+      ],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-19-ember/key/14-drops.png",
       "base": "drops",
-      "variants": [],
+      "variants": [
+        "loot"
+      ],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated"
     },
     {
       "file": "captures/2026-11-19-ember/key/15-return.png",
       "base": "menu",
       "variants": [],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-ember/05-quest-start.png",
       "base": "loading",
       "variants": [],
       "overlays": [],
-      "actionable": false
+      "actionable": false,
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-ember/01-gate.png",
       "base": "support",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "职阶筛选1",
+        "职阶情报",
+        "助战卡片第1行"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/36-attack-animation.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
-        "攻击"
+        "攻击",
+        "战斗菜单",
+        "令咒",
+        "御主技能"
       ]
     },
     {
@@ -366,42 +599,75 @@
       "base": "ap_recovery",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "圣晶石",
+        "黄金果实",
+        "白银果实"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/34-grand-support-confirm.png",
-      "base": "unknown",
+      "base": "support",
       "variants": [],
-      "overlays": [],
-      "actionable": false
+      "overlays": [
+        "support_party_confirm"
+      ],
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19/07-battle-loading.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/01-mystic-combat.png",
-      "base": "unknown",
+      "base": "team",
       "variants": [],
-      "overlays": [],
-      "actionable": false
+      "overlays": [
+        "master_equipment"
+      ],
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/02-team-equipped.png",
       "base": "team",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者卡第1位",
+        "开始任务"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/03-battle-combat.png",
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/04-master-skills.png",
@@ -410,7 +676,13 @@
       "overlays": [
         "master_skills"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "攻击",
+        "令咒",
+        "御主技能3"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/05-order-change-select.png",
@@ -420,9 +692,7 @@
         "order_change"
       ],
       "actionable": true,
-      "absentControls": [
-        "进行更替"
-      ]
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-mystic/key/06-swap-out-selected.png",
@@ -432,9 +702,7 @@
         "order_change"
       ],
       "actionable": true,
-      "absentControls": [
-        "进行更替"
-      ]
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-mystic/key/07-swap-in-selected.png",
@@ -444,18 +712,20 @@
         "order_change"
       ],
       "actionable": true,
-      "actionableControls": [
-        "进行更替"
-      ]
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-mystic/key/08-swap-result.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
-        "攻击"
+        "攻击",
+        "战斗菜单"
       ]
     },
     {
@@ -463,7 +733,12 @@
       "base": "battle",
       "variants": [],
       "overlays": [],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "从者1技能1",
+        "敌方1"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/10-command-spell.png",
@@ -472,7 +747,11 @@
       "overlays": [
         "command_spell_menu"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "关闭"
+      ]
     },
     {
       "file": "captures/2026-11-19-mystic/key/11-command-spell-confirm.png",
@@ -481,7 +760,8 @@
       "overlays": [
         "command_spell_confirm"
       ],
-      "actionable": true
+      "actionable": true,
+      "basis": "inferred"
     },
     {
       "file": "captures/2026-11-19-mystic/key/12-retreat-confirm.png",
@@ -491,54 +771,64 @@
         "retreat_confirm"
       ],
       "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "决定",
+        "取消"
+      ],
       "absentControls": [
-        "撤退",
-        "技能使用确认"
+        "撤退"
       ]
     },
     {
       "file": "captures/2026-11-19/13-cards-selected.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
         "攻击",
         "卡1",
-        "卡2",
-        "卡3",
-        "卡4",
-        "卡5"
+        "战斗菜单",
+        "令咒",
+        "御主技能"
       ]
     },
     {
       "file": "captures/2026-11-19/19-cards2-selected.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
         "攻击",
         "卡1",
-        "卡2",
-        "卡3",
-        "卡4",
-        "卡5"
+        "战斗菜单",
+        "令咒",
+        "御主技能"
       ]
     },
     {
       "file": "captures/2026-11-19/25-cards3-selected.png",
       "base": "battle",
-      "variants": [],
+      "variants": [
+        "animation"
+      ],
       "overlays": [],
-      "actionable": true,
+      "actionable": false,
+      "basis": "annotated",
       "absentControls": [
         "攻击",
         "卡1",
-        "卡2",
-        "卡3",
-        "卡4",
-        "卡5"
+        "战斗菜单",
+        "令咒",
+        "御主技能"
       ]
     }
   ]

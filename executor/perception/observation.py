@@ -31,6 +31,11 @@ class Variant(str, Enum):
 
     GRAND_SUPPORT = 'grand_support'
     GRAND_TEAM = 'grand_team'
+    RESULT_BOND = 'bond'
+    RESULT_EXP = 'exp'
+    DROPS_LOOT = 'loot'
+    SKILL_TARGET = 'skill_target'
+    BATTLE_ANIMATION = 'animation'
 
 
 class Overlay(str, Enum):
@@ -47,6 +52,7 @@ class Overlay(str, Enum):
     BATTLE_MENU = 'battle_menu'
     MASTER_SKILLS = 'master_skills'
     RETREAT_CONFIRM = 'retreat_confirm'
+    MASTER_EQUIPMENT = 'master_equipment'
 
 
 class ControlKind(str, Enum):
@@ -54,6 +60,9 @@ class ControlKind(str, Enum):
     CARD = 'card'
     TARGET = 'target'
     ROW = 'row'
+    SKILL = 'skill'
+    ENEMY = 'enemy'
+    ITEM = 'item'
 
 
 class FieldStatus(str, Enum):
