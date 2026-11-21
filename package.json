@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vue-tsc --noEmit && vite build",
-
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "resources:check": "node scripts/resources.mjs check",
@@ -16,7 +15,8 @@
     "issues:check": "node scripts/issue-sync.mjs",
     "issues:selftest": "node scripts/issue-sync.selftest.mjs",
     "replay": "node scripts/replay.mjs",
-    "test": "node scripts/replay.mjs"
+    "test": "node scripts/replay.mjs",
+    "fixtures:check": "node scripts/check-perception-fixtures.mjs"
   },
   "dependencies": {
     "vue": "^3.5.13"

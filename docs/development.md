@@ -37,6 +37,16 @@ npm run replay
 
 完整测试、CI 和实机验收命令见 [测试与验收](testing.md)。
 
+感知调试工具：
+
+```bash
+python scripts/perception_lab.py <图片或目录> [--np] [--enemies]  # 先出特征表，再改阈值
+python scripts/perception_monitor.py                              # 实时监控，热加载规则，s 保存
+python scripts/perception_frame_report.py [目录]                  # 逐帧可视化核对报告
+```
+
+监控保存的帧写入 `logs/perception-monitor/`，只读抓帧，不发送设备输入。
+
 ## 4. 目录职责
 
 | 目录 | 职责 | 入库规则 |
