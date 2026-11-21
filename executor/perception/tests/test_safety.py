@@ -170,6 +170,12 @@ class SafetyTest(unittest.TestCase):
                 for first, second in zip(rows, rows[1:]):
                     self.assertEqual(first.box[3], second.box[1])
 
+    def test_small_arts_np_card_is_detected(self) -> None:
+        observation = self.read('captures/2026-11-21/key/card-np-arts-small.png')
+
+        self.assertTrue(observation.control('宝具卡1').actionable)
+        self.assertIsNone(observation.control('宝具卡2'))
+
     def test_purple_enemy_bar_and_effect_ring(self) -> None:
         purple = self.read('captures/2026-11-21/key/battle-purple-hp.png')
         effect = self.read('captures/2026-11-21/key/card-effect-ring.png')

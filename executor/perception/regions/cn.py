@@ -180,11 +180,12 @@ NP_SEARCH: dict[str, Box] = {
     'C': (750, 60, 990, 420),
 }
 NP_EMBLEM_THRESHOLD = 0.65
-NP_EMBLEM_MIN_AREA = 2500
-NP_EMBLEM_MIN_WIDTH = 120
-NP_EMBLEM_MAX_AREA = 8000
-NP_RING_MAX_AREA = 7000
-NP_RING_MAX_WIDTH = 210
+# 三种纹章的大小范围：绿环最大，蓝/红允许更小（宝具卡本身也会缩放）。
+NP_EMBLEM_BOUNDS: tuple[tuple[float, float, float, float], ...] = (
+    (2500, 120, 7000, 210),   # Quick 绿环：min_area, min_width, max_area, max_width
+    (1400, 80, 9000, 260),    # Arts 蓝星
+    (1400, 80, 9000, 260),    # Buster 红色
+)
 # 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记。
 NP_EMBLEM_Y_RANGE = (0.15, 0.80)
 NP_EMBLEM_HUES: tuple[tuple[tuple[int, int], ...], ...] = (

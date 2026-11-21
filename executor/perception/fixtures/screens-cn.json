@@ -936,6 +936,20 @@
         "宝具卡1"
       ],
       "basis": "inferred"
+    },
+    {
+      "file": "captures/2026-11-21/key/card-np-arts-small.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "宝具卡1"
+      ],
+      "absentControls": [
+        "宝具卡2"
+      ],
+      "basis": "annotated"
     }
   ]
 }

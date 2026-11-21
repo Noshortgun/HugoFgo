@@ -156,14 +156,14 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
             continue
         largest = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest)
-        is_ring = index == 0
-        max_area = cn.NP_RING_MAX_AREA if is_ring else cn.NP_EMBLEM_MAX_AREA
-        if not (cn.NP_EMBLEM_MIN_AREA <= area <= max_area):
+        min_area, min_width, max_area, max_width = cn.NP_EMBLEM_BOUNDS[index]
+        if not (min_area <= area <= max_area):
             continue
         _x, y, width, h = cv2.boundingRect(largest)
-        if width < cn.NP_EMBLEM_MIN_WIDTH:
+        if not (min_width <= width <= max_width):
             continue
-        if is_ring and width > cn.NP_RING_MAX_WIDTH:
+        # 纹章是“宽扁”的卡种图形；职阶图标/人物色块多为竖长，用长宽比排除。
+        if h and width / h < 1.15:
             continue
         center_y = y + h / 2
         if low_ratio * height < center_y < high_ratio * height:
