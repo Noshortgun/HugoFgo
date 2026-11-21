@@ -22,7 +22,9 @@
     "verify:selftest": "node scripts/verify.selftest.mjs",
     "replay": "node scripts/replay.mjs",
     "test": "node scripts/replay.mjs",
-    "test:run-state": "node scripts/run-state.selftest.mjs"
+    "test:run-state": "node scripts/run-state.selftest.mjs",
+    "desktop:selftest": "node scripts/desktop-package.selftest.mjs",
+    "package:windows": "node scripts/desktop-package.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",

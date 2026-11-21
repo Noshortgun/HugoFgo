@@ -44,7 +44,7 @@ const strategyRevision = ref(0);
 const savedStrategyRevision = ref(0);
 const strategyDirty = computed(() => strategyRevision.value !== savedStrategyRevision.value);
 const servantChoices = computed<Servant[]>(() => {
-  if (!atlasServants.value.length) return team;
+  if (!atlasServants.value.length) return team.map((member) => ({ ...member, image: '', art: '', ceImage: '', placeholder: true }));
   return atlasServants.value.filter((servant) => (servant.type === 'normal' || servant.type === 'heroine') && servant.collectionNo > 0).map((servant) => {
     const assetSkills = activeSkillsForLimitCount(servant.skills, 4);
     const ascension = servant.ascensionAssets?.[4];
@@ -127,10 +127,12 @@ onMounted(async () => {
 });
 onUnmounted(() => unsubscribeRun?.());
 
-watch(resourceRegion, async () => {
-  await Promise.all([loadAtlas(), loadEquips()]);
+async function reloadResources(force = false) {
+  await Promise.all([loadAtlas(resourceRegion.value, force), loadEquips(resourceRegion.value, force)]);
   members.value = members.value.map((member) => resolveMemberAssets(member, member.limitCount ?? 4));
-});
+}
+
+watch(resourceRegion, () => reloadResources());
 
 function selectServant(index: number, servant: Servant) {
   const current = members.value[index];
@@ -149,8 +151,10 @@ function resolveMemberAssets(member: Servant, limitCount: number): Servant {
     limitCount,
     npId: noblePhantasm?.id,
     noblePhantasm,
-    image: ascension?.face ?? asset?.face ?? member.image,
-    art: ascension?.card ?? asset?.card ?? member.art,
+    image: atlasServants.value.length ? ascension?.face ?? asset?.face ?? member.image : '',
+    art: atlasServants.value.length ? ascension?.card ?? asset?.card ?? member.art : '',
+    ceImage: atlasServants.value.length ? member.ceImage : '',
+    placeholder: !atlasServants.value.length && !member.empty,
     skills: assetSkills.length
       ? assetSkills.map((skill, skillIndex) => ({
           icon: member.skills[skillIndex]?.icon ?? standardSkills()[skillIndex].icon,
@@ -483,7 +487,7 @@ async function startRun() {
       serial: selectedSerial.value || (fakeRunRequested ? 'fake' : ''),
       jobPath: currentJobPath.value,
       settings,
-      region: 'CN',
+      region: resourceRegion.value,
     });
   } catch (error) {
     runState.value = { ...runState.value, phase: 'failed', error: error instanceof Error ? error.message : String(error) };
@@ -504,7 +508,7 @@ async function stopRun() {
 </script>
 
 <template>
-  <FormationHome :members="members" :mystic="currentMystic" :fallback="fallback" :gender="gender" @gender="gender = $event" @picker="openPicker" @plan="planOpen = true" @fallback="fallbackOpen = true" @support="supportSlot = $event" @reorder="reorderMembers" @remove="removeMember" @ascension="changeAscension"
+  <FormationHome :members="members" :mystic="currentMystic" :fallback="fallback" :gender="gender" :gallery-empty="!atlasServants.length" :resource-region="resourceRegion" @gender="gender = $event" @picker="openPicker" @plan="planOpen = true" @fallback="fallbackOpen = true" @support="supportSlot = $event" @reorder="reorderMembers" @remove="removeMember" @ascension="changeAscension"
  @start="startRun" @utility="openUtility" :start-disabled="Boolean(runDisabledReason)" :start-disabled-reason="runDisabledReason" :start-label="runStartLabel" />
   <BattlePlanDrawer v-if="planOpen" ref="planDrawer" :members="members" :mystic="currentMystic" :saved-state="savedPlan" :import-warnings="jobWarnings" :strategy-dirty="strategyDirty" :saving="jobSaving" @close="planOpen = false; jobWarnings = []" @fallback="fallbackOpen = true" @save="savePlanSnapshot" @reset-saved="resetStrategyToSaved" />
   <PickerDialog v-if="picker" :type="picker.type" :slot="picker.slot" :servants="servantChoices" :mystic-codes="allMysticCodes" @close="picker = null" @servant="selectServant" @ce="selectCe" @mystic="selectMystic" />
@@ -518,7 +522,7 @@ async function stopRun() {
       <header><div><span class="picker-kicker">HUGOFGO</span><h2>{{ { jobs: '作业库', history: '运行记录', settings: '设置与资源' }[utility] }}</h2></div><button title="关闭" @click="utility = null"><AppIcon name="close" /></button></header>
       <div v-if="utility === 'jobs'" class="utility-content"><p v-if="jobLibraryReadOnly" class="job-file-message">浏览器预览为只读：作业可以导入、导出与查看，保存、打开、删除和资源任务请使用桌面版。</p><p v-else>作业保存在桌面应用数据目录的 jobs/ 文件夹（开发期为项目 jobs/），并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading || jobLibraryReadOnly" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><div class="job-library-actions"><button @click="openSavedJob(entry)">打开</button><button @click="removeSavedJob(entry)">删除</button></div></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 选卡策略 + 可选固定卡序；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><ul v-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
       <div v-else-if="utility === 'history'" class="utility-content"><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>深蓝的航路 · 完成 10 次</strong><small>今天 14:32 · 用时 18 分 42 秒</small></div><span>成功</span></div><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>每日宝库速巡 · 完成 3 次</strong><small>昨天 20:16 · 用时 4 分 08 秒</small></div><span>成功</span></div><p class="utility-note">运行记录只在需要时从这里查看，不占主界面导航。</p></div>
-      <div v-else class="utility-content"><RunSettingsPanel /><DevicePanel v-model="selectedSerial" /><div class="resource-row"><div><strong>图像识别运行时</strong><small>Python CV · RapidOCR · 本地运行</small></div><span class="ready-text">未接入</span></div><div class="resource-row"><div><strong>编队检查方式</strong><small>开始前检测一次 · 不自动配队 · 自有礼装不校验</small></div><span class="ready-text">手动编队</span></div><ResourceCenter /></div>
+      <div v-else class="utility-content"><RunSettingsPanel /><DevicePanel v-model="selectedSerial" /><div class="resource-row"><div><strong>图像识别运行时</strong><small>Python CV · RapidOCR · 本地运行</small></div><span class="ready-text">未接入</span></div><div class="resource-row"><div><strong>编队检查方式</strong><small>开始前检测一次 · 不自动配队 · 自有礼装不校验</small></div><span class="ready-text">手动编队</span></div><ResourceCenter @updated="reloadResources(true)" /></div>
     </section>
   </div>
 </template>

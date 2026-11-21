@@ -37,6 +37,8 @@ npm run resources:contract    # 校验清单包含运行时必需类别
 npm run resources:selftest    # 校验任务映射、类别合约和清单哈希逻辑
 ```
 
+Windows 安装版由桌面壳启动随包附带的 Node.js 运行时执行同一条资源管线，不需要用户安装 Node.js。开发期读写项目 `data/<区服>/`；安装版读写应用数据目录下的 `data/<区服>/`，安装包不包含图库或 Atlas 原始元数据。空库首次更新会先下载元数据，再生成索引与清单，完成后编队界面立即重新加载当前区服。
+
 首次运行资源命令时，旧的 `data/` 国服内容会复制到 `data/CN/`，原文件保留供校验对照。`resources:contract` 和 `resources:selftest` 不需要本地图库或网络，已纳入 `npm run verify`。修改 `scripts/asset-jobs.mjs` 的资源类别后，必须运行 `resources:update` 并提交新的 `data/CN/resource-manifest.json`；否则 CI 会发现清单缺少 `commands.ascension` 等非空类别。图库、原始元数据与清单都按 `data/<区服>/` 隔离，切换区服不会重下已有区服。
 
 ## 边界

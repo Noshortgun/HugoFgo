@@ -2,7 +2,7 @@
 
 HugoFgo 是一个 FGO 自动刷本桌面工具：用可视化界面编队、编排作业，并由执行器驱动安卓模拟器完成战斗。项目使用 Vue 3、TypeScript、Tauri 2 和 Python。
 
-当前仍在重构。编队与作业编辑可用，但桌面 UI 尚未接入新的自动执行流程，不能作为已完成的一键刷本工具使用。具体能力与限制见 [当前状态](docs/status.md)。
+当前仍在重构。编队、作业编辑和桌面执行器桥接已接通，但完整实机验收尚未完成，不能视为稳定的一键刷本工具。具体能力与限制见 [当前状态](docs/status.md)。
 
 ## 快速开始
 
@@ -31,6 +31,30 @@ cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Li
 ```
 
 也可用 `HUGOFGO_PYTHON` 指定解释器。
+
+## Windows 安装版与发布
+
+安装包不包含图库。首次启动会使用占位卡；打开“设置与资源”，选择区服并点击“增量更新”，下载完成后编队会自动刷新。资源更新使用随包附带的 Node.js，无需另装 Node.js。
+
+安装版的作业、图库、设置和运行证据统一保存在 `%APPDATA%/com.hugofgo.desktop/` 下的 `jobs/`、`data/`、`run-settings.json` 与 `logs/farm/`，不依赖源码目录或开发服务器。
+
+**Python 执行器采用检测用户 Python 的分发策略，不随包附带 Python。** 运行作业前请安装 64 位 Python 3.12，再按实际安装位置安装固定依赖：
+
+```powershell
+py -3.12 -m pip install -r "<HugoFgo 安装目录>\cv\requirements.txt"
+```
+
+也可用 `HUGOFGO_PYTHON` 指向已安装这些依赖的解释器。设备运行另需可用的 adb 与安卓模拟器；假运行可用于离线联调。
+
+发布者在具备 Rust 工具链的 Windows 机器上执行：
+
+```bash
+npm ci
+python -m pip install -r cv/requirements.txt
+npm run package:windows
+```
+
+该命令先准备固定版本 Node.js 运行时，再执行前端构建、全量回放和 `tauri build`。NSIS 安装包输出到 `src-tauri/target/release/bundle/nsis/`。CI 的“Windows 安装包”任务使用同一命令并上传安装包。发布时需核对：空库首启、国服下载、作业保存/打开，以及假运行或实机运行与历史记录；未做完整实机验收前不得标记稳定。
 
 ## 文档
 

@@ -9,18 +9,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
 import { resourcePaths } from './resource-paths.mjs';
-import { loadRemoteUnavailable } from './resource-utils.mjs';
+import { loadRemoteUnavailable, metadataSource } from './resource-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = resourcePaths(root);
 const { region } = paths;
 const raw = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-nice-cn.json`), 'utf8'));
 const basic = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-basic-cn.json`), 'utf8'));
-const legacyLabels = new Map(JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/servants.json`), 'utf8')).map((info) => [info.id, info.classLabel]));
+const labelsPath = metadataSource(root, region, 'servants.json');
+const legacyLabels = new Map(fs.existsSync(labelsPath) ? JSON.parse(fs.readFileSync(labelsPath, 'utf8')).map((info) => [info.id, info.classLabel]) : []);
 const standardLabels = { saber: 'Saber', archer: 'Archer', lancer: 'Lancer', rider: 'Rider', caster: 'Caster', assassin: 'Assassin', berserker: 'Berserker', ruler: 'Ruler', avenger: 'Avenger', moonCancer: 'Moon Cancer', alterEgo: 'Alter Ego', foreigner: 'Foreigner', pretender: 'Pretender', shielder: 'Shielder' };
 const slim = Object.fromEntries(basic.map((info) => [info.id, { ...info, classLabel: /beast/i.test(info.className) ? 'Beast' : legacyLabels.get(info.id) ?? standardLabels[info.className] ?? info.className }]));
 fs.writeFileSync(paths.absolute(`data/${region}/servants-by-id.json`), JSON.stringify(slim));
-const overridesPath = paths.absolute(`data/${region}/name-overrides.json`);
+const overridesPath = metadataSource(root, region, 'name-overrides.json');
 const overrides = fs.existsSync(overridesPath)
   ? JSON.parse(fs.readFileSync(overridesPath, 'utf8'))
   : {};

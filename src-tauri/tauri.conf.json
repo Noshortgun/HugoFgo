@@ -23,8 +23,24 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"]
+    "active": true,
+    "targets": "nsis",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
+    "resources": {
+      "runtime/node/": "runtime/node/",
+      "../scripts/resources.mjs": "scripts/resources.mjs",
+      "../scripts/asset-jobs.mjs": "scripts/asset-jobs.mjs",
+      "../scripts/resource-migrate.mjs": "scripts/resource-migrate.mjs",
+      "../scripts/resource-paths.mjs": "scripts/resource-paths.mjs",
+      "../scripts/resource-utils.mjs": "scripts/resource-utils.mjs",
+      "../scripts/download-servant-assets.mjs": "scripts/download-servant-assets.mjs",
+      "../scripts/download-equip-assets.mjs": "scripts/download-equip-assets.mjs",
+      "../scripts/download-mystic-assets.mjs": "scripts/download-mystic-assets.mjs",
+      "../executor/": "executor/",
+      "../schemas/job-v1.schema.json": "schemas/job-v1.schema.json",
+      "../cv/requirements.txt": "cv/requirements.txt",
+      "../data/CN/servants.json": "seed/CN/servants.json",
+      "../data/CN/name-overrides.json": "seed/CN/name-overrides.json"
+    }
   }
 }

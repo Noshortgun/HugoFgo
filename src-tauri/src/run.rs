@@ -125,10 +125,22 @@ fn project_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn python_path() -> String {
+fn python_path(app: &AppHandle) -> Result<PathBuf, String> {
+    if !cfg!(debug_assertions) {
+        let bundled = app
+            .path()
+            .resource_dir()
+            .map_err(|error| format!("无法定位应用资源目录：{error}"))?
+            .join("runtime")
+            .join("python")
+            .join("python.exe");
+        if bundled.is_file() {
+            return Ok(bundled);
+        }
+    }
     if let Ok(configured) = env::var("HUGOFGO_PYTHON") {
         if !configured.trim().is_empty() {
-            return configured;
+            return Ok(PathBuf::from(configured));
         }
     }
     let local = project_root().join("cv").join(".venv");
@@ -138,10 +150,19 @@ fn python_path() -> String {
         local.join("bin").join("python")
     };
     if candidate.is_file() {
-        candidate.to_string_lossy().to_string()
+        Ok(candidate)
     } else {
-        "python".to_string()
+        Ok(PathBuf::from("python"))
     }
+}
+
+fn executor_root(app: &AppHandle) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        return Ok(project_root());
+    }
+    app.path()
+        .resource_dir()
+        .map_err(|error| format!("无法定位应用资源目录：{error}"))
 }
 
 fn fake_requested() -> bool {
@@ -287,13 +308,10 @@ impl RunManager {
         let requested = PathBuf::from(&job_path);
         let candidate = if requested.is_absolute() {
             requested
+        } else if cfg!(debug_assertions) && project_root().join(&requested).is_file() {
+            project_root().join(&requested)
         } else {
-            let development = project_root().join(&requested);
-            if development.is_file() {
-                development
-            } else {
-                app_data.join(&requested)
-            }
+            app_data.join(&requested)
         };
         let job = fs::canonicalize(&candidate)
             .map_err(|error| format!("无法读取作业文件 {}：{error}", candidate.display()))?;
@@ -325,19 +343,27 @@ impl RunManager {
             .unwrap_or("未命名作业")
             .to_string();
         let args = executor_args(&job, &serial, &region, &run_dir, &settings, fake);
-        let root = project_root();
-        let mut command = Command::new(python_path());
+        let root = executor_root(&app)?;
+        if !root.join("executor").join("__main__.py").is_file() {
+            return Err(format!("找不到随包执行器：{}；请重新安装 HugoFgo", root.display()));
+        }
+        let python = python_path(&app)?;
+        let requirements = root.join("cv").join("requirements.txt");
+        let mut command = Command::new(&python);
         command
             .args(args)
             .current_dir(&root)
+            .env("HUGOFGO_DATA_ROOT", app_data.join("data"))
+            .env("HUGOFGO_REGION", &region)
             .env("PYTHONUTF8", "1")
             .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let mut child = command
             .spawn()
-            .map_err(|error| format!("无法启动 Python 执行器：{error}"))?;
+            .map_err(|error| format!("无法启动 Python 执行器 {}：{error}；请安装 Python 3.12 并运行 py -m pip install -r \"{}\"，或用 HUGOFGO_PYTHON 指定解释器", python.display(), requirements.display()))?;
         let stdout = child.stdout.take().ok_or_else(|| "无法读取执行器 stdout".to_string())?;
         let stderr = child.stderr.take().ok_or_else(|| "无法读取执行器 stderr".to_string())?;
         let child = Arc::new(Mutex::new(child));
@@ -444,11 +470,14 @@ impl RunManager {
                         inner.state.error = "执行器已退出，但没有发送完成事件".to_string();
                     } else if !exit.success() && inner.state.status == "running" {
                         inner.state.status = "failed".to_string();
-                        let detail = if stderr.is_empty() {
+                        let mut detail = if stderr.is_empty() {
                             String::new()
                         } else {
                             format!("：{stderr}")
                         };
+                        if stderr.contains("No module named") || stderr.contains("Python was not found") {
+                            detail.push_str("；请按 README 安装 cv/requirements.txt 中的依赖，或用 HUGOFGO_PYTHON 指定可用解释器");
+                        }
                         inner.state.error = format!(
                             "执行器异常退出（代码 {}）{detail}",
                             exit.code().map(|code| code.to_string()).unwrap_or_else(|| "未知".to_string())

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assetCategoryGaps, buildAssetJobs, countAssetCategories } from './asset-jobs.mjs';
 import { migrateLegacyData } from './resource-migrate.mjs';
+import { metadataSource, readJsonOr } from './resource-utils.mjs';
 import { parseRegion, resourcePaths } from './resource-paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,7 +87,7 @@ async function fetchMysticCodes() {
 }
 
 async function fetchEquipData() {
-  const current = readJson(`data/${region}/atlas-equip-cn.json`);
+  const current = readJsonOr(absolute(`data/${region}/atlas-equip-cn.json`), []);
   const catalogParts = await Promise.all([1, 2, 3, 4].map((part) => fetchJson(`https://raw.githubusercontent.com/AtlasAcademy/chaldea-data/main/dist/craftEssences.${part}.json`)));
   const fullRefresh = process.argv.includes('--refresh-metadata');
   const known = new Set(current.map((equip) => equip.id));
@@ -113,7 +114,7 @@ async function fetchEquipData() {
 
 async function fetchServantData(kind) {
   const catalogParts = await Promise.all([1, 2, 3, 4].map((part) => fetchJson(`https://raw.githubusercontent.com/AtlasAcademy/chaldea-data/main/dist/servants.${part}.json`)));
-  const local = readJson(`data/${region}/atlas-basic-cn.json`);
+  const local = readJsonOr(absolute(`data/${region}/atlas-basic-cn.json`), []);
   const classes = [...new Set([...catalogParts.flat(), ...local].map((servant) => servant.className).filter(Boolean))];
   const groups = await Promise.all(classes.map((className) => fetchJson(`${api}/${kind}/${region}/servant/search?className=${className}&excludeCollectionNo=0`)));
   const found = new Map(groups.flat().map((servant) => [servant.id, servant]));
@@ -140,10 +141,10 @@ async function refreshRawData() {
 
 function currentRawData() {
   return {
-    servants: readJson(`data/${region}/atlas-nice-cn.json`),
-    basic: readJson(`data/${region}/atlas-basic-cn.json`),
-    equips: readJson(`data/${region}/atlas-equip-cn.json`),
-    mystics: readJson(`data/${region}/atlas-mystic-cn.json`),
+    servants: readJsonOr(absolute(`data/${region}/atlas-nice-cn.json`), []),
+    basic: readJsonOr(absolute(`data/${region}/atlas-basic-cn.json`), []),
+    equips: readJsonOr(absolute(`data/${region}/atlas-equip-cn.json`), []),
+    mystics: readJsonOr(absolute(`data/${region}/atlas-mystic-cn.json`), []),
   };
 }
 
@@ -332,6 +333,16 @@ if (command === 'self-test') {
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: hashFile(absolute('data/name-overrides.json')) } } }).length, 0);
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: 'broken' } } }).length, 1);
   assert.equal(verifyManifest({ files: { 'data/not-published.png': { remoteUnavailable: true } } }).length, 0);
+  assert.deepEqual(readJsonOr(path.join(root, '.scratch', 'missing-raw-metadata.json'), []), []);
+  const seedRoot = path.join(root, '.scratch', 'resource-bootstrap-test');
+  fs.rmSync(seedRoot, { recursive: true, force: true });
+  fs.mkdirSync(path.join(seedRoot, 'seed', 'CN'), { recursive: true });
+  fs.writeFileSync(path.join(seedRoot, 'seed', 'CN', 'servants.json'), '[]');
+  assert.equal(metadataSource(seedRoot, 'CN', 'servants.json', {}), path.join(seedRoot, 'seed', 'CN', 'servants.json'));
+  fs.mkdirSync(path.join(seedRoot, 'user-data', 'CN'), { recursive: true });
+  fs.writeFileSync(path.join(seedRoot, 'user-data', 'CN', 'servants.json'), '[]');
+  assert.equal(metadataSource(seedRoot, 'CN', 'servants.json', { HUGOFGO_DATA_ROOT: path.join(seedRoot, 'user-data') }), path.join(seedRoot, 'user-data', 'CN', 'servants.json'));
+  fs.rmSync(seedRoot, { recursive: true, force: true });
   assert.equal(parseRegion(['verify']), 'CN');
   assert.equal(parseRegion(['verify', '--region', 'JP']), 'JP');
   assert.throws(() => parseRegion(['verify', '--region', '../CN']));

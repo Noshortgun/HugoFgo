@@ -16,8 +16,8 @@ let loadedRegion: Region | null = null;
 let started: Promise<void> | null = null;
 let startedRegion: Region | null = null;
 
-export function loadEquips(region: Region = resourceRegion.value): Promise<void> {
-  if (loadedRegion === region) return Promise.resolve();
+export function loadEquips(region: Region = resourceRegion.value, force = false): Promise<void> {
+  if (!force && loadedRegion === region) return Promise.resolve();
   if (started && startedRegion === region) return started;
   loadedRegion = null;
   startedRegion = region;

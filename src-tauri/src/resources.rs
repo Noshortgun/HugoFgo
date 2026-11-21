@@ -68,6 +68,13 @@ fn script_root(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("无法定位应用资源目录：{error}"))
 }
 
+fn node_path(root: &Path) -> PathBuf {
+    if cfg!(debug_assertions) {
+        return PathBuf::from(std::env::var("HUGOFGO_NODE").unwrap_or_else(|_| "node".to_string()));
+    }
+    root.join("runtime").join("node").join("node.exe")
+}
+
 fn emit_output(app: &AppHandle, region: &str, action: &str, stream: &str, text: String) {
     let _ = app.emit(
         OUTPUT_EVENT,
@@ -114,8 +121,8 @@ pub fn run_task(
         return Err(format!("找不到资源脚本：{}", script.display()));
     }
 
-    let node = std::env::var("HUGOFGO_NODE").unwrap_or_else(|_| "node".to_string());
-    let mut command = Command::new(node);
+    let node = node_path(&root);
+    let mut command = Command::new(&node);
     command
         .arg(&script)
         .arg(action)
@@ -144,7 +151,7 @@ pub fn run_task(
     let result = (|| {
         let mut child = command
             .spawn()
-            .map_err(|error| format!("无法启动资源任务：{error}"))?;
+            .map_err(|error| format!("无法启动资源运行时 {}：{error}；请重新安装 HugoFgo", node.display()))?;
         let stdout = child
             .stdout
             .take()

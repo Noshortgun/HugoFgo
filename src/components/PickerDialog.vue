@@ -36,6 +36,7 @@ const visibleServants = computed(() => props.servants
           <article v-for="servant in visibleServants" :key="servantPreferenceKey(servant)" class="servant-picker-card">
             <button class="servant-select" @click="emit('servant', props.slot || 0, servant)">
               <img v-if="servant.image" :src="servant.image" :alt="servant.name" />
+              <span v-else class="servant-picker-placeholder"><AppIcon name="cards" :size="24" /></span>
               <strong>{{ servant.name }}</strong>
               <small>{{ servant.role }}</small>
             </button>
