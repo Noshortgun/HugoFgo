@@ -28,6 +28,7 @@ class GatedReader:
             OcrLine('2回合', 930, 96, 0.98),
             OcrLine('30%', 268, 668, 0.97),
             OcrLine('45%', 585, 668, 0.96),
+            OcrLine('还剩1名', 924, 62, 0.98),
         ]
 
 
@@ -50,12 +51,13 @@ class FieldTest(unittest.TestCase):
         self.assertIs(FieldStatus.NOT_READ, pending.field('turn').status)
 
         self.reader.release.set()
-        ready = self.perception.read_fields(self.battle, ['wave', 'turn', 'np'], timeout=5)
+        ready = self.perception.read_fields(self.battle, ['wave', 'turn', 'np', 'enemies'], timeout=5)
 
         self.assertIs(FieldStatus.CONFIRMED, ready.field('wave').status)
         self.assertEqual(1, ready.field('wave').value)
         self.assertEqual(2, ready.field('turn').value)
         self.assertEqual((30, 45), ready.field('np').value)
+        self.assertEqual(1, ready.field('enemies').value)
 
     def test_ocr_only_runs_once_per_frame(self) -> None:
         self.perception.read(self.battle)

@@ -26,7 +26,7 @@ class OcrLine:
 
 Reader = Callable[[np.ndarray], list[OcrLine]]
 
-PARSEABLE_FIELDS = ('wave', 'turn', 'ap', 'np')
+PARSEABLE_FIELDS = ('wave', 'turn', 'ap', 'np', 'enemies')
 
 
 def rapidocr_reader() -> Reader:
@@ -122,6 +122,7 @@ def parse_fields(lines: list[OcrLine]) -> dict[str, Field]:
         'turn': _parse_turn(lines),
         'ap': _parse_ap(lines),
         'np': _parse_np(lines),
+        'enemies': _parse_number(lines, cn.ENEMY_COUNT_REGION, cn.ENEMY_COUNT_PATTERN),
     }
 
 

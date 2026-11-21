@@ -405,6 +405,7 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'wave': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'turn': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'np': frozenset({BasePage.BATTLE, BasePage.CARD}),
+    'enemies': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'ap': frozenset({BasePage.AP_RECOVERY}),
 }
 
@@ -420,3 +421,6 @@ TURN_PATTERN = r'(\d+)\s*回合'
 AP_PATTERN = r'行动力现在[：:]\s*(\d+)\s*/\s*(\d+)'
 NP_PATTERN = r'^(\d+)\s*%$'
 TURN_FALLBACK_REGION: Box = (900, 80, 980, 120)
+# 敌人数量不依赖血条颜色/位置，直接读“敌方单位 还剩 N 名”。
+ENEMY_COUNT_REGION: Box = (760, 40, 1060, 90)
+ENEMY_COUNT_PATTERN = r'还剩\s*(\d+)\s*名'
