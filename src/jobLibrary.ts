@@ -1,3 +1,4 @@
+import { invoke, isTauri } from './tauri';
 import type { HugoFgoJob, Servant } from './types';
 
 export interface SavedJobEntry {
@@ -5,6 +6,10 @@ export interface SavedJobEntry {
   savedAt: number;
   job: HugoFgoJob;
 }
+
+export const jobLibraryReadOnly = !isTauri;
+
+const readOnlyMessage = '浏览器预览为只读，作业库需要桌面版。请用 npm run tauri dev 打开桌面窗口。';
 
 /** 作业以首发三名队员命名；空位不参与命名。 */
 export function jobNameForMembers(members: Servant[]): string {
@@ -16,19 +21,21 @@ export function jobNameForMembers(members: Servant[]): string {
 }
 
 export async function listSavedJobs(): Promise<SavedJobEntry[]> {
-  const response = await fetch('/api/jobs');
-  if (!response.ok) throw new Error(`读取作业文件夹失败（HTTP ${response.status}）`);
-  const data = (await response.json()) as { jobs?: SavedJobEntry[] };
-  return data.jobs ?? [];
+  if (!isTauri) return [];
+  return invoke<SavedJobEntry[]>('list_jobs');
+}
+
+export async function readJobFromLibrary(file: string): Promise<HugoFgoJob> {
+  if (!isTauri) throw new Error(readOnlyMessage);
+  return invoke<HugoFgoJob>('read_job', { file });
 }
 
 export async function saveJobToLibrary(job: HugoFgoJob, name: string): Promise<{ file: string; savedAt: number }> {
-  const response = await fetch('/api/jobs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, job }),
-  });
-  const data = (await response.json().catch(() => ({}))) as { file?: string; savedAt?: number; error?: string };
-  if (!response.ok) throw new Error(data.error || `写入作业文件夹失败（HTTP ${response.status}）`);
-  return { file: data.file ?? `${name}.json`, savedAt: data.savedAt ?? Date.now() };
+  if (!isTauri) throw new Error(readOnlyMessage);
+  return invoke<{ file: string; savedAt: number }>('save_job', { name, job });
+}
+
+export async function deleteJobFromLibrary(file: string): Promise<void> {
+  if (!isTauri) throw new Error(readOnlyMessage);
+  return invoke<void>('delete_job', { file });
 }

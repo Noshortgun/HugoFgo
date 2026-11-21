@@ -11,11 +11,13 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 export function createVerificationSteps(pythonCommand) {
   return [
     { name: 'frontend-build', command: npm, args: ['run', 'build'] },
+    { name: 'run-state', command: process.execPath, args: [path.join(root, 'scripts/run-state.selftest.mjs')] },
     { name: 'executor-unit', command: pythonCommand,
       args: ['-m', 'unittest', 'discover', '-s', 'executor', '-t', '.', '-v'] },
     { name: 'device-selftest', command: pythonCommand, args: ['-m', 'executor.device', '--self-test'] },
     { name: 'fixtures', command: process.execPath, args: [path.join(root, 'scripts/check-perception-fixtures.mjs')] },
     { name: 'resources-selftest', command: process.execPath, args: [path.join(root, 'scripts/resources.mjs'), 'self-test'] },
+    { name: 'desktop-selftest', command: process.execPath, args: [path.join(root, 'scripts/desktop-package.selftest.mjs')] },
     { name: 'replay', command: npm, args: ['run', 'replay'] },
     { name: 'issues-selftest', command: npm, args: ['run', 'issues:selftest'] },
   ];

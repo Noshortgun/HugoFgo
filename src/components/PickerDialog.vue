@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import type { MysticCode, Servant } from '../types';
 import { favoriteServantKeys, isFavoriteServant, servantPreferenceKey, toggleFavoriteServant } from '../preferences';
+import { resourceUrl } from '../resources';
 import AppIcon from './AppIcon.vue';
 
 const props = defineProps<{ type: 'servant' | 'ce' | 'mystic'; servants: Servant[]; mysticCodes: MysticCode[]; slot?: number }>();
@@ -12,6 +13,7 @@ const title = computed(() => props.type === 'servant' ? '选择从者' : props.t
 const classOrder = ['Saber', 'Archer', 'Lancer', 'Rider', 'Caster', 'Assassin', 'Berserker', 'Ruler', 'Avenger', 'Moon Cancer', 'Alter Ego', 'Foreigner', 'Pretender', 'Shielder', 'Beast'];
 const classIconIds: Record<string, number> = { Saber: 1, Archer: 2, Lancer: 3, Rider: 4, Caster: 5, Assassin: 6, Berserker: 7, Shielder: 8, Ruler: 9, 'Alter Ego': 10, Avenger: 11, 'Moon Cancer': 23, Foreigner: 25, Pretender: 28, Beast: 33 };
 const classes = computed(() => classOrder.filter((role) => props.servants.some((servant) => servant.role === role)));
+const classIcon = (role: string) => resourceUrl(`assets/classes/${classIconIds[role]}.png`);
 const visibleServants = computed(() => props.servants
   .filter((item) => (classFilter.value === '全部' || item.role === classFilter.value) && item.name.includes(search.value.trim()))
   .sort((left, right) => Number(isFavoriteServant(right)) - Number(isFavoriteServant(left)) || left.name.localeCompare(right.name, 'zh-CN')));
@@ -26,7 +28,7 @@ const visibleServants = computed(() => props.servants
         <div class="servant-picker-tools">
           <div class="servant-class-filter" aria-label="职阶筛选">
             <button :class="{ active: classFilter === '全部' }" @click="classFilter = '全部'">全部</button>
-            <button v-for="role in classes" :key="role" class="class-icon-button" :class="{ active: classFilter === role }" :title="role" :aria-label="`筛选${role}`" @click="classFilter = role"><img :src="`/assets/classes/${classIconIds[role]}.png`" :alt="role" /></button>
+            <button v-for="role in classes" :key="role" class="class-icon-button" :class="{ active: classFilter === role }" :title="role" :aria-label="`筛选${role}`" @click="classFilter = role"><img :src="classIcon(role)" :alt="role" /></button>
           </div>
           <span>{{ favoriteServantKeys.length }} 位中意 · {{ visibleServants.length }} 位结果</span>
         </div>
@@ -34,6 +36,7 @@ const visibleServants = computed(() => props.servants
           <article v-for="servant in visibleServants" :key="servantPreferenceKey(servant)" class="servant-picker-card">
             <button class="servant-select" @click="emit('servant', props.slot || 0, servant)">
               <img v-if="servant.image" :src="servant.image" :alt="servant.name" />
+              <span v-else class="servant-picker-placeholder"><AppIcon name="cards" :size="24" /></span>
               <strong>{{ servant.name }}</strong>
               <small>{{ servant.role }}</small>
             </button>

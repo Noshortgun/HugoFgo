@@ -4,7 +4,7 @@ import type { FallbackStrategy, MysticCode, Servant } from '../types';
 import { ascensionOptionsFor } from '../job';
 import AppIcon from './AppIcon.vue';
 
-const props = defineProps<{ members: Servant[]; mystic: MysticCode; fallback: FallbackStrategy; gender: 'female' | 'male' }>();
+const props = withDefaults(defineProps<{ members: Servant[]; mystic: MysticCode; fallback: FallbackStrategy; gender: 'female' | 'male'; startDisabled?: boolean; startDisabledReason?: string; startLabel?: string; galleryEmpty?: boolean; resourceRegion?: string }>(), { startDisabled: false, startDisabledReason: '', startLabel: '开始', galleryEmpty: false, resourceRegion: 'CN' });
 const emit = defineEmits<{
   picker: [type: 'servant' | 'ce' | 'mystic', slot?: number];
   plan: [];
@@ -66,7 +66,7 @@ function dropApple(key: AppleKey) {
     </header>
 
     <section class="formation-area">
-      <div class="formation-topline"><div><span class="formation-kicker">PARTY FORMATION</span><strong>出战编队</strong></div><div class="party-cost"><span>编队 COST</span><strong>112 <small>/ 117</small></strong></div></div>
+      <div class="formation-topline"><div><span class="formation-kicker">PARTY FORMATION</span><strong>出战编队</strong></div><div v-if="props.galleryEmpty" class="empty-gallery-prompt"><span>{{ props.resourceRegion }} 图库为空，当前使用占位卡</span><button @click="emit('utility', 'settings')">选择区服并下载</button></div><div class="party-cost"><span>编队 COST</span><strong>112 <small>/ 117</small></strong></div></div>
       <div class="game-formation-grid">
         <article v-for="(member, index) in props.members" :key="member.memberInstanceId" class="game-member" :class="{ support: member.support, grand: member.grandRequired, back: index >= 3, empty: member.empty, placeholder: member.placeholder }" draggable="true" @dragstart="draggingMember = index" @dragover.prevent @drop="dropMember(index)">
           <button v-if="!member.empty && (!member.support || member.supportRequired)" class="member-delete" :title="`删除第 ${index + 1} 位从者`" @click.stop="emit('remove', index)"><AppIcon name="close" :size="13" /></button>
@@ -103,7 +103,7 @@ function dropApple(key: AppleKey) {
       <div class="master-actions"><div class="master-action-label"><span>御主技能</span></div><div class="master-skill-row"><button v-for="(skill, index) in props.mystic.skills" :key="index" :title="`御主技能 ${index + 1}`"><img :src="props.mystic.skillIconUrls?.[index] || `/assets/skills/${skill}.png`" :alt="`御主技能${index + 1}`" /><span>{{ index + 1 }}</span></button></div><p class="master-skill-note">在操作序列中编入技能</p></div>
     </section>
 
-    <div class="start-zone"><div class="start-ring"></div><button class="game-start-button" @click="emit('start')"><span>开始</span><small>START</small></button><p>开始前检测编队 · 不自动修改游戏编队</p></div>
+    <div class="start-zone"><div class="start-ring"></div><button class="game-start-button" :disabled="props.startDisabled" :title="props.startDisabledReason || '开始运行当前作业'" @click="emit('start')"><span>{{ props.startLabel }}</span><small>START</small></button><p v-if="props.startDisabledReason" class="start-disabled-reason">{{ props.startDisabledReason }}</p><p v-else>开始前检测编队 · 不自动修改游戏编队</p></div>
     <div class="game-version">HUGOFGO · PROTOTYPE 0.5</div>
   </main>
 </template>

@@ -6,34 +6,37 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assetCategoryGaps, buildAssetJobs, countAssetCategories } from './asset-jobs.mjs';
+import { migrateLegacyData } from './resource-migrate.mjs';
+import { metadataSource, readJsonOr } from './resource-utils.mjs';
+import { parseRegion, resourcePaths } from './resource-paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const manifestPath = path.join(root, 'data/resource-manifest.json');
+const paths = resourcePaths(root);
+const { region, absolute, relative } = paths;
+const manifestPath = absolute(`data/${region}/resource-manifest.json`);
 const api = 'https://api.atlasacademy.io';
 const infoUrl = `${api}/info`;
 const rawDefinitions = [
-  { key: 'servants', file: 'data/atlas-nice-cn.json', url: `${api}/nice/CN/servant/search` },
-  { key: 'basic', file: 'data/atlas-basic-cn.json', url: `${api}/basic/CN/servant/search` },
-  { key: 'equips', file: 'data/atlas-equip-cn.json', url: 'https://github.com/AtlasAcademy/chaldea-data/tree/main/dist' },
-  { key: 'mystics', file: 'data/atlas-mystic-cn.json', url: `${api}/nice/CN/MC/{id}` },
+  { key: 'servants', file: `data/${region}/atlas-nice-cn.json`, url: `${api}/nice/${region}/servant/search` },
+  { key: 'basic', file: `data/${region}/atlas-basic-cn.json`, url: `${api}/basic/${region}/servant/search` },
+  { key: 'equips', file: `data/${region}/atlas-equip-cn.json`, url: 'https://github.com/AtlasAcademy/chaldea-data/tree/main/dist' },
+  { key: 'mystics', file: `data/${region}/atlas-mystic-cn.json`, url: `${api}/nice/${region}/MC/{id}` },
 ];
 const generatedFiles = [
-  'data/servants-by-id.json',
-  'data/equips.json',
-  'data/equips-by-id.json',
-  'data/assets/atlas/index.json',
-  'data/assets/atlas/mystic/index.json',
+  `data/${region}/servants-by-id.json`,
+  `data/${region}/equips.json`,
+  `data/${region}/equips-by-id.json`,
+  `data/${region}/assets/atlas/index.json`,
+  `data/${region}/assets/atlas/mystic/index.json`,
 ];
 
-const readJson = (file) => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
-const relative = (file) => path.relative(root, file).split(path.sep).join('/');
-const absolute = (file) => path.join(root, file);
+const readJson = (file) => JSON.parse(fs.readFileSync(absolute(file), 'utf8'));
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 const hashFile = (file) => sha256(fs.readFileSync(file));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function readManifest() {
-  return fs.existsSync(manifestPath) ? readJson('data/resource-manifest.json') : null;
+  return fs.existsSync(manifestPath) ? readJson(relative(manifestPath)) : null;
 }
 
 async function fetchBuffer(url, attempt = 1) {
@@ -66,7 +69,7 @@ function atomicWrite(file, data) {
 }
 
 async function fetchMysticCodes() {
-  const current = fs.existsSync(absolute('data/atlas-mystic-cn.json')) ? readJson('data/atlas-mystic-cn.json') : [];
+  const current = fs.existsSync(absolute(`data/${region}/atlas-mystic-cn.json`)) ? readJson(`data/${region}/atlas-mystic-cn.json`) : [];
   // 日常 check 不探测 ID；只有版本变化时才按现有编号规则检查新御主礼装。
   const ids = [...new Set([1, ...Array.from({ length: 50 }, (_, index) => (index + 1) * 10), ...current.map((code) => code.id)])];
   const result = [];
@@ -74,7 +77,7 @@ async function fetchMysticCodes() {
   await Promise.all(Array.from({ length: 6 }, async () => {
     while (next < ids.length) {
       const id = ids[next++];
-      const response = await fetch(`${api}/nice/CN/MC/${id}`);
+      const response = await fetch(`${api}/nice/${region}/MC/${id}`);
       if (response.status === 404) continue;
       if (!response.ok) throw new Error(`御主礼装 ${id}：HTTP ${response.status}`);
       result.push(await response.json());
@@ -84,7 +87,7 @@ async function fetchMysticCodes() {
 }
 
 async function fetchEquipData() {
-  const current = readJson('data/atlas-equip-cn.json');
+  const current = readJsonOr(absolute(`data/${region}/atlas-equip-cn.json`), []);
   const catalogParts = await Promise.all([1, 2, 3, 4].map((part) => fetchJson(`https://raw.githubusercontent.com/AtlasAcademy/chaldea-data/main/dist/craftEssences.${part}.json`)));
   const fullRefresh = process.argv.includes('--refresh-metadata');
   const known = new Set(current.map((equip) => equip.id));
@@ -97,7 +100,7 @@ async function fetchEquipData() {
   await Promise.all(Array.from({ length: 8 }, async () => {
     while (next < ids.length) {
       const id = ids[next++];
-      const response = await fetch(`${api}/nice/CN/equip/${id}`);
+      const response = await fetch(`${api}/nice/${region}/equip/${id}`);
       if (response.status === 404) continue;
       if (!response.ok) throw new Error(`礼装 ${id}：HTTP ${response.status}`);
       fetched.push(await response.json());
@@ -111,12 +114,12 @@ async function fetchEquipData() {
 
 async function fetchServantData(kind) {
   const catalogParts = await Promise.all([1, 2, 3, 4].map((part) => fetchJson(`https://raw.githubusercontent.com/AtlasAcademy/chaldea-data/main/dist/servants.${part}.json`)));
-  const local = readJson('data/atlas-basic-cn.json');
+  const local = readJsonOr(absolute(`data/${region}/atlas-basic-cn.json`), []);
   const classes = [...new Set([...catalogParts.flat(), ...local].map((servant) => servant.className).filter(Boolean))];
-  const groups = await Promise.all(classes.map((className) => fetchJson(`${api}/${kind}/CN/servant/search?className=${className}&excludeCollectionNo=0`)));
+  const groups = await Promise.all(classes.map((className) => fetchJson(`${api}/${kind}/${region}/servant/search?className=${className}&excludeCollectionNo=0`)));
   const found = new Map(groups.flat().map((servant) => [servant.id, servant]));
   const missing = local.filter((servant) => !found.has(servant.id));
-  await Promise.all(missing.map(async (servant) => found.set(servant.id, await fetchJson(`${api}/${kind}/CN/servant/${servant.id}`))));
+  await Promise.all(missing.map(async (servant) => found.set(servant.id, await fetchJson(`${api}/${kind}/${region}/servant/${servant.id}`))));
   return [...found.values()].sort((left, right) => left.id - right.id);
 }
 
@@ -138,10 +141,10 @@ async function refreshRawData() {
 
 function currentRawData() {
   return {
-    servants: readJson('data/atlas-nice-cn.json'),
-    basic: readJson('data/atlas-basic-cn.json'),
-    equips: readJson('data/atlas-equip-cn.json'),
-    mystics: readJson('data/atlas-mystic-cn.json'),
+    servants: readJsonOr(absolute(`data/${region}/atlas-nice-cn.json`), []),
+    basic: readJsonOr(absolute(`data/${region}/atlas-basic-cn.json`), []),
+    equips: readJsonOr(absolute(`data/${region}/atlas-equip-cn.json`), []),
+    mystics: readJsonOr(absolute(`data/${region}/atlas-mystic-cn.json`), []),
   };
 }
 
@@ -151,7 +154,11 @@ function plannedAssetJobs(raw) {
 
 function regenerateIndexes() {
   for (const script of ['download-servant-assets.mjs', 'download-equip-assets.mjs', 'download-mystic-assets.mjs']) {
-    const result = spawnSync(process.execPath, [path.join(root, 'scripts', script)], { cwd: root, stdio: 'inherit' });
+    const result = spawnSync(process.execPath, [path.join(root, 'scripts', script), '--region', region], {
+      cwd: root,
+      env: { ...process.env, HUGOFGO_DATA_ROOT: paths.dataRoot },
+      stdio: 'inherit',
+    });
     if (result.status !== 0) throw new Error(`${script} 执行失败`);
   }
 }
@@ -186,9 +193,9 @@ function writeManifest(info, raw, jobs) {
   }
   const manifest = {
     schemaVersion: 1,
-    region: 'CN',
+    region,
     source: api,
-    version: info.CN,
+    version: info[region],
     updatedAt: new Date().toISOString(),
     counts: {
       servants: raw.servants.length,
@@ -227,17 +234,19 @@ async function check() {
   const manifest = readManifest();
   const info = await fetchJson(infoUrl);
   if (!manifest) {
-    console.log(`远端 CN：${info.CN.hash}；本地尚未建立资源清单，请运行 npm run resources:update`);
+    console.log(`远端 ${region}：${info[region].hash}；本地尚未建立资源清单，请运行 npm run resources:update -- --region ${region}`);
     return;
   }
-  const latest = manifest.version.hash === info.CN.hash;
-  console.log(latest ? `已是最新：${info.CN.hash}` : `发现更新：${manifest.version.hash} → ${info.CN.hash}`);
-  console.log(`本地清单：${manifest.counts.files} 个文件；远端版本时间：${new Date(info.CN.timestamp * 1000).toISOString()}`);
+  const remote = info[region];
+  const latest = manifest.version.hash === remote.hash;
+  console.log(`远端 ${region}：${remote.hash}`);
+  console.log(latest ? `已是最新：${remote.hash}` : `发现更新：${manifest.version.hash} → ${remote.hash}`);
+  console.log(`本地清单：${manifest.counts.files} 个文件；远端版本时间：${new Date(remote.timestamp * 1000).toISOString()}`);
 }
 
 async function verify() {
   const manifest = readManifest();
-  if (!manifest) throw new Error('尚未建立资源清单，请先运行 npm run resources:update');
+  if (!manifest) throw new Error(`尚未建立 ${region} 资源清单，请先运行 npm run resources:update -- --region ${region}`);
   const invalid = verifyManifest(manifest);
   if (invalid.length) {
     console.error(`校验失败：${invalid.length} 个文件`);
@@ -274,7 +283,7 @@ async function update() {
   const rawInvalid = invalid.some((item) => rawDefinitions.some((definition) => definition.file === item.file));
   const info = await fetchJson(infoUrl);
   const forceMetadata = process.argv.includes('--refresh-metadata');
-  const changed = forceMetadata || !previous || previous.version.hash !== info.CN.hash || rawInvalid;
+  const changed = forceMetadata || !previous || previous.version.hash !== info[region].hash || rawInvalid;
   const raw = changed ? await refreshRawData() : currentRawData();
   if (!previous) console.log('首次建立清单：URL 未变化的已有文件会直接纳入，后续可检测本地损坏。');
 
@@ -324,9 +333,34 @@ if (command === 'self-test') {
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: hashFile(absolute('data/name-overrides.json')) } } }).length, 0);
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: 'broken' } } }).length, 1);
   assert.equal(verifyManifest({ files: { 'data/not-published.png': { remoteUnavailable: true } } }).length, 0);
+  assert.deepEqual(readJsonOr(path.join(root, '.scratch', 'missing-raw-metadata.json'), []), []);
+  const seedRoot = path.join(root, '.scratch', 'resource-bootstrap-test');
+  fs.rmSync(seedRoot, { recursive: true, force: true });
+  fs.mkdirSync(path.join(seedRoot, 'seed', 'CN'), { recursive: true });
+  fs.writeFileSync(path.join(seedRoot, 'seed', 'CN', 'servants.json'), '[]');
+  assert.equal(metadataSource(seedRoot, 'CN', 'servants.json', {}), path.join(seedRoot, 'seed', 'CN', 'servants.json'));
+  fs.mkdirSync(path.join(seedRoot, 'user-data', 'CN'), { recursive: true });
+  fs.writeFileSync(path.join(seedRoot, 'user-data', 'CN', 'servants.json'), '[]');
+  assert.equal(metadataSource(seedRoot, 'CN', 'servants.json', { HUGOFGO_DATA_ROOT: path.join(seedRoot, 'user-data') }), path.join(seedRoot, 'user-data', 'CN', 'servants.json'));
+  fs.rmSync(seedRoot, { recursive: true, force: true });
+  assert.equal(parseRegion(['verify']), 'CN');
+  assert.equal(parseRegion(['verify', '--region', 'JP']), 'JP');
+  assert.throws(() => parseRegion(['verify', '--region', '../CN']));
+  const testRoot = path.join(root, '.scratch', 'resource-paths-test');
+  const testPaths = resourcePaths(root, { argv: ['verify', '--region', 'TW'], env: { HUGOFGO_DATA_ROOT: testRoot } });
+  assert.equal(testPaths.regionRoot, path.join(testRoot, 'TW'));
+  assert.equal(testPaths.absolute('data/assets/atlas/index.json'), path.join(testRoot, 'TW', 'assets/atlas/index.json'));
+  assert.equal(testPaths.webPath('assets/atlas/index.json'), '/data/TW/assets/atlas/index.json');
   console.log('资源管理器自检通过');
-} else if (command === 'check') await check();
-else if (command === 'update') await update();
-else if (command === 'verify') await verify();
+} else if (command === 'check') {
+  migrateLegacyData(paths);
+  await check();
+} else if (command === 'update') {
+  migrateLegacyData(paths);
+  await update();
+} else if (command === 'verify') {
+  migrateLegacyData(paths);
+  await verify();
+}
 else if (command === 'contract') contract();
 else throw new Error(`未知命令：${command}；可用 check / update / verify / contract / self-test`);

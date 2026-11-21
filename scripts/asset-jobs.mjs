@@ -75,7 +75,7 @@ export function buildAssetJobs(raw) {
     }
   }
   for (const id of CLASS_ICON_IDS) {
-    const job = assetJob('classes', `https://static.atlasacademy.io/CN/ClassIcons/class3_${id}.png`, `public/assets/classes/${id}.png`);
+    const job = assetJob('classes', 'https://static.atlasacademy.io/CN/ClassIcons/class3_' + id + '.png', `data/assets/classes/${id}.png`);
     if (job) jobs.set(job.file, job);
   }
   return [...jobs.values()];

@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { fetchResourceJson, resourceRegion, resourceUrl, type Region } from './resources';
 import type { MysticCode, SkillSecondarySelection, SkillTarget } from './types';
 
 export interface AtlasSkill {
@@ -38,9 +39,11 @@ export interface AtlasServant {
 export const atlasByServantName = ref<Map<string, AtlasServant>>(new Map());
 export const atlasServants = ref<AtlasServant[]>([]);
 export const atlasMysticCodes = ref<MysticCode[]>([]);
-const byNameAndClass = new Map<string, AtlasServant>();
-const byId = new Map<number, AtlasServant>();
-let started = false;
+let byNameAndClass = new Map<string, AtlasServant>();
+let byId = new Map<number, AtlasServant>();
+let loadedRegion: Region | null = null;
+let loading: Promise<void> | null = null;
+let loadingRegion: Region | null = null;
 
 interface AtlasMystic {
   id: number;
@@ -53,15 +56,36 @@ interface AtlasMystic {
   orderChangeSkill?: number;
 }
 
+function mapUrl(url: string | null | undefined) {
+  return url ? resourceUrl(url) : url ?? null;
+}
+
+function mapServant(servant: AtlasServant): AtlasServant {
+  return {
+    ...servant,
+    face: mapUrl(servant.face),
+    card: mapUrl(servant.card),
+    ascensionAssets: servant.ascensionAssets
+      ? Object.fromEntries(
+          Object.entries(servant.ascensionAssets).map(([stage, assets]) => [
+            stage,
+            { face: mapUrl(assets.face), card: mapUrl(assets.card) },
+          ]),
+        )
+      : undefined,
+    skills: servant.skills.map((skill) => ({ ...skill, icon: mapUrl(skill.icon) })),
+  };
+}
+
 function toMysticCode(code: AtlasMystic): MysticCode {
-  const icons = code.skills.map((skill) => skill.icon ?? '');
+  const icons = code.skills.map((skill) => mapUrl(skill.icon) ?? '');
   return {
     id: `atlas-${code.id}`,
     name: code.name,
-    figure: code.figure ?? code.item ?? '',
-    maleFigure: code.maleFigure ?? code.figure ?? code.item ?? '',
-    item: code.item ?? '',
-    maleItem: code.maleItem ?? code.item ?? '',
+    figure: mapUrl(code.figure ?? code.item) ?? '',
+    maleFigure: mapUrl(code.maleFigure ?? code.figure ?? code.item) ?? '',
+    item: mapUrl(code.item) ?? '',
+    maleItem: mapUrl(code.maleItem ?? code.item) ?? '',
     skills: code.skills.map(() => 'skill_00400'),
     skillIconUrls: icons,
     skillTargets: code.skills.map((skill) => skill.target ?? 'allAllies'),
@@ -82,30 +106,39 @@ export function lookupAtlasById(id?: number): AtlasServant | undefined {
   return id === undefined ? undefined : byId.get(id);
 }
 
-export async function loadAtlas() {
-  if (started) return;
-  started = true;
-  try {
-    const response = await fetch('/data/assets/atlas/index.json');
-    if (!response.ok) return;
-    const data = (await response.json()) as { servants: AtlasServant[] };
-    const map = new Map<string, AtlasServant>();
-    data.servants.forEach((servant) => {
-      if (!map.has(servant.name)) map.set(servant.name, servant);
-      byNameAndClass.set(`${servant.name}|${servant.classLabel}`, servant);
-      byId.set(servant.id, servant);
-    });
-    atlasByServantName.value = map;
-    atlasServants.value = data.servants;
-  } catch {
-    // 分享版不包含图库，忽略即可。
-  }
-  try {
-    const response = await fetch('/data/assets/atlas/mystic/index.json');
-    if (!response.ok) return;
-    const data = (await response.json()) as { mysticCodes: AtlasMystic[] };
-    atlasMysticCodes.value = data.mysticCodes.filter((code) => code.figure || code.item).map(toMysticCode);
-  } catch {
-    // 同上。
-  }
+export async function loadAtlas(region: Region = resourceRegion.value, force = false): Promise<void> {
+  if (!force && loadedRegion === region) return;
+  if (loading && loadingRegion === region) return loading;
+  loadedRegion = null;
+  loadingRegion = region;
+  loading = (async () => {
+    try {
+      const data = await fetchResourceJson<{ servants: AtlasServant[] }>('assets/atlas/index.json');
+      const map = new Map<string, AtlasServant>();
+      byNameAndClass = new Map();
+      byId = new Map();
+      const servants = data.servants.map(mapServant);
+      servants.forEach((servant) => {
+        if (!map.has(servant.name)) map.set(servant.name, servant);
+        byNameAndClass.set(`${servant.name}|${servant.classLabel}`, servant);
+        byId.set(servant.id, servant);
+      });
+      atlasByServantName.value = map;
+      atlasServants.value = servants;
+      loadedRegion = region;
+    } catch {
+      atlasByServantName.value = new Map();
+      atlasServants.value = [];
+    }
+    try {
+      const data = await fetchResourceJson<{ mysticCodes: AtlasMystic[] }>('assets/atlas/mystic/index.json');
+      atlasMysticCodes.value = data.mysticCodes.filter((code) => code.figure || code.item).map(toMysticCode);
+    } catch {
+      atlasMysticCodes.value = [];
+    } finally {
+      loading = null;
+      loadingRegion = null;
+    }
+  })();
+  return loading;
 }

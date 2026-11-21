@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,12 +26,18 @@ class CommandTemplate:
     descriptors: np.ndarray
 
 
+def default_identity_root() -> Path:
+    configured = os.environ.get('HUGOFGO_DATA_ROOT', '').strip()
+    root = Path(configured) if configured else cn.PROJECT_ROOT / 'data'
+    return root / os.environ.get('HUGOFGO_REGION', 'CN')
+
+
 class IdentityMatcher:
     _catalog_cache: dict[tuple[str, str, frozenset[int] | None], list[IdentityTemplate]] = {}
     _command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
-        self._root = root or cn.PROJECT_ROOT / 'data'
+        self._root = root or default_identity_root()
         self._servants = self._metadata('servants-by-id.json')
         self._equips = self._metadata('equips-by-id.json')
         self._face_templates: list[IdentityTemplate] | None = None
