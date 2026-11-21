@@ -17,6 +17,7 @@ from executor.session.evidence import RunEvidence
 
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
+    Overlay.CLASS_INFO,
     Overlay.SUPPORT_PARTY_CONFIRM,
     Overlay.MASTER_EQUIPMENT,
     Overlay.SUPPORT_CONFIRM,
@@ -583,6 +584,7 @@ class Runner:
     def incidental_control(self, observation: Observation) -> tuple[Overlay, str] | None:
         for overlay, name in (
             (Overlay.FRIEND_REQUEST, '结束'),
+            (Overlay.CLASS_INFO, '关闭'),
             (Overlay.SUPPORT_PARTY_CONFIRM, '关闭'),
             (Overlay.MASTER_EQUIPMENT, '关闭'),
         ):

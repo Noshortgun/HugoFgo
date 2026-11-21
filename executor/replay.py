@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Callable
 
 from executor.core import RunOptions, RunStatus, run
+from executor.core.ap_policy import RecoveryPolicy
 from executor.core.model import RunResult
+from executor.core.smoke import ConfirmedStartPerception
 from executor.device import FakeDevice
 from executor.device.base import Frame
-from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                              TurnPlan, WavePlan)
 from executor.perception import Observation, Perception
 from executor.session import MemoryEventSink, RunEvent
@@ -37,6 +39,9 @@ class ReplayCase:
     options: RunOptions = field(default_factory=lambda: RunOptions(write_evidence=False))
     completed_runs: int = 1
     evidence: bool = False
+    confirmed_start: tuple[int, int] | None = None
+    suppress_controls: tuple[str, ...] = ()
+    fresh_hashes: bool = True
 
 
 @dataclass
@@ -64,9 +69,12 @@ class ReplayReport:
 
 
 class ReplayPerception:
-    def __init__(self, perception: Perception, trace: list[dict]) -> None:
+    def __init__(self, perception: Perception, trace: list[dict], *,
+                 suppress_controls: tuple[str, ...] = (), fresh_hashes: bool = True) -> None:
         self.perception = perception
         self.trace = trace
+        self.suppress_controls = frozenset(suppress_controls)
+        self.fresh_hashes = fresh_hashes
         self.observations: list[Observation] = []
         self.capture = 0
         self.hashes: dict[str, str] = {}
@@ -75,8 +83,12 @@ class ReplayPerception:
         self.perception.bind_formation(formation)
 
     def _record(self, observation: Observation) -> Observation:
+        if self.suppress_controls:
+            observation = replace(observation, controls=tuple(
+                control for control in observation.controls if control.name not in self.suppress_controls))
         self.capture += 1
-        capture_hash = f'{observation.frame_hash}:capture-{self.capture}'
+        capture_hash = (f'{observation.frame_hash}:capture-{self.capture}' if self.fresh_hashes
+                        else observation.frame_hash)
         self.hashes[observation.frame_hash] = capture_hash
         observed = replace(observation, frame_hash=capture_hash)
         self.observations.append(observed)
@@ -117,6 +129,13 @@ def replay_plan() -> ExecutionPlan:
     )
     return ExecutionPlan(mystic_id='default', enemy_count=1,
                          waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
+
+
+def skill_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+    turn = replace(plan.waves[0].turns[0], actions=(skill,))
+    return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
 
 
 def load_frames(case: ReplayCase) -> list[Frame]:
@@ -173,7 +192,10 @@ def run_case(case: ReplayCase, output: str | Path) -> ReplayReport:
     trace: list[dict] = []
     device = FakeDevice(load_frames(case))
     perception = Perception()
-    observed = ReplayPerception(perception, trace)
+    reader = (ConfirmedStartPerception(perception, *case.confirmed_start)
+              if case.confirmed_start is not None else perception)
+    observed = ReplayPerception(reader, trace, suppress_controls=case.suppress_controls,
+                                fresh_hashes=case.fresh_hashes)
     events = ReplayEvents(trace)
     run_dir = Path(output) / case.name
     options = replace(case.options, run_dir=str(run_dir), write_evidence=True)
@@ -198,6 +220,7 @@ CASES = (
             FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
             FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
             FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
@@ -207,6 +230,256 @@ CASES = (
                  '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('state_changed', 'action', 'action', 'action', 'finished'),
+    ),
+    ReplayCase(
+        name='stale-result-frame',
+        frames=(
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 31.5),
+        actions=('结算推进',),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('result', 'unknown'),
+        event_types=('action', 'warning', 'failed'),
+        completed_runs=0,
+        fresh_hashes=False,
+    ),
+    ReplayCase(
+        name='skill-action-loop',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            FULL_LOOP + '12-battle-start.png',
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            'captures/2026-11-19-ember/key/05-skill.png',
+            FULL_LOOP + 'battle-after-cards.png', FULL_LOOP + 'battle-after-cards.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('助战卡片第2行', '开始任务', '从者1技能1', '攻击', '卡1', '卡2', '卡4',
+                 '结算推进', '结算推进', '下一步'),
+        states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
+        event_types=('action', 'action', 'action', 'action', 'finished'),
+        plan_factory=skill_plan,
+    ),
+    ReplayCase(
+        name='drops-fallback',
+        frames=(
+            'captures/2026-11-19-ember/key/14-drops.png',
+            'captures/2026-11-19-ember/key/14-drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('下一步',),
+        states=('drops', 'battle'),
+        event_types=('action', 'finished'),
+        suppress_controls=('下一步',),
+    ),
+    ReplayCase(
+        name='support-search-refresh',
+        frames=(
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
+            FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 35.0),
+        actions=('助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='repeat-two-runs',
+        frames=(
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('结算推进', '结算推进', '下一步', '连续出击', '开始任务', '攻击',
+                 '卡1', '卡2', '卡4', '结算推进', '结算推进', '下一步'),
+        states=('result', 'drops', 'battle', 'team', 'battle', 'card', 'result', 'drops', 'battle'),
+        event_types=('action', 'action', 'action', 'action', 'action', 'finished'),
+        options=RunOptions(run_count=2, write_evidence=False),
+        completed_runs=2,
+    ),
+    ReplayCase(
+        name='ap-drain-complete',
+        frames=(
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'ap-recovery-bronze.png',
+        ),
+        actions=('下一步', '连续出击'),
+        reason='ap_drained',
+        states=('drops', 'battle', 'ap_recovery'),
+        event_types=('action', 'drain_started', 'action', 'finished'),
+        options=RunOptions(recovery=RecoveryPolicy(drain_after_turns=True), write_evidence=False),
+    ),
+    ReplayCase(
+        name='ap-default-bronze',
+        frames=(
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 2.0, 32.0),
+        actions=('青铜果实',),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('ap_recovery', 'team', 'unknown'),
+        event_types=('action', 'recovery_used', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='ap-scroll-bronze',
+        frames=(
+            FULL_LOOP + 'ap-recovery.png', FULL_LOOP + 'ap-recovery.png',
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 32.5),
+        actions=('AP 恢复列表向下', '青铜果实'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('ap_recovery', 'team', 'unknown'),
+        event_types=('action', 'action', 'recovery_used', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='ap-empty-whitelist',
+        frames=(FULL_LOOP + 'ap-recovery-bronze.png',),
+        actions=(),
+        status=RunStatus.STOPPED,
+        reason='ap_recovery',
+        states=('ap_recovery',),
+        event_types=('state_changed', 'failed'),
+        options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset()), write_evidence=False),
+        completed_runs=0,
+        evidence=True,
+    ),
+    ReplayCase(
+        name='grand-page-recovery',
+        frames=(
+            'captures/2026-11-19-ember/34-grand-support-confirm.png',
+            'captures/2026-11-19-ember/34-grand-support-confirm.png',
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
+        actions=('关闭', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='friend-request-recovery',
+        frames=(
+            'captures/2026-11-21/key/friend-request.png',
+            'captures/2026-11-21/key/friend-request.png',
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
+        actions=('结束', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='class-info-recovery',
+        frames=(
+            FULL_LOOP + '09-class-filter.png', FULL_LOOP + '09-class-filter.png',
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
+        actions=('关闭', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='resume-support-unknown',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
+        actions=('助战卡片第2行', '开始任务'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'team', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+        evidence=True,
+    ),
+    ReplayCase(
+        name='resume-battle',
+        frames=(
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
+            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('攻击', '卡1', '卡2', '卡4', '结算推进', '结算推进', '下一步'),
+        states=('battle', 'card', 'result', 'drops', 'battle'),
+        event_types=('state_changed', 'action', 'finished'),
+        confirmed_start=(1, 1),
+    ),
+    ReplayCase(
+        name='resume-result',
+        frames=(
+            FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
+            FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png',
+        ),
+        actions=('结算推进', '结算推进', '下一步'),
+        states=('result', 'drops', 'battle'),
+        event_types=('action', 'action', 'action', 'finished'),
     ),
 )
 
