@@ -68,9 +68,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'src-tauri/tauri.conf.json'), 'utf8'));
   validateDesktopConfig(config, root);
-  await prepareNode(root);
-  if (!process.argv.includes('--prepare-only')) {
-    run(root, ['run', 'build']);
+  if (process.argv.includes('--prepare-only')) {
+    await prepareNode(root);
+  } else {
     run(root, ['run', 'replay']);
     run(root, ['run', 'tauri', 'build']);
   }
