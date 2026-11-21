@@ -522,6 +522,8 @@ class Runner:
     def handle_result(self, observation: Observation, now: float) -> None:
         if self.tap_stable(observation, '结算推进', now):
             self.wait_for_pages(now, BasePage.RESULT, BasePage.DROPS)
+        elif self.fallback_tap(observation, now, '结算推进', 1130, 660, 'result_fallback'):
+            self.wait_for_pages(now, BasePage.RESULT, BasePage.DROPS)
 
     def scroll_recovery(self, observation: Observation, now: float) -> bool:
         if self.recovery_scroll_since is None:
