@@ -1093,20 +1093,6 @@
       "basis": "annotated"
     },
     {
-      "file": "captures/2026-11-21/key/gate.png",
-      "base": "menu",
-      "variants": [
-        "gate"
-      ],
-      "overlays": [],
-      "actionable": true,
-      "actionableControls": [
-        "每日任务",
-        "菜单"
-      ],
-      "basis": "holdout"
-    },
-    {
       "file": "captures/2026-11-21/key/card-np-blue-glow.png",
       "base": "card",
       "variants": [],

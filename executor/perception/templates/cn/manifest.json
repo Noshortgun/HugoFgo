@@ -335,17 +335,6 @@
       ],
       "threshold": 0.6
     },
-    "gate_daily": {
-      "file": "gate_daily.png",
-      "source": "captures/2026-11-21/key/gate.png",
-      "roi": [
-        895,
-        327,
-        1116,
-        431
-      ],
-      "threshold": 0.6
-    },
     "story_skip": {
       "file": "story_skip.png",
       "source": "captures/2026-11-21/key/story.png",

@@ -74,7 +74,6 @@ PAGE_RULES: tuple[PageRule, ...] = (
     PageRule(BasePage.BATTLE, ('battle',)),
     PageRule(BasePage.MENU, ('menu',)),
     PageRule(BasePage.STORY, ('story_skip',)),
-    PageRule(BasePage.MENU, ('gate_daily',)),
 )
 
 VARIANT_RULES: tuple[VariantRule, ...] = (
@@ -83,7 +82,6 @@ VARIANT_RULES: tuple[VariantRule, ...] = (
     VariantRule(Variant.RESULT_BOND, BasePage.RESULT, ('result_bond',)),
     VariantRule(Variant.RESULT_EXP, BasePage.RESULT, ('result_exp',)),
     VariantRule(Variant.DROPS_LOOT, BasePage.DROPS, ('drops',)),
-    VariantRule(Variant.GATE, BasePage.MENU, ('gate_daily',)),
     # 己方单体技能选目标：与令咒目标同样显示“请选择对象”，但没有“是否使用”。
     VariantRule(Variant.SKILL_TARGET, BasePage.BATTLE, ('command_spell_target',),
                 absent=('command_spell_use',)),
@@ -317,10 +315,6 @@ AP_ITEM_LAYOUTS: dict[str, tuple[ControlSpec, ...]] = {
 }
 
 VARIANT_CONTROLS: dict[Variant, tuple[ControlSpec, ...]] = {
-    Variant.GATE: (
-        ControlSpec('每日任务', ControlKind.BUTTON, (860, 340, 1240, 420)),
-        ControlSpec('菜单', ControlKind.BUTTON, (1120, 610, 1275, 695)),
-    ),
     Variant.GRAND_SUPPORT: _SUPPORT_TOP,
     Variant.GRAND_TEAM: tuple(
         ControlSpec('返回', ControlKind.BUTTON, (6, 5, 178, 85)) if spec.name == '返回'
