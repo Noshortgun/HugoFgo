@@ -30,7 +30,7 @@ class IdentityMatcher:
     _command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
-        self._root = root or cn.PROJECT_ROOT / 'data'
+        self._root = root or cn.PROJECT_ROOT / 'data' / 'CN'
         self._servants = self._metadata('servants-by-id.json')
         self._equips = self._metadata('equips-by-id.json')
         self._face_templates: list[IdentityTemplate] | None = None
