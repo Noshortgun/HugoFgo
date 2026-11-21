@@ -15,6 +15,10 @@ class ScriptedPerception:
     def __init__(self, observations, *, preserve_hashes: bool = False) -> None:
         self.observations = tuple(observations)
         self.preserve_hashes = preserve_hashes
+        self.formation = None
+
+    def bind_formation(self, formation) -> None:
+        self.formation = formation
 
     def observation(self, frame: Frame) -> Observation:
         observation = self.observations[int(frame.image)]

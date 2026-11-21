@@ -19,6 +19,7 @@ Single-context：根目录 `GLOSSARY.md` + `docs/adr/`。See `docs/agents/domain
 ## 工作约定
 
 - 文档入口是 `docs/README.md`；当前能力变化时更新 `docs/status.md`，需求、架构、术语分别只在对应权威文档维护。
+- Atlas 素材字段、预期路径与大 JSON 查询入口见 `docs/resources.md`；用 `npm run data:query` 查询单个从者，直接读取整份原始 JSON 会耗尽上下文。
 - `.scratch/` 默认存放本地实验产物；只有 `.scratch/backend-rebuild/` 中已跟踪的票据源、重构规格与行为基线入库，需要长期保留的新资产应转入正式目录。
 - 任何实施或实机会话开始前跑 `npm run preflight`（只做代码加 `--offline`）；非施工分支需 `--allow-branch` 显式确认，实机会话需 `--live` 显式确认。
 - 新施工从 `origin/main` 建 `ticket/NN-slug` 分支；prototype 分支只保留原型证据，不在上面提交新票据工作。

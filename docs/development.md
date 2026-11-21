@@ -12,7 +12,7 @@ cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Li
 npm run resources:update
 ```
 
-`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。
+`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。资源更新会下载各再临阶段的从者头像和 Atlas `commands` 指令卡立绘原图，分别供助战与普通指令卡身份识别使用；新增从者的原图随图库更新生效，不需要手工登记模板；实际识别泛化仍需真实截图留出集验证，感知运行时不访问网络。素材字段、查询命令和资源合约见 [Atlas 资源](resources.md)。
 
 ## 2. 每次施工前预检
 

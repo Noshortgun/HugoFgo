@@ -87,6 +87,8 @@ class CommandCardIdentity:
     card_type: str
     deck_index: int | None = None
     noble_phantasm: bool = False
+    svt_id: int | None = None
+    support: bool = False
 
 
 @dataclass(frozen=True)

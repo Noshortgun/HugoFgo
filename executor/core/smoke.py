@@ -46,6 +46,9 @@ class ConfirmedStartPerception:
         self.turn = turn
         self.pending = True
 
+    def bind_formation(self, formation) -> None:
+        self.perception.bind_formation(formation)
+
     def read(self, frame: Frame) -> Observation:
         return self.perception.read(frame)
 

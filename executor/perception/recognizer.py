@@ -8,6 +8,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict, deque
+from pathlib import Path
 from typing import Iterable, Mapping
 
 import cv2
@@ -17,6 +18,7 @@ from executor.device.base import Frame
 from executor.perception import evidence
 from executor.perception.errors import StaleFrameError
 from executor.perception.evidence import Evidence, Template, find_dialog_buttons, find_enemy_bars
+from executor.perception.identity import IdentityMatcher
 from executor.perception.observation import (
     BasePage,
     Control,
@@ -124,7 +126,8 @@ def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Contr
 
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
-              evidence: Evidence, gray: np.ndarray, image: np.ndarray) -> tuple[Control, ...]:
+              evidence: Evidence, gray: np.ndarray, image: np.ndarray,
+              identities: IdentityMatcher) -> tuple[Control, ...]:
     modal = next((item for item in cn.MODAL_OVERLAYS if item in overlays), None)
 
     if page in (BasePage.UNKNOWN, BasePage.LOADING) or Variant.BATTLE_ANIMATION in variants:
@@ -147,7 +150,8 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
 
         if page is BasePage.SUPPORT:
             for index, box in enumerate(_support_rows(gray), start=1):
-                controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected'))
+                controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected',
+                                        support=identities.support(image, box)))
 
         if page is BasePage.BATTLE:
             for slot in (1, 2, 3):
@@ -166,6 +170,9 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
                 controls.append(Control(f'敌方{index}', ControlKind.ENEMY, box, True, 'enemy_hp_bar'))
 
         if page is BasePage.CARD:
+            controls = [Control(control.name, control.kind, control.box, control.actionable, control.reason,
+                                card=identities.command(image, control.box))
+                        if control.name.startswith('卡') else control for control in controls]
             present = [(slot, box) for slot, box in cn.NP_SLOTS.items() if evidence.np_hit(slot)]
             for index, (slot, box) in enumerate(present, start=1):
                 controls.append(Control(f'宝具卡{index}', ControlKind.CARD, box, True, f'np_slot:{slot}'))
@@ -228,9 +235,11 @@ class Perception:
 
     def __init__(self, *, templates: Mapping[str, Template] | None = None,
                  emblems: Mapping[str, evidence.Emblem] | None = None,
-                 ocr_reader=None, clock=time.perf_counter, cache_size: int = 64) -> None:
+                 ocr_reader=None, clock=time.perf_counter, cache_size: int = 64,
+                 identity_root: Path | None = None) -> None:
         self._templates = dict(templates) if templates is not None else evidence.load_templates()
         self._emblems = dict(emblems) if emblems is not None else evidence.load_emblems()
+        self._identities = IdentityMatcher(identity_root)
         self._worker = OcrWorker(ocr_reader)
         self._clock = clock
         self._cache_size = cache_size
@@ -241,6 +250,13 @@ class Perception:
         self._timings: deque[float] = deque(maxlen=200)
         self._reads = 0
         self._cache_hits = 0
+
+    def bind_formation(self, formation) -> None:
+        self._identities.bind_formation(formation)
+        with self._lock:
+            self._cache.clear()
+            self._requested.clear()
+            self._latest = None
 
     def read(self, frame: Frame) -> Observation:
         started = self._clock()
@@ -282,7 +298,7 @@ class Perception:
             base_page=page,
             variants=variants,
             overlays=overlays,
-            controls=_controls(page, variants, overlays, frame_evidence, gray, image),
+            controls=_controls(page, variants, overlays, frame_evidence, gray, image, self._identities),
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
