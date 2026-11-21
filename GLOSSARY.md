@@ -73,8 +73,12 @@ _Avoid_: 吃苹果设置、体力配置
 _Avoid_: 后端、脚本、自动化模块
 
 **画面状态 (Screen State)**:
-对当前截图的分类（menu / support / team / battle / card / result / drops / ap_recovery / story / loading / unknown），执行器决策的唯一依据。
+对当前截图的分类（menu / support / team / battle / card / result / drops / ap_recovery / story / loading / unknown），执行器决策的唯一画面依据。
 _Avoid_: 界面识别、OCR 结果
+
+**运行进度 (Run Progress)**:
+执行器在一次运行中保存的作业位置与确认状态，包括当前面、回合、下一个作业动作、动作后确认和已完成场数。只能由已确认的画面证据推进。
+_Avoid_: 画面状态、识别状态
 
 **安全停止 (Safe Stop)**:
 遇到未知画面、AP 恢复页或意外弹窗时立即停止并保存截图与日志，不继续点击。

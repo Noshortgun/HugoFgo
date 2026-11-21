@@ -7,6 +7,7 @@ from executor.domain.model import (
     CompileResult,
     Diagnostic,
     ExecutionPlan,
+    FormationSlotPlan,
     TurnPlan,
     WavePlan,
 )
@@ -18,6 +19,7 @@ __all__ = [
     'CompileResult',
     'Diagnostic',
     'ExecutionPlan',
+    'FormationSlotPlan',
     'TurnPlan',
     'WavePlan',
     'compile_job',

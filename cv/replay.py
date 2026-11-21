@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ import farm_ember as farm
 from image_io import read_image, write_image
 from state_classifier import load_templates, result_for_image
 from executor.device.base import Frame
+from executor.device.fake import FakeDevice
 from executor.perception import Perception
 
 PERCEPTION_FIXTURES = ROOT / "executor/perception/fixtures/screens-cn.json"
@@ -102,6 +104,270 @@ def recorder():
         taps.append({"x": int(x), "y": int(y), "reason": reason})
 
     return taps, record
+
+
+def run_core_scenario(observations, times, plan, *, options=None):
+    from executor.core import RunOptions, run
+    from executor.session import MemoryEventSink
+
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+
+    class ScriptedPerception:
+        def read(self, frame):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+        def read_fields(self, frame, names, *, timeout=None):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    run_options = options or RunOptions(write_evidence=False)
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=run_options)
+    return result, device, events
+
+
+def check_executor_core():
+    from executor.core import RunOptions, run
+    from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation)
+    from executor.session import MemoryEventSink
+
+    fields = {
+        'wave': Field(FieldStatus.CONFIRMED, 1),
+        'turn': Field(FieldStatus.CONFIRMED, 1),
+        'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+    }
+    battle = Observation(base_page=BasePage.BATTLE, fields=fields, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+             (811, 415, 976, 655), (1066, 415, 1231, 655))
+    card = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                card=CommandCardIdentity(index - 1, 'arts'))
+        for index in range(1, 6)))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    observations = [battle, battle, card, card, card, card, card, card, unknown, unknown]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+
+    class ScriptedPerception:
+        def read(self, frame):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+        def read_fields(self, frame, names, *, timeout=None):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3']
+    ok = result.reason == 'unknown_timeout' and controls == expected and len(device.actions) == 4
+    add_report('executor:third-card-stops-input', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; taps={device.actions}', ok, simulated_ocr=True)
+
+
+def check_executor_self_target():
+    from executor.core import RunOptions, run
+    from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Field, FieldStatus, Observation, Variant
+    from executor.session import MemoryEventSink
+
+    fields = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+              'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
+    battle = Observation(base_page=BasePage.BATTLE, fields=fields, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+        Control('从者2技能3', ControlKind.SKILL, (539, 548, 600, 610), True),
+    ))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    wrong = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(4, 'arts')) for index in range(1, 6)))
+    observations = [battle, battle, animation, battle, battle, wrong]
+    times = [0.0, 0.5, 0.6, 1.0, 1.5, 1.6]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+
+    class ScriptedPerception:
+        def read(self, frame):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+        def read_fields(self, frame, names, *, timeout=None):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+    action = ActionPlan(kind='skill', title='自身技能', detail='', icon='',
+                        member_slot=1, skill=2, player_target_slot=1)
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(actions=(action,), attack=AttackPlan(mode='verify', cards=cards))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者2技能3', '攻击']
+    ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
+    add_report('executor:self-target-direct-animation', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; progress={result.progress}', ok, simulated_ocr=True)
+
+
+def check_executor_repeat_support():
+    from executor.core import RunOptions, run
+    from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, SupportCandidate)
+    from executor.session import MemoryEventSink
+
+    repeat = Observation(base_page=BasePage.DROPS, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                         controls=(Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True),))
+    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+    support = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+    team = Observation(base_page=BasePage.TEAM, controls=(
+        Control('开始任务', ControlKind.BUTTON, (1086, 635, 1248, 707), True),))
+    fields = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+              'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
+    battle = Observation(base_page=BasePage.BATTLE, fields=fields, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    wrong = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(4, 'arts')) for index in range(1, 6)))
+    observations = [repeat, repeat, support, support, team, team, battle, battle, wrong]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+
+    class ScriptedPerception:
+        def read(self, frame):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+        def read_fields(self, frame, names, *, timeout=None):
+            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
+
+    formation = [FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)]
+    formation[0] = FormationSlotPlan(slot=0, name='娄希', svt_id=705000, role='Berserker',
+                                     support=True, support_required=True)
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=tuple(
+        AttackCardPlan(slot=slot, type='arts') for slot in range(3))))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=tuple(formation))
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['连续出击', '助战卡片第1行', '开始任务', '攻击']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+
+def check_executor_safety():
+    from executor.core import RunOptions
+    from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, SupportCandidate, Variant)
+
+    def make_plan(actions=(), wave_count=1, support_required=False):
+        cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+        turn = TurnPlan(actions=tuple(actions), attack=AttackPlan(mode='verify', cards=cards))
+        waves = tuple(WavePlan(number=index, target=1, turns=(turn,))
+                      for index in range(1, wave_count + 1))
+        formation = [FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)]
+        if support_required:
+            formation[0] = FormationSlotPlan(slot=0, name='娄希', svt_id=705000, role='Berserker',
+                                             support=True, support_required=True)
+        return ExecutionPlan(mystic_id='default', enemy_count=3, waves=waves, formation=tuple(formation))
+
+    def battle(wave=1, turn=1, overlays=()):
+        fields = {'wave': Field(FieldStatus.CONFIRMED, wave), 'turn': Field(FieldStatus.CONFIRMED, turn),
+                  'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
+        return Observation(base_page=BasePage.BATTLE, fields=fields, overlays=frozenset(overlays), controls=(
+            Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+            Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+        ))
+
+    boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+             (811, 415, 976, 655), (1066, 415, 1231, 655))
+    card = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                card=CommandCardIdentity(index - 1, 'arts')) for index in range(1, 6)))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    wrong = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                card=CommandCardIdentity(4, 'arts')) for index in range(1, 6)))
+    skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+    result, _, events = run_core_scenario(
+        [battle(), battle(), battle(), animation, battle(), battle(), battle(), wrong],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9], make_plan((skill,)))
+    actions = [event for event in events.events if event.type == 'action']
+    ok = result.reason == 'card_mismatch' and actions[-1].timestamp == 1.8
+    add_report('executor:skill-needs-animation', LOADING_IMAGE, 1.8, actions[-1].timestamp,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    repeat = battle(overlays=(Overlay.REPEAT_DIALOG,))
+    repeat = replace(repeat, controls=(*repeat.controls,
+                                      Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True)))
+    result, device, _ = run_core_scenario([repeat], [0.0], make_plan())
+    ok = result.reason == 'unexpected_overlay' and not device.actions
+    add_report('executor:unexpected-repeat-stops', LOADING_IMAGE, 'unexpected_overlay', result.reason,
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    friend = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.FRIEND_REQUEST}))
+    result, device, _ = run_core_scenario([friend, friend], [0.0, 30.0], make_plan())
+    ok = result.reason == 'overlay_recovery_unavailable' and not device.actions
+    add_report('executor:overlay-recovery-timeout', SUPPORT_IMAGE, 'overlay_recovery_unavailable', result.reason,
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+    support = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+    result_page = Observation(base_page=BasePage.RESULT, controls=(
+        Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
+    drops = Observation(base_page=BasePage.DROPS, controls=(
+        Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
+    observations = [battle(), battle(), card, card, card, card, card, card, animation,
+                    battle(2), battle(2), card, card, card, card, card, card, animation,
+                    result_page, result_page, drops, drops, repeat, repeat, support, support]
+    result, _, events = run_core_scenario(
+        observations, [index * 0.5 for index in range(len(observations))],
+        make_plan(wave_count=2, support_required=True), options=RunOptions(run_count=2, write_evidence=False))
+    support_states = [event for event in events.events
+                      if event.type == 'state_changed' and event.data['state'] == 'support']
+    ok = bool(support_states) and support_states[0].data['wave'] == 2
+    add_report('executor:repeat-progress-resets-after-next-page', SUPPORT_IMAGE, 2,
+               support_states[0].data['wave'] if support_states else None,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    result, _, events = run_core_scenario(
+        [drops, repeat, repeat, repeat, support, support], [0.0, 0.1, 0.6, 1.1, 1.2, 1.7],
+        make_plan(support_required=True), options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = controls.count('连续出击') == 1
+    add_report('executor:persistent-repeat-clicks-once', SUPPORT_IMAGE, 1, controls.count('连续出击'),
+               'stop', f'controls={controls}', ok, simulated_ocr=True)
+
+    support_repeat = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                                 controls=(Control('连续出击', ControlKind.BUTTON,
+                                                   (709, 554, 970, 612), True),))
+    result, device, _ = run_core_scenario([drops, support_repeat], [0.0, 0.1], make_plan())
+    ok = result.reason == 'unexpected_overlay' and not device.actions
+    add_report('executor:repeat-on-support-stops', SUPPORT_IMAGE, 'unexpected_overlay', result.reason,
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
 
 
 def check_result_action(name, rows, expected_action, expected_tap=None):
@@ -235,6 +501,10 @@ def run(output: Path):
     REPORTS.clear()
     check_classifications()
     check_perception()
+    check_executor_core()
+    check_executor_self_target()
+    check_executor_repeat_support()
+    check_executor_safety()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))
     check_result_action("action:unknown-waits", [("加载中", 640, 360)], "wait")

@@ -58,10 +58,28 @@ class WavePlan:
 
 
 @dataclass(frozen=True)
+class FormationSlotPlan:
+    slot: int
+    name: str
+    svt_id: int | None = None
+    limit_count: int | None = None
+    np_id: int | None = None
+    role: str | None = None
+    support: bool = False
+    support_required: bool = False
+    grand_required: bool = False
+    ce: str | None = None
+    ce_id: int | None = None
+    grand_ce: dict[str, Any] | None = None
+    grand_ce_ids: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class ExecutionPlan:
     mystic_id: str
     enemy_count: int
     waves: tuple[WavePlan, ...]
+    formation: tuple[FormationSlotPlan, ...]
 
 
 @dataclass

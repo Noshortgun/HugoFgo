@@ -14,6 +14,7 @@ from executor.domain.model import (
     CompileResult,
     Diagnostic,
     ExecutionPlan,
+    FormationSlotPlan,
     TurnPlan,
     WavePlan,
 )
@@ -36,6 +37,27 @@ def _formation_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> dict
             continue
         slots[slot] = entry['name'].strip()
     return slots
+
+
+def _compile_formation(raw: dict[str, Any]) -> tuple[FormationSlotPlan, ...]:
+    return tuple(
+        FormationSlotPlan(
+            slot=entry['slot'],
+            name=entry['name'].strip(),
+            svt_id=entry.get('svtId'),
+            limit_count=entry.get('limitCount'),
+            np_id=entry.get('npId'),
+            role=entry.get('role'),
+            support=entry.get('support', False),
+            support_required=entry.get('supportRequired', False),
+            grand_required=entry.get('grandRequired', False),
+            ce=entry.get('ce'),
+            ce_id=entry.get('ceId'),
+            grand_ce=entry.get('grandCe'),
+            grand_ce_ids=entry.get('grandCeIds'),
+        )
+        for entry in raw['formation']
+    )
 
 
 def _check_strategy_slots(strategy: dict[str, Any], path: str, formation: dict[int, str],
@@ -79,11 +101,18 @@ def _compile_action(action: dict[str, Any], action_path: str, wave: int, turn_no
 def _compile_np_positions(value: dict[str, Any] | None, turn_path: str, wave: int, turn_no: int,
                           formation: dict[int, str], diagnostics: list[Diagnostic]) -> dict[int, int | str]:
     positions: dict[int, int | str] = {}
+    used_positions: dict[int, int] = {}
     for slot_text, position in (value or {}).items():
         slot = int(slot_text)
         if not formation.get(slot):
             _diagnostic(diagnostics, f'{turn_path}.npPositions.{slot_text}',
                         f'宝具卡序引用了空槽位：{slot} 号位没有从者', wave, turn_no)
+        if isinstance(position, int) and position in used_positions:
+            _diagnostic(diagnostics, f'{turn_path}.npPositions.{slot_text}',
+                        f'宝具卡序冲突：槽位 {used_positions[position]} 与槽位 {slot} 都在第 {position} 张',
+                        wave, turn_no)
+        elif isinstance(position, int):
+            used_positions[position] = slot
         positions[slot] = position
     return positions
 
@@ -155,5 +184,6 @@ def compile_job(text: str) -> CompileResult:
         mystic_id=raw['mysticId'],
         enemy_count=raw['enemyCount'],
         waves=waves,
+        formation=_compile_formation(raw),
     )
     return CompileResult(None if diagnostics else plan, diagnostics)

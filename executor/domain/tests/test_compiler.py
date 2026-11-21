@@ -34,6 +34,20 @@ class CompileJobTest(unittest.TestCase):
         self.assertEqual(3, len(result.plan.waves))
         self.assertEqual([1, 1, 1], [len(wave.turns) for wave in result.plan.waves])
 
+    def test_real_job_preserves_support_requirements(self):
+        text = (ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8')
+
+        result = compile_job(text)
+
+        self.assertEqual([], result.diagnostics)
+        support = result.plan.formation[0]
+        self.assertEqual((0, '娄希', 705000, 'Berserker'),
+                         (support.slot, support.name, support.svt_id, support.role))
+        self.assertTrue(support.support)
+        self.assertTrue(support.support_required)
+        self.assertFalse(support.grand_required)
+        self.assertEqual(('迦勒底午茶时光', 9403520), (support.ce, support.ce_id))
+
     def test_multi_turn_fixture_preserves_actions_and_card_order(self):
         text = (ROOT / 'executor/domain/fixtures/valid-multi-turn.json').read_text(encoding='utf-8')
 
@@ -58,6 +72,18 @@ class CompileJobTest(unittest.TestCase):
         second = plan.waves[0].turns[1]
         self.assertEqual((3, 2), (second.actions[0].from_target, second.actions[0].to_target))
         self.assertEqual('spell', plan.waves[1].turns[0].actions[0].kind)
+
+    def test_conflicting_np_positions_are_diagnosed(self):
+        job = self.valid_job()
+        job['waves'][0]['turns'][0]['npPositions'] = {'0': 1, '3': 1}
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        diagnostic = result.diagnostics[0]
+        self.assertEqual((1, 1), (diagnostic.wave, diagnostic.turn))
+        self.assertIn('npPositions', diagnostic.path)
+        self.assertIn('宝具卡序冲突', diagnostic.message)
 
     def test_out_of_range_slot_is_diagnosed_with_location(self):
         text = (ROOT / 'executor/domain/fixtures/invalid-slot.json').read_text(encoding='utf-8')
