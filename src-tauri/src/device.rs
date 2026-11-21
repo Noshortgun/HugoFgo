@@ -44,44 +44,6 @@ pub struct TapResult {
     pub norm_y: f64,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct RunStatus {
-    pub running: bool,
-    pub run_id: String,
-    pub serial: String,
-    pub job_name: String,
-    pub started_at_ms: u128,
-    pub status: String,
-}
-
-impl RunStatus {
-    pub fn started(serial: &str, job_name: &str) -> Self {
-        let started_at_ms = now_ms();
-        Self {
-            running: true,
-            run_id: format!("run-{started_at_ms}"),
-            serial: serial.to_string(),
-            job_name: job_name.to_string(),
-            started_at_ms,
-            status: "prepared".to_string(),
-        }
-    }
-
-    pub fn stopped(mut self) -> Self {
-        self.running = false;
-        self.status = "stopped".to_string();
-        self
-    }
-
-    pub fn idle() -> Self {
-        Self {
-            running: false,
-            status: "idle".to_string(),
-            ..Default::default()
-        }
-    }
-}
-
 fn now_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

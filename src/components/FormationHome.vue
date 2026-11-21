@@ -4,7 +4,7 @@ import type { FallbackStrategy, MysticCode, Servant } from '../types';
 import { ascensionOptionsFor } from '../job';
 import AppIcon from './AppIcon.vue';
 
-const props = defineProps<{ members: Servant[]; mystic: MysticCode; fallback: FallbackStrategy; gender: 'female' | 'male' }>();
+const props = withDefaults(defineProps<{ members: Servant[]; mystic: MysticCode; fallback: FallbackStrategy; gender: 'female' | 'male'; startDisabled?: boolean; startDisabledReason?: string; startLabel?: string }>(), { startDisabled: false, startDisabledReason: '', startLabel: '开始' });
 const emit = defineEmits<{
   picker: [type: 'servant' | 'ce' | 'mystic', slot?: number];
   plan: [];
@@ -103,7 +103,7 @@ function dropApple(key: AppleKey) {
       <div class="master-actions"><div class="master-action-label"><span>御主技能</span></div><div class="master-skill-row"><button v-for="(skill, index) in props.mystic.skills" :key="index" :title="`御主技能 ${index + 1}`"><img :src="props.mystic.skillIconUrls?.[index] || `/assets/skills/${skill}.png`" :alt="`御主技能${index + 1}`" /><span>{{ index + 1 }}</span></button></div><p class="master-skill-note">在操作序列中编入技能</p></div>
     </section>
 
-    <div class="start-zone"><div class="start-ring"></div><button class="game-start-button" @click="emit('start')"><span>开始</span><small>START</small></button><p>开始前检测编队 · 不自动修改游戏编队</p></div>
+    <div class="start-zone"><div class="start-ring"></div><button class="game-start-button" :disabled="props.startDisabled" :title="props.startDisabledReason || '开始运行当前作业'" @click="emit('start')"><span>{{ props.startLabel }}</span><small>START</small></button><p v-if="props.startDisabledReason" class="start-disabled-reason">{{ props.startDisabledReason }}</p><p v-else>开始前检测编队 · 不自动修改游戏编队</p></div>
     <div class="game-version">HUGOFGO · PROTOTYPE 0.5</div>
   </main>
 </template>
