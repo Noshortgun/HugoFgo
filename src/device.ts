@@ -49,9 +49,9 @@ function tauriInvoke(): TauriInvoke | undefined {
 
 export const isTauri = Boolean(tauriInvoke());
 
-async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const run = tauriInvoke();
-  if (!run) throw new Error('设备控制仅在 Tauri 桌面版中可用，当前是浏览器预览');
+  if (!run) throw new Error('此命令仅在 Tauri 桌面版中可用，当前是浏览器预览');
   return (await run(command, args)) as T;
 }
 

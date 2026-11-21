@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+
+from executor.core.ap_policy import RecoveryPolicy
 
 
 class RunStatus(str, Enum):
@@ -13,6 +15,7 @@ class RunStatus(str, Enum):
 @dataclass(frozen=True)
 class RunOptions:
     run_count: int = 1
+    recovery: RecoveryPolicy = field(default_factory=RecoveryPolicy)
     stable_seconds: float = 0.5
     coordinate_tolerance: int = 8
     action_timeout: float = 30.0
@@ -38,6 +41,7 @@ class RunProgress:
     turn: int = 1
     action_index: int = 0
     completed_runs: int = 0
+    recovery_used: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

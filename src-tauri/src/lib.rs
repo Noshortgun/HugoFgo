@@ -1,4 +1,5 @@
 mod device;
+mod settings;
 
 use std::sync::Mutex;
 
@@ -80,7 +81,9 @@ pub fn run() {
             capture_frame,
             tap_normalized,
             start_run,
-            stop_run
+            stop_run,
+            settings::get_run_settings,
+            settings::save_run_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running HugoFgo");

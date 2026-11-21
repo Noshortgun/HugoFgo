@@ -8,6 +8,7 @@ from unittest import mock
 from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run as core_run
+from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
 from executor.device.base import DeviceError
 from executor.device.fake import FakeDevice
 from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy,
@@ -910,16 +911,82 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('stopped', rows[-1]['type'])
         self.assertEqual(directory, rows[-1]['data']['evidence_dir'])
 
+    def test_default_policy_uses_visible_bronze_and_emits_cumulative_count(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
+        team = observe(BasePage.TEAM)
+        device, perception = scripted([recovery, recovery, team], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(['tap'], [action['action'] for action in device.actions])
+        used = [event for event in events.events if event.type == 'recovery_used']
+        self.assertEqual(1, len(used))
+        self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
+
+    def test_default_policy_scrolls_once_to_find_bronze(self) -> None:
+        top = observe(BasePage.AP_RECOVERY,
+                      Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
+                      Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),
+                      Control('白银果实', ControlKind.ITEM, (315, 414, 981, 559), True))
+        bottom = observe(BasePage.AP_RECOVERY,
+                         Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True))
+        team = observe(BasePage.TEAM)
+        device, perception = scripted([top, top, bottom, bottom, team], [0.0, 0.5, 0.6, 1.1, 1.2])
+        events = MemoryEventSink()
+
+        run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(['swipe', 'tap'], [action['action'] for action in device.actions])
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual('AP 恢复列表向下', actions[0].data['control'])
+        self.assertEqual(1, len([event for event in events.events if event.type == 'recovery_used']))
+
     def test_ap_recovery_stops_without_using_items(self) -> None:
-        recovery = observe(BasePage.AP_RECOVERY, button('青铜苹果', (100, 100, 300, 200)))
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
         device, perception = scripted([recovery], [0.0])
         events = MemoryEventSink()
 
-        result = run(single_wave_plan(), device, perception, events)
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset())))
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('ap_recovery', result.reason)
         self.assertEqual([], device.actions)
+
+    def test_non_whitelisted_items_are_not_used(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('白银果实', ControlKind.ITEM, (100, 100, 300, 200), True),
+                           Control('青铜果实', ControlKind.ITEM, (100, 200, 300, 300), True))
+        device, perception = scripted([recovery], [0.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.GOLD}))))
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual([], device.actions)
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
+
+    def test_drain_completes_at_recovery_without_using_an_item(self) -> None:
+        repeat = Observation(base_page=BasePage.DROPS,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击'),))
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
+        device, perception = scripted([repeat, repeat, recovery], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(drain_after_turns=True)))
+
+        self.assertEqual(RunStatus.COMPLETED, result.status)
+        self.assertEqual('ap_drained', result.reason)
+        self.assertEqual(['连续出击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
 
     def test_drops_fallback_is_limited_to_confirmed_drops_page(self) -> None:
         drops = observe(BasePage.DROPS)
