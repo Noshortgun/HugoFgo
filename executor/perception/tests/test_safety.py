@@ -177,6 +177,14 @@ class SafetyTest(unittest.TestCase):
                 for first, second in zip(rows, rows[1:]):
                     self.assertEqual(first.box[3], second.box[1])
 
+    def test_selected_arts_and_buster_pair_is_detected(self) -> None:
+        for relative in ('captures/2026-11-21/key/card-np-selected-arts-buster.png',
+                         'captures/2026-11-21/key/card-np-selected-chain.png'):
+            with self.subTest(relative=relative):
+                observation = self.read(relative)
+                names = [item.name for item in observation.controls if item.name.startswith('宝具卡')]
+                self.assertEqual(['宝具卡1', '宝具卡2'], names)
+
     def test_selected_np_pair_is_detected(self) -> None:
         observation = self.read('captures/2026-11-21/key/card-np-selected-pair.png')
 
