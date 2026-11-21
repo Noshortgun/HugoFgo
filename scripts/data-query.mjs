@@ -3,10 +3,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resourcePaths } from './resource-paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const rawPath = path.join(root, 'data/atlas-nice-cn.json');
-const commandRoot = path.join(root, 'data/assets/atlas/commands');
+const paths = resourcePaths(root);
+const { region } = paths;
+const rawPath = paths.absolute(`data/${region}/atlas-nice-cn.json`);
+const commandRoot = paths.regionFile('assets/atlas/commands');
 
 function usage() {
   console.log(`用法：
@@ -15,7 +18,7 @@ function usage() {
   npm run data:query -- assets <ID>
   npm run data:query -- counts
 
-所有查询追加 --json 输出机器可读结果。`);
+所有查询追加 --json 输出机器可读结果；--region JP 切换区服目录，默认 CN。`);
 }
 
 function readServants() {
@@ -38,7 +41,7 @@ function servantSummary(servant) {
 
 function localCommandPath(id, stage, kind = 'ascension') {
   const name = kind === 'costume' ? `costume-${stage}.png` : `${stage}.png`;
-  return `data/assets/atlas/commands/${id}/${name}`;
+  return `data/${region}/assets/atlas/commands/${id}/${name}`;
 }
 
 function preferLocal(primary, fallback) {
@@ -54,13 +57,13 @@ function assetRows(servant) {
     rows.push({ family, key, url, local, downloaded: fs.existsSync(path.join(root, local)) });
   };
   for (const [stage, url] of Object.entries(assets.faces?.ascension ?? {})) {
-    const local = `data/assets/atlas/faces/${servant.id}-${stage}.png`;
-    const fallback = stage === '1' ? `data/assets/atlas/faces/${servant.id}.png` : null;
+    const local = `data/${region}/assets/atlas/faces/${servant.id}-${stage}.png`;
+    const fallback = stage === '1' ? `data/${region}/assets/atlas/faces/${servant.id}.png` : null;
     add('faces.ascension', stage, url, preferLocal(local, fallback));
   }
   for (const [stage, url] of Object.entries(assets.charaGraph?.ascension ?? {})) {
-    const local = `data/assets/atlas/cards/${servant.id}-${stage}.png`;
-    const fallback = stage === '1' ? `data/assets/atlas/cards/${servant.id}.png` : null;
+    const local = `data/${region}/assets/atlas/cards/${servant.id}-${stage}.png`;
+    const fallback = stage === '1' ? `data/${region}/assets/atlas/cards/${servant.id}.png` : null;
     add('charaGraph.ascension', stage, url, preferLocal(local, fallback));
   }
   for (const [stage, url] of Object.entries(assets.commands?.ascension ?? {})) {
@@ -103,7 +106,7 @@ function counts(servants) {
 
 function main(argv) {
   const json = argv.includes('--json');
-  const args = argv.filter((value) => value !== '--json');
+  const args = argv.filter((value, index) => value !== '--json' && value !== '--region' && !value.startsWith('--region=') && argv[index - 1] !== '--region');
   const [action, value] = args;
   if (!action) {
     usage();

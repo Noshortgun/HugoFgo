@@ -6,13 +6,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable } from './resource-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/atlas-mystic-cn.json'), 'utf8'));
-const outRoot = path.join(root, 'data/assets/atlas/mystic');
+const paths = resourcePaths(root);
+const { region } = paths;
+const raw = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-mystic-cn.json`), 'utf8'));
+const outRoot = paths.regionFile('assets/atlas/mystic');
 for (const dir of ['items', 'figures']) fs.mkdirSync(path.join(outRoot, dir), { recursive: true });
-const skillDir = path.join(root, 'data/assets/atlas/skills');
+const skillDir = paths.regionFile('assets/atlas/skills');
 fs.mkdirSync(skillDir, { recursive: true });
 
 const jobs = [];
@@ -29,7 +32,7 @@ for (const code of raw) {
   }
 }
 
-const remoteUnavailable = loadRemoteUnavailable(root);
+const remoteUnavailable = loadRemoteUnavailable(root, region);
 async function download(job, attempt = 1) {
   const relative = path.relative(root, job.file).split(path.sep).join('/');
   if (remoteUnavailable.has(relative)) return 'remote-unavailable';
@@ -76,15 +79,15 @@ const index = raw.map((code) => {
     num: skill.num,
     name: skill.name,
     detail: skill.detail ?? '',
-    icon: skill.icon ? `/data/assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}` : null,
+    icon: skill.icon ? paths.webPath(`assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`) : null,
     target: skillTarget(skill),
   }));
   const orderChangeSkill = skills.findIndex((skill) => orderChangePattern.test(skill.name) || orderChangePattern.test(skill.detail));
-  const has = (relative) => fs.existsSync(path.join(root, relative));
-  const femaleItem = `/data/assets/atlas/mystic/items/female-${code.id}.png`;
-  const maleItem = `/data/assets/atlas/mystic/items/male-${code.id}.png`;
-  const femaleFigure = `/data/assets/atlas/mystic/figures/female-${code.id}.png`;
-  const maleFigure = `/data/assets/atlas/mystic/figures/male-${code.id}.png`;
+  const has = (relative) => fs.existsSync(paths.regionFile(relative));
+  const femaleItem = paths.webPath(`assets/atlas/mystic/items/female-${code.id}.png`);
+  const maleItem = paths.webPath(`assets/atlas/mystic/items/male-${code.id}.png`);
+  const femaleFigure = paths.webPath(`assets/atlas/mystic/figures/female-${code.id}.png`);
+  const maleFigure = paths.webPath(`assets/atlas/mystic/figures/male-${code.id}.png`);
   return {
     id: code.id,
     name: code.name,

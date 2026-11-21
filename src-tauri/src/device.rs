@@ -126,7 +126,10 @@ pub fn adb_path() -> Result<String, String> {
         }
     }
 
-    Err("未找到 adb。请安装 Android platform-tools，或设置环境变量 HUGOFGO_ADB 指向 adb.exe".to_string())
+    Err(
+        "未找到 adb。请安装 Android platform-tools，或设置环境变量 HUGOFGO_ADB 指向 adb.exe"
+            .to_string(),
+    )
 }
 
 fn run_adb(serial: Option<&str>, args: &[&str]) -> Result<String, String> {
@@ -191,7 +194,9 @@ pub fn ensure_device(serial: &str) -> Result<(), String> {
     if state == "device" {
         Ok(())
     } else {
-        Err(format!("设备 {serial} 当前状态为 {state}，请先完成授权或重新连接"))
+        Err(format!(
+            "设备 {serial} 当前状态为 {state}，请先完成授权或重新连接"
+        ))
     }
 }
 
@@ -291,13 +296,8 @@ pub fn capture_frame(serial: &str) -> Result<CapturedFrame, String> {
     let (width, height) = png_size(&bytes).ok_or_else(|| "截图不是有效的 PNG".to_string())?;
     let captured_at_ms = now_ms();
     let directory = env::temp_dir().join("hugofgo-frames");
-    fs::create_dir_all(&directory)
-        .map_err(|error| format!("无法创建截图目录：{error}"))?;
-    let path = directory.join(format!(
-        "{}-{}.png",
-        safe_filename(serial),
-        captured_at_ms
-    ));
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建截图目录：{error}"))?;
+    let path = directory.join(format!("{}-{}.png", safe_filename(serial), captured_at_ms));
     fs::write(&path, &bytes).map_err(|error| format!("无法保存截图：{error}"))?;
 
     Ok(CapturedFrame {

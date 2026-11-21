@@ -41,7 +41,7 @@ python -m executor.perception <截图> --ready --json
 - 修改 `cv/requirements.txt` 的版本或安装方式后，必须重跑全部回放。
 - 测试断言外部可观察行为，包括画面分类、动作、坐标、停止和错误诊断。
 - 声称“图库自动覆盖”的识别测试必须从独立资源根加载不在仓库内置素材中的原图；内置素材只用于离线回归，不能单独证明生产图库加载路径正确。
-- 感知单测和统一回放默认使用空生成图库，测试工具通过 `isolated_perception` / `TemporaryDirectory` 显式注入；只有生产图库加载测试可以指定带素材的临时资源根，不能让本机 `data/assets/` 的有无改变测试结论。
+- 感知单测和统一回放默认使用空生成图库，测试工具通过 `isolated_perception` / `TemporaryDirectory` 显式注入；只有生产图库加载测试可以指定带素材的临时资源根，不能让本机 `data/<区服>/assets/` 的有无改变测试结论。
 - 不用文档中的固定用例数量作为验收条件，以命令退出码和当次报告为准。
 
 旧原型的行为基线见 `.scratch/backend-rebuild/behavior-baseline.md`。它记录重写时必须保留的行为及证据强度，其中被新 ADR 取代的规则以当前需求和 ADR 为准。
