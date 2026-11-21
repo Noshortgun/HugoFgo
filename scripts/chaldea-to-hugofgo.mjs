@@ -16,10 +16,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resourcePaths } from './resource-paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const catalog = JSON.parse(fs.readFileSync(path.join(root, 'data/servants-by-id.json'), 'utf8'));
-const equipPath = path.join(root, 'data/equips-by-id.json');
+const paths = resourcePaths(root);
+const { region } = paths;
+const catalog = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/servants-by-id.json`), 'utf8'));
+const equipPath = paths.absolute(`data/${region}/equips-by-id.json`);
 const equips = fs.existsSync(equipPath) ? JSON.parse(fs.readFileSync(equipPath, 'utf8')) : {};
 const cardTypes = { 1: 'arts', 2: 'buster', 3: 'quick', arts: 'arts', buster: 'buster', quick: 'quick' };
 const localIcons = ['skill_00400', 'skill_00403', 'skill_00700'];

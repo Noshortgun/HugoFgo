@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum RecoveryItem {
+pub(crate) enum RecoveryItem {
     SaintQuartz,
     Gold,
     Silver,
@@ -16,7 +16,7 @@ enum RecoveryItem {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-struct RecoveryPolicy {
+pub(crate) struct RecoveryPolicy {
     allowed: Vec<RecoveryItem>,
     drain_after_turns: bool,
 }
@@ -32,7 +32,7 @@ impl Default for RecoveryPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-struct RunSettings {
+pub(crate) struct RunSettings {
     battles: u32,
     recovery: RecoveryPolicy,
 }
