@@ -191,6 +191,12 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual(['宝具卡1', '宝具卡2'],
                          [item.name for item in observation.controls if item.name.startswith('宝具卡')])
 
+    def test_selected_buster_np_card_is_detected(self) -> None:
+        observation = self.read('captures/2026-11-21/key/card-np-buster-selected.png')
+
+        self.assertEqual(['宝具卡1', '宝具卡2'],
+                         [item.name for item in observation.controls if item.name.startswith('宝具卡')])
+
     def test_buster_np_card_is_detected(self) -> None:
         observation = self.read('captures/2026-11-21/key/card-np-buster.png')
 

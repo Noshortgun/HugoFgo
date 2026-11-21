@@ -27,7 +27,7 @@ def measure(image: np.ndarray):
 class EmblemTest(unittest.TestCase):
     def test_red_buster_emblem_is_detected(self) -> None:
         image = canvas()
-        draw_blob(image, (412, 300), (120, 60), (0, 0, 220))
+        draw_blob(image, (412, 300), (90, 60), (0, 0, 220))
 
         scores, blobs = measure(image)
 
@@ -39,7 +39,7 @@ class EmblemTest(unittest.TestCase):
     def test_small_or_low_red_marker_is_not_a_card_emblem(self) -> None:
         image = canvas()
         draw_blob(image, (412, 380), (50, 45), (0, 0, 220))
-        draw_blob(image, (640, 75), (120, 60), (0, 0, 220))
+        draw_blob(image, (640, 75), (90, 60), (0, 0, 220))
 
         _, blobs = measure(image)
 

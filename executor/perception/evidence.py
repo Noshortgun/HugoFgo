@@ -191,14 +191,17 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
             continue
         if h and not (bounds['min_aspect'] <= width / h <= bounds['max_aspect']):
             continue
-        if h and area / (width * h) < bounds['min_fill']:
+        fill = area / (width * h) if h else 0.0
+        if fill < bounds['min_fill']:
             continue
         top = y + y1
         center_y = top + h / 2
         if top + h > bounds['max_bottom']:
             continue
         ratio = (center_y - card_top) / card_height if card_height else 0
-        if low_ratio <= ratio <= bounds['max_center_ratio']:
+        high_fill = fill >= bounds.get('high_fill_min', 1.0)
+        max_ratio = bounds.get('high_fill_max_ratio', bounds['max_center_ratio']) if high_fill             else bounds['max_center_ratio']
+        if low_ratio <= ratio <= max_ratio:
             return True
     return False
 
