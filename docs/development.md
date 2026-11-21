@@ -14,6 +14,28 @@ npm run resources:update
 
 `HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。资源更新会下载各再临阶段的从者头像和 Atlas `commands` 指令卡立绘原图，分别供助战与普通指令卡身份识别使用；新增从者的原图随图库更新生效，不需要手工登记模板；实际识别泛化仍需真实截图留出集验证，感知运行时不访问网络。素材字段、查询命令和资源合约见 [Atlas 资源](resources.md)。
 
+### Windows 构建环境（src-tauri）
+
+桌面壳是 Rust + Tauri 2。没有工具链时 `src-tauri` 的改动无法在本地验证，只能人工审阅；改壳之前先装好：
+
+```bash
+winget install --id Rustlang.Rustup -e
+rustup default stable
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+MSVC 链接器是必需的：Rust 的构建脚本要先链接成 exe 才能运行，`cargo check` 同样绕不开。
+
+**Git Bash 的 `link.exe` 会冒名顶替 MSVC 链接器。** `where.exe link.exe` 的第一条如果是 `C:\Program Files\Git\usr\bin\link.exe`，cargo 会拿它链接，报 `link: extra operand`。绕法是显式指定链接器（版本号以本机为准）：
+
+```bash
+export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/<版本>/bin/Hostx64/x64/link.exe"
+cargo check --tests --manifest-path src-tauri/Cargo.toml   # 需先 npm run desktop:prepare
+cargo test --lib --manifest-path src-tauri/Cargo.toml
+```
+
+`npm run package:windows` 先跑全量回放再 `tauri build`，产出 NSIS 安装包；CI 的 `Windows 安装包` 任务在 windows-latest 上做同样的构建并上传产物。
+
 ## 2. 每次施工前预检
 
 ```bash
@@ -22,7 +44,7 @@ npm run preflight -- --live          # 实机工作，仍由预检保持只读
 npm run preflight -- --allow-branch  # 明确确认在特殊分支上工作
 ```
 
-预检检查分支、工作区、回放依赖、adb 设备和外部自动化进程。离线模式跳过设备与进程检查；实机模式把设备冲突和连接问题作为阻断项。预检本身不发送设备输入。
+预检检查分支、工作区、回放依赖、Rust 工具链、票据源、adb 设备和外部自动化进程。离线模式跳过设备与进程检查；实机模式把设备冲突和连接问题作为阻断项。预检本身不发送设备输入。
 
 新施工从 `origin/main` 创建 `ticket/NN-slug` 分支。`main` 和 `prototype/*` 默认不作为施工分支。
 
