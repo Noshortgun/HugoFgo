@@ -11,6 +11,7 @@ from pathlib import Path
 
 from executor.device.base import Frame
 from executor.perception.recognizer import Perception
+from executor.perception.readiness import readiness_gaps
 
 
 def describe(observation) -> dict:
@@ -38,13 +39,14 @@ def describe(observation) -> dict:
     }
 
 
-def main() -> int:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('image', type=Path)
     parser.add_argument('--fields', default='', help='等待读取的字段，逗号分隔，如 wave,turn')
     parser.add_argument('--timeout', type=float, default=10.0)
+    parser.add_argument('--ready', action='store_true', help='检查执行器所需的感知输入是否齐全')
     parser.add_argument('--json', action='store_true')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     data = args.image.read_bytes()
     frame = Frame(image=data, width=1280, height=720, captured_at=0.0)
@@ -56,6 +58,20 @@ def main() -> int:
             observation = perception.read_fields(frame, names, timeout=args.timeout)
     finally:
         perception.close()
+
+    if args.ready:
+        missing = readiness_gaps(observation)
+        payload = {
+            'file': str(args.image),
+            'basePage': observation.base_page.value,
+            'ready': not missing,
+            'missing': missing,
+        }
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(f"执行器感知就绪：{'是' if payload['ready'] else '否'}；缺失 {missing}")
+        return 0 if payload['ready'] else 2
 
     payload = describe(observation)
     if args.json:

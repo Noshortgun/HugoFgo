@@ -107,25 +107,9 @@ def recorder():
 
 
 def run_core_scenario(observations, times, plan, *, options=None):
-    from executor.core import RunOptions, run
-    from executor.session import MemoryEventSink
+    from executor.testing import run_scenario
 
-    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
-              for index, at in enumerate(times)]
-
-    class ScriptedPerception:
-        def read(self, frame):
-            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
-
-        def read_fields(self, frame, names, *, timeout=None):
-            return replace(observations[int(frame.image)], frame_hash=frame.image.decode())
-
-    device = FakeDevice(frames)
-    events = MemoryEventSink()
-    run_options = options or RunOptions(write_evidence=False)
-    with mock.patch('executor.core.runner.time.sleep', return_value=None):
-        result = run(plan, device, ScriptedPerception(), events, options=run_options)
-    return result, device, events
+    return run_scenario(observations, times, plan, options=options)
 
 
 def check_executor_core():

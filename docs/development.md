@@ -32,6 +32,7 @@ npm run preflight -- --allow-branch  # 明确确认在特殊分支上工作
 npm run dev
 npm run tauri dev
 npm run build
+npm run verify
 npm run replay
 ```
 

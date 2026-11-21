@@ -17,6 +17,8 @@ GitHub issue 是权威内容，本地源是待发布内容；两者不一致时�
 - 重复编号（两个 `NN-<slug>.md`）与遗留双份（`NN.md`、`NN.current.md`）只报告、不自动删除；发布源永远是 `NN-<slug>.md`。
 - 本命令只读：不创建、不编辑、不关闭 issue。发布动作仍由人工执行。
 
+开始实现前，先发布已确认的规格修订。`ready-for-agent` 且未关闭的票据与本地发布源不一致时不得开工；合并后再用评论补充验证证据。CI 的 `issues:check` 会阻断这类漂移，已关闭或父票据的保护性差异只作提示。
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body-file <file>`。多行正文用文件，不用行内字符串。
