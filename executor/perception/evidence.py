@@ -41,10 +41,13 @@ class Evidence:
     slots: Mapping[str, float] = field(default_factory=dict)
     np_slots: Mapping[str, float] = field(default_factory=dict)
     np_blobs: Mapping[str, bool] = field(default_factory=dict)
+    np_faces: Mapping[str, float] = field(default_factory=dict)
     locations: Mapping[str, tuple[int, int]] = field(default_factory=dict)
 
     def np_hit(self, slot: str) -> bool:
-        return bool(self.np_blobs.get(slot)) or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD
+        return (bool(self.np_blobs.get(slot))
+                or self.np_faces.get(slot, 0.0) >= cn.NP_FACE_MIN_FRACTION
+                or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD)
 
     def hit(self, name: str) -> bool:
         template = self.templates.get(name)
@@ -178,10 +181,12 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
 
 
 def measure_np_slots(image: np.ndarray, gray: np.ndarray,
-                     emblems: Mapping[str, Emblem]) -> tuple[dict[str, float], dict[str, bool]]:
-    """逐槽判断宝具卡：Quick 看绿环（面积+宽度），Arts 看蓝星模板。"""
+                     emblems: Mapping[str, Emblem]) -> tuple[dict[str, float], dict[str, bool], dict[str, float]]:
+    """逐槽判断宝具卡：卡面亮度为主，Quick 绿环 / Arts 蓝星模板为辅。"""
     scores: dict[str, float] = {}
     blobs: dict[str, bool] = {}
+    faces: dict[str, float] = {}
+    full_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     for slot, box in cn.NP_SEARCH.items():
         x1, y1, x2, y2 = box
         roi = gray[y1:y2, x1:x2]
@@ -193,7 +198,10 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
             best = max(best, float(np.nan_to_num(result.max(), nan=0.0)))
         scores[slot] = best
         blobs[slot] = _has_card_emblem(image, box, cn.NP_SLOTS[slot])
-    return scores, blobs
+        fx1, fy1, fx2, fy2 = cn.NP_SLOTS[slot]
+        face = full_hsv[fy1:fy2, fx1:fx2]
+        faces[slot] = float(((face[..., 2] > 165) & (face[..., 1] < 110)).mean())
+    return scores, blobs, faces
 
 
 def match_templates(gray: np.ndarray,

@@ -189,6 +189,8 @@ NP_EMBLEM_BOUNDS: tuple[tuple[float, float, float, float], ...] = (
 # 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记和技能特效文字。
 NP_EMBLEM_Y_RANGE = (0.30, 1.10)
 NP_EMBLEM_MAX_BOTTOM = 370
+# 卡面亮度占比：宝具卡槽位 ≥0.35，背景/特效槽位最多 0.18。
+NP_FACE_MIN_FRACTION = 0.30
 NP_EMBLEM_HUES: tuple[tuple[tuple[int, int], ...], ...] = (
     ((35, 90),),             # Quick 绿
     ((90, 140),),            # Arts 蓝

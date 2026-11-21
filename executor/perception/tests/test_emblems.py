@@ -20,7 +20,8 @@ def draw_blob(image: np.ndarray, center: tuple[int, int], size: tuple[int, int],
 
 def measure(image: np.ndarray):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return evidence.measure_np_slots(image, gray, {})
+    scores, blobs, _faces = evidence.measure_np_slots(image, gray, {})
+    return scores, blobs
 
 
 class EmblemTest(unittest.TestCase):

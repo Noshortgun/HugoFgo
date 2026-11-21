@@ -266,10 +266,10 @@ class Perception:
                                   edges=edges, slots=slots, locations=locations)
         page, variants, overlays, confidence = _classify(frame_evidence)
         if page is BasePage.CARD:
-            np_slots, np_blobs = evidence.measure_np_slots(image, gray, self._emblems)
+            np_slots, np_blobs, np_faces = evidence.measure_np_slots(image, gray, self._emblems)
             frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
                                       edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs,
-                                      locations=locations)
+                                      np_faces=np_faces, locations=locations)
         return Observation(
             base_page=page,
             variants=variants,
