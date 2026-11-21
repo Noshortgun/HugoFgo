@@ -2,10 +2,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from executor.device.base import Frame
+from executor.perception.recognizer import Perception
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def isolated_perception(add_cleanup, **kwargs) -> Perception:
+    temporary = TemporaryDirectory()
+    add_cleanup(temporary.cleanup)
+    perception = Perception(identity_root=Path(temporary.name), **kwargs)
+    add_cleanup(perception.close)
+    return perception
 
 
 def load_frame(relative: str) -> Frame:

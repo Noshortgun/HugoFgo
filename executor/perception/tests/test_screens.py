@@ -5,8 +5,7 @@ import json
 import unittest
 from pathlib import Path
 
-from executor.perception import Perception
-from executor.perception.tests.fixtures import load_frame
+from executor.perception.tests.fixtures import isolated_perception, load_frame
 
 FIXTURES = json.loads((Path(__file__).resolve().parents[1] / 'fixtures' / 'screens-cn.json')
                       .read_text(encoding='utf-8'))
@@ -15,11 +14,7 @@ FIXTURES = json.loads((Path(__file__).resolve().parents[1] / 'fixtures' / 'scree
 class ScreenRegressionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.perception = Perception(ocr_reader=None)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.perception.close()
+        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=None)
 
     def check(self, case: dict) -> None:
         observation = self.perception.read(load_frame(case['file']))

@@ -5,8 +5,8 @@ import unittest
 from unittest import mock
 
 from executor.device.base import Frame, FrameFormat
-from executor.perception import BasePage, FieldStatus, Perception, evidence
-from executor.perception.tests.fixtures import ROOT, load_frame
+from executor.perception import BasePage, FieldStatus, evidence
+from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
 from executor.perception.observation import CommandCardIdentity, Control, ControlKind, SupportCandidate
 
 
@@ -23,11 +23,7 @@ class ContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.reader = RecordingReader()
-        cls.perception = Perception(ocr_reader=cls.reader)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.perception.close()
+        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=cls.reader)
 
     def test_read_never_calls_ocr(self) -> None:
         for relative in (

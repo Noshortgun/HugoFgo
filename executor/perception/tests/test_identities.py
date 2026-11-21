@@ -12,15 +12,12 @@ from executor.device.base import Frame
 from executor.perception import BasePage, Perception
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
-from executor.perception.tests.fixtures import ROOT, load_frame
+from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
 
 
 class IdentityTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.perception = Perception()
-
-    def tearDown(self) -> None:
-        self.perception.close()
+        self.perception = isolated_perception(self.addCleanup)
 
     def test_support_candidate_includes_servant_and_craft_essence(self) -> None:
         observation = self.perception.read(

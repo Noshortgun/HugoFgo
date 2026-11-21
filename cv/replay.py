@@ -7,6 +7,7 @@ from dataclasses import replace
 import sys
 from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,7 +73,8 @@ def check_classifications():
 
 def check_perception():
     """双速感知的逐屏回放：28 屏开发/回归集 + 跨会话关键帧，覆盖覆盖层与第三张卡之后的动作安全。"""
-    perception = Perception()
+    temporary = TemporaryDirectory()
+    perception = Perception(identity_root=Path(temporary.name))
     try:
         fixtures = json.loads(PERCEPTION_FIXTURES.read_text(encoding="utf-8"))
         for group in ("regression", "crossSession"):
@@ -95,12 +97,14 @@ def check_perception():
                            f"variants={variants} 越权可点={blocked} 缺失可点={missing}", ok)
     finally:
         perception.close()
+        temporary.cleanup()
 
 
 def check_perception_identities():
     from executor.domain import FormationSlotPlan
 
-    perception = Perception()
+    temporary = TemporaryDirectory()
+    perception = Perception(identity_root=Path(temporary.name))
     perception.bind_formation((
         FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
                           ce='迦勒底午茶时光', ce_id=9403520),
@@ -153,6 +157,7 @@ def check_perception_identities():
                    'Atlas 指令卡原图覆盖梅林等从者', actual == expected)
     finally:
         perception.close()
+        temporary.cleanup()
 
 
 def recorder():
