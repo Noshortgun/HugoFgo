@@ -395,9 +395,11 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
 SKILL_ICON_OFFSETS: tuple[int, ...] = (0, 87, 174)
 SKILL_ICON_BOX = (0, 548, 61, 610)
 
-# 助战卡片行的动态检测参数：卡片比背景亮，按行平均亮度分段。
+# 助战卡片行的动态检测参数：用水平边缘找卡片上下边界（行内深色文字不会干扰）。
 SUPPORT_ROW_REGION: Box = (40, 150, 1216, 720)
-SUPPORT_ROW_MIN_MEAN = 120.0
+SUPPORT_ROW_EDGE_PERCENTILE = 97
+SUPPORT_ROW_EDGE_GROUP = 6
+SUPPORT_ROW_MIN_GAP = 80
 SUPPORT_ROW_MIN_HEIGHT = 60
 
 # 字段只在明确需要读取的页面上出现；其余页面一律 NOT_APPLICABLE。

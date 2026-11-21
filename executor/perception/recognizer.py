@@ -72,20 +72,35 @@ def _classify(evidence: Evidence):
 
 
 def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
-    """助战卡片随行滚动，按“卡片比背景亮”的行平均亮度分段定位，不写死行坐标。"""
+    """助战列表可滚动：用 Sobel 水平边缘找每张卡片的上下边界，再切成行。"""
     x1, y1, x2, y2 = cn.SUPPORT_ROW_REGION
-    profile = gray[y1:y2, x1:x2].astype(np.float32).mean(axis=1)
+    region = gray[y1:y2, x1:x2]
+    gradient = np.abs(cv2.Sobel(region, cv2.CV_32F, 0, 1, ksize=3)).mean(axis=1)
+    gradient = np.convolve(gradient, np.ones(3) / 3, 'same')
+    threshold = np.percentile(gradient, cn.SUPPORT_ROW_EDGE_PERCENTILE)
+    groups: list[list[int]] = []
+    for index, value in enumerate(gradient):
+        if value < threshold:
+            continue
+        if groups and index - groups[-1][-1] <= cn.SUPPORT_ROW_EDGE_GROUP:
+            groups[-1].append(index)
+        else:
+            groups.append([index])
+    edges: list[int] = []
+    for group in groups:
+        edge = int(np.mean(group)) + y1
+        if edges and edge - edges[-1] < cn.SUPPORT_ROW_MIN_GAP:
+            continue
+        edges.append(edge)
+
     boxes = []
-    start = None
-    for index, on in enumerate(profile > cn.SUPPORT_ROW_MIN_MEAN):
-        if on and start is None:
-            start = index
-        elif not on and start is not None:
-            if index - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
-                boxes.append((x1, max(0, start + y1 - 4), x2, index + y1 + 4))
-            start = None
-    if start is not None and len(profile) - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
-        boxes.append((x1, max(0, start + y1 - 4), x2, y2))
+    start = y1
+    for edge in edges:
+        if edge - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
+            boxes.append((x1, start, x2, edge))
+        start = edge
+    if y2 - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
+        boxes.append((x1, start, x2, y2))
     return boxes
 
 

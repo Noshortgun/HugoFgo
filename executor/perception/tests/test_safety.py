@@ -153,6 +153,23 @@ class SafetyTest(unittest.TestCase):
         self.assertTrue(480 <= switch.box[0] <= 620, switch.box)
         self.assertTrue(600 <= switch.box[2] <= 800, switch.box)
 
+    def test_support_rows_follow_scroll(self) -> None:
+        cases = {
+            'captures/2026-11-20/key/support-select-correct-ce.png': 3,
+            'captures/2026-11-20/key/support-select-wrong-ce.png': 4,  # 顶部露出被滚上去的半行
+            'captures/2026-11-20/key/163-grand-support.png': 3,
+            'captures/2026-11-20/key/164-current.png': 3,
+        }
+        for relative, expected in cases.items():
+            with self.subTest(relative=relative):
+                observation = self.read(relative)
+                rows = [item for item in observation.controls if item.kind.value == 'row']
+                self.assertEqual(expected, len(rows))
+                for row in rows:
+                    self.assertGreaterEqual(row.box[3] - row.box[1], 60)
+                for first, second in zip(rows, rows[1:]):
+                    self.assertEqual(first.box[3], second.box[1])
+
     def test_purple_enemy_bar_and_effect_ring(self) -> None:
         purple = self.read('captures/2026-11-21/key/battle-purple-hp.png')
         effect = self.read('captures/2026-11-21/key/card-effect-ring.png')
