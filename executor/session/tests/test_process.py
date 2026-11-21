@@ -21,6 +21,25 @@ def command(run_dir: Path, *extra: str) -> list[str]:
 
 
 class ExecutorProcessTest(unittest.TestCase):
+    def test_region_is_required_and_only_cn_is_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = command(Path(directory) / 'run', '--fake-interval', '0')
+            missing = [arg for arg in base if arg not in {'--region', 'CN'}]
+            result = subprocess.run(
+                missing, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20,
+            )
+            self.assertEqual(2, result.returncode)
+            self.assertIn('--region', result.stderr)
+
+            for region in ('JP', 'TW'):
+                with self.subTest(region=region):
+                    result = subprocess.run(
+                        [region if arg == 'CN' else arg for arg in base],
+                        cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20,
+                    )
+                    self.assertEqual(2, result.returncode)
+                    self.assertIn('当前仅支持 CN', result.stderr)
+
     def test_fake_mode_emits_utf8_json_lines_and_completes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory) / 'run'

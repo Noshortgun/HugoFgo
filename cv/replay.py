@@ -656,8 +656,9 @@ def check_executor_recovery():
     bronze = Observation(base_page=BasePage.AP_RECOVERY, controls=(
         Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True),))
     team = Observation(base_page=BasePage.TEAM)
+    support = Observation(base_page=BasePage.SUPPORT)
     result, device, events = run_core_scenario(
-        [bronze, bronze, team, bronze, bronze], [0.0, 0.5, 0.6, 0.7, 1.2], plan)
+        [bronze, bronze, team, bronze, bronze, support], [0.0, 0.5, 0.6, 0.7, 1.2, 1.3], plan)
     used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
     expected = [{'item': 'bronze', 'count': 1}, {'item': 'bronze', 'count': 2}]
     ok = len(device.actions) == 2 and used == expected and result.progress.recovery_used == {'bronze': 2}
@@ -706,6 +707,36 @@ def check_executor_recovery():
     add_report('executor:recovery-drain-stops-without-items', AP_RECOVERY_IMAGE, 'ap_drained', result.reason,
                'complete', f'controls={controls}; recovery={result.progress.recovery_used}', ok,
                simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [repeat, repeat, bronze, bronze, team], [0.0, 0.5, 0.6, 1.1, 1.2], plan,
+        options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = ['连续出击', '青铜果实']
+    ok = controls == expected and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-after-repeat', AP_RECOVERY_IMAGE, expected, controls,
+               'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [repeat, repeat, bronze, bronze, repeat, repeat, team],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8], plan,
+        options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = ['连续出击', '青铜果实', '连续出击']
+    ok = controls == expected and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-back-to-repeat', AP_RECOVERY_IMAGE, expected, controls,
+               'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [bronze, bronze, bronze], [0.0, 0.5, 31.0], plan)
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    ok = (result.reason == 'action_confirmation_timeout' and len(device.actions) == 1 and not used
+          and not result.progress.recovery_used)
+    add_report('executor:recovery-unconfirmed-not-counted', AP_RECOVERY_IMAGE,
+               'action_confirmation_timeout; no recovery_used', result.reason,
+               'stop', f'taps={len(device.actions)}; recovery={used}', ok, simulated_ocr=True)
 
 
 def check_executor_process():

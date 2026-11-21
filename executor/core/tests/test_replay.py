@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -162,6 +166,21 @@ class ExecutorReplayTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertTrue(output.is_file())
+
+    def test_cli_filter_runs_legacy_strategy_suite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'report.json'
+            completed = subprocess.run(
+                [sys.executable, '-m', 'executor.replay', '--filter', 'strategy', '--output', str(output)],
+                capture_output=True, text=True, encoding='utf-8', timeout=120,
+                env={**os.environ, 'PYTHONUTF8': '1'},
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            report = json.loads(output.read_text(encoding='utf-8'))
+            self.assertGreater(report['total'], 0)
+            self.assertEqual(report['total'], report['passed'])
+            self.assertTrue(all('strategy' in case['name'] for case in report['cases']))
 
 
 if __name__ == '__main__':

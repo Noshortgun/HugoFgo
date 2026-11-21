@@ -12,10 +12,22 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::settings::RunSettings;
+use crate::{paths::project_root, settings::RunSettings};
 
 const RUN_EVENT: &str = "run-event";
-const STOP_GRACE: Duration = Duration::from_millis(750);
+const STOP_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum RunPhase {
+    #[default]
+    Idle,
+    Running,
+    Stopping,
+    Completed,
+    Stopped,
+    Failed,
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -26,7 +38,7 @@ pub(crate) struct RunState {
     pub job_name: String,
     pub job_path: String,
     pub started_at_ms: u128,
-    pub status: String,
+    pub status: RunPhase,
     pub screen: String,
     pub wave: u32,
     pub turn: u32,
@@ -47,7 +59,7 @@ impl Default for RunState {
             job_name: String::new(),
             job_path: String::new(),
             started_at_ms: 0,
-            status: "idle".to_string(),
+            status: RunPhase::Idle,
             screen: String::new(),
             wave: 1,
             turn: 1,
@@ -116,13 +128,6 @@ fn now_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or(0)
-}
-
-fn project_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn python_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -257,17 +262,17 @@ impl RunManager {
             }
             "finished" => {
                 state.running = false;
-                state.status = "completed".to_string();
+                state.status = RunPhase::Completed;
                 state.completed_runs =
                     value_u32(&event.data, "completed_runs").unwrap_or(state.completed_runs);
             }
             "stopped" => {
                 state.running = false;
-                state.status = "stopped".to_string();
+                state.status = RunPhase::Stopped;
             }
             "failed" => {
                 state.running = false;
-                state.status = "failed".to_string();
+                state.status = RunPhase::Failed;
                 state.error = value_text(&event.data, "message")
                     .or_else(|| value_text(&event.data, "reason"))
                     .unwrap_or_else(|| "执行器报告失败".to_string());
@@ -283,7 +288,7 @@ impl RunManager {
         serial: String,
         job_path: String,
         settings: RunSettings,
-        region: Option<String>,
+        region: String,
     ) -> Result<RunState, String> {
         if settings.battles < 1 {
             return Err("连续出击场数必须至少为 1".to_string());
@@ -330,12 +335,17 @@ impl RunManager {
         if !fake {
             crate::device::ensure_device(&serial)?;
         }
-        let region = region.unwrap_or_else(|| "CN".to_string());
+        let region = region.trim().to_string();
+        if region != "CN" {
+            return Err("执行器当前仅支持 CN；请在“设置与资源”中选择国服后再运行".to_string());
+        }
         let run_id = format!("run-{}-{}", now_ms(), std::process::id());
-        let run_dir = app_data
-            .join("logs")
-            .join("farm")
-            .join(&run_id);
+        let log_root = if cfg!(debug_assertions) {
+            project_root().join("logs")
+        } else {
+            app_data.join("logs")
+        };
+        let run_dir = log_root.join("farm").join(&run_id);
         fs::create_dir_all(&run_dir).map_err(|error| format!("无法创建运行目录：{error}"))?;
         let job_name = job
             .file_stem()
@@ -349,11 +359,16 @@ impl RunManager {
         }
         let python = python_path(&app)?;
         let requirements = root.join("cv").join("requirements.txt");
+        let data_root = if cfg!(debug_assertions) {
+            project_root().join("data")
+        } else {
+            app_data.join("data")
+        };
         let mut command = Command::new(&python);
         command
             .args(args)
             .current_dir(&root)
-            .env("HUGOFGO_DATA_ROOT", app_data.join("data"))
+            .env("HUGOFGO_DATA_ROOT", data_root)
             .env("HUGOFGO_REGION", &region)
             .env("PYTHONUTF8", "1")
             .env("PYTHONIOENCODING", "utf-8")
@@ -374,7 +389,7 @@ impl RunManager {
             job_name,
             job_path: job.to_string_lossy().to_string(),
             started_at_ms: now_ms(),
-            status: "running".to_string(),
+            status: RunPhase::Running,
             log_dir: run_dir.to_string_lossy().to_string(),
             ..RunState::default()
         };
@@ -463,13 +478,13 @@ impl RunManager {
             match status {
                 Ok(exit) => {
                     inner.state.exit_code = exit.code();
-                    if inner.state.status == "stopping" {
-                        inner.state.status = "stopped".to_string();
-                    } else if exit.success() && inner.state.status != "completed" {
-                        inner.state.status = "failed".to_string();
+                    if inner.state.status == RunPhase::Stopping {
+                        inner.state.status = RunPhase::Stopped;
+                    } else if exit.success() && inner.state.status != RunPhase::Completed {
+                        inner.state.status = RunPhase::Failed;
                         inner.state.error = "执行器已退出，但没有发送完成事件".to_string();
-                    } else if !exit.success() && inner.state.status == "running" {
-                        inner.state.status = "failed".to_string();
+                    } else if !exit.success() && inner.state.status == RunPhase::Running {
+                        inner.state.status = RunPhase::Failed;
                         let mut detail = if stderr.is_empty() {
                             String::new()
                         } else {
@@ -485,11 +500,11 @@ impl RunManager {
                     }
                 }
                 Err(error) => {
-                    inner.state.status = "failed".to_string();
+                    inner.state.status = RunPhase::Failed;
                     inner.state.error = error;
                 }
             }
-            if inner.state.status == "failed" && !inner.state.error.is_empty() {
+            if inner.state.status == RunPhase::Failed && !inner.state.error.is_empty() {
                 synthetic = Some(RunEvent::new(
                     run_id,
                     "failed",
@@ -518,7 +533,7 @@ impl RunManager {
                 return Ok(inner.state.clone());
             }
             inner.state.running = false;
-            inner.state.status = "stopping".to_string();
+            inner.state.status = RunPhase::Stopping;
             let child = inner
                 .child
                 .clone()
@@ -526,6 +541,7 @@ impl RunManager {
             (inner.state.run_id.clone(), child)
         };
 
+        let mut stop_error = None;
         {
             let mut process = child
                 .lock()
@@ -534,23 +550,37 @@ impl RunManager {
                 let _ = stdin.write_all(b"stop\n");
                 let _ = stdin.flush();
             }
-            let deadline = Instant::now() + STOP_GRACE;
+            let deadline = Instant::now() + STOP_TIMEOUT;
             let mut exited = process
                 .try_wait()
                 .map_err(|error| format!("无法检查执行器状态：{error}"))?
                 .is_some();
-            while !exited && Instant::now() < deadline {
+            let mut terminal = false;
+            while !terminal && Instant::now() < deadline {
                 thread::sleep(Duration::from_millis(25));
-                exited = process
-                    .try_wait()
-                    .map_err(|error| format!("无法检查执行器状态：{error}"))?
-                    .is_some();
+                if !exited {
+                    exited = process
+                        .try_wait()
+                        .map_err(|error| format!("无法检查执行器状态：{error}"))?
+                        .is_some();
+                }
+                terminal = self.inner.lock().map(|inner| {
+                    inner.state.run_id == run_id
+                        && matches!(inner.state.status, RunPhase::Completed | RunPhase::Stopped | RunPhase::Failed)
+                }).unwrap_or(false);
             }
-            if !exited {
-                terminate_process_tree(&mut process)?;
-                process
-                    .wait()
-                    .map_err(|error| format!("无法确认执行器已终止：{error}"))?;
+            if !terminal {
+                if exited {
+                    eprintln!("执行器退出但未发送终端事件；停止流程异常");
+                    stop_error = Some("执行器退出时未发送终端事件；请查看运行日志".to_string());
+                } else {
+                    eprintln!("执行器超过 30 秒未发送终端事件；强制终止进程树（异常停止）");
+                    terminate_process_tree(&mut process)?;
+                    process
+                        .wait()
+                        .map_err(|error| format!("无法确认执行器已终止：{error}"))?;
+                    stop_error = Some("执行器未在 30 秒内确认安全停止，已强制终止；请查看运行日志".to_string());
+                }
             }
         }
 
@@ -560,7 +590,12 @@ impl RunManager {
             .map_err(|_| "运行状态锁不可用".to_string())?;
         if inner.state.run_id == run_id {
             inner.state.running = false;
-            inner.state.status = "stopped".to_string();
+            if inner.state.status == RunPhase::Stopping {
+                inner.state.status = RunPhase::Stopped;
+            }
+            if let Some(error) = stop_error {
+                inner.state.error = error;
+            }
         }
         Ok(inner.state.clone())
     }
@@ -600,7 +635,7 @@ pub(crate) fn start_run(
     serial: String,
     job_path: String,
     settings: RunSettings,
-    region: Option<String>,
+    region: String,
 ) -> Result<RunState, String> {
     manager.start(app, serial, job_path, settings, region)
 }

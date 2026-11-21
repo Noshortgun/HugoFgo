@@ -1,7 +1,14 @@
+"""真实截图回放；--filter 与 --output 组合转发到 cv/replay.py 旧用例集。
+
+默认运行本文件的真实截图场景，--only 选择场景，--report 保存 JSON 汇总。
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
+import runpy
+import sys
 import tempfile
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -34,6 +41,7 @@ class ReplayCase:
     reason: str = 'completed'
     states: tuple[str, ...] = ()
     event_types: tuple[str, ...] = ()
+    excluded_event_types: tuple[str, ...] = ()
     times: tuple[float, ...] | None = None
     plan_factory: Callable[[], ExecutionPlan] = field(default=lambda: replay_plan(), repr=False)
     options: RunOptions = field(default_factory=lambda: RunOptions(write_evidence=False))
@@ -170,7 +178,11 @@ def check_report(report: ReplayReport) -> None:
     require_equal(case, list(case.actions), [event.data['control'] for event in report.events.events
                                            if event.type == 'action'], '动作序列')
     require_ordered(case, case.states, [item.base_page.value for item in report.observations], '画面顺序')
-    require_ordered(case, case.event_types, [event.type for event in report.events.events], '事件顺序')
+    actual_events = [event.type for event in report.events.events]
+    require_ordered(case, case.event_types, actual_events, '事件顺序')
+    for event_type in case.excluded_event_types:
+        if event_type in actual_events:
+            raise ReplayFailure(f'{case.name}: 不应出现事件 {event_type}')
     require_equal(case, case.completed_runs, report.result.progress.completed_runs, '完成场数')
 
     action_positions = [index for index, item in enumerate(report.trace)
@@ -341,6 +353,60 @@ CASES = (
         options=RunOptions(recovery=RecoveryPolicy(drain_after_turns=True), write_evidence=False),
     ),
     ReplayCase(
+        name='ap-recovery-after-repeat',
+        frames=(
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 33.5),
+        actions=('下一步', '连续出击', '青铜果实'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('drops', 'battle', 'ap_recovery', 'team', 'unknown'),
+        event_types=('action', 'action', 'action', 'recovery_used', 'warning', 'failed'),
+        options=RunOptions(run_count=2, write_evidence=False),
+        completed_runs=1,
+    ),
+    ReplayCase(
+        name='ap-recovery-back-to-repeat',
+        frames=(
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 34.5),
+        actions=('下一步', '连续出击', '青铜果实', '连续出击'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('drops', 'battle', 'ap_recovery', 'battle', 'team', 'unknown'),
+        event_types=('action', 'action', 'action', 'recovery_used', 'action', 'warning', 'failed'),
+        options=RunOptions(run_count=2, write_evidence=False),
+        completed_runs=1,
+    ),
+    ReplayCase(
+        name='ap-recovery-unconfirmed',
+        frames=(
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'ap-recovery-bronze.png',
+        ),
+        times=(0.0, 0.5, 31.0),
+        actions=('青铜果实',),
+        status=RunStatus.STOPPED,
+        reason='action_confirmation_timeout',
+        states=('ap_recovery',),
+        event_types=('state_changed', 'action', 'failed'),
+        excluded_event_types=('recovery_used',),
+        completed_runs=0,
+    ),
+    ReplayCase(
         name='ap-default-bronze',
         frames=(
             FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
@@ -491,12 +557,26 @@ def get_case(name: str) -> ReplayCase:
         raise KeyError(f'未知回放用例：{name}') from error
 
 
+def legacy_main(argv: list[str]) -> int:
+    namespace = runpy.run_path(str(ROOT / 'cv' / 'replay.py'))
+    previous = sys.argv
+    sys.argv = [str(ROOT / 'cv' / 'replay.py'), *argv]
+    try:
+        return int(namespace['main']())
+    finally:
+        sys.argv = previous
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog='python -m executor.replay', description='新执行器真实截图回放')
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if any(argument == '--filter' or argument.startswith('--filter=') for argument in arguments):
+        return legacy_main(arguments)
+    parser = argparse.ArgumentParser(prog='python -m executor.replay', description=__doc__)
     parser.add_argument('--only', action='append', help='只运行指定用例，可重复')
-    parser.add_argument('--output', help='保留各用例运行证据的目录')
+    parser.add_argument('--output', help='保留各用例运行证据的目录；与 --filter 同用时为旧报告路径')
     parser.add_argument('--report', help='JSON 汇总报告路径')
-    args = parser.parse_args(argv)
+    parser.add_argument('--filter', help='运行名称包含指定文本的 cv/replay.py 旧用例')
+    args = parser.parse_args(arguments)
     selected = tuple(get_case(name) for name in args.only) if args.only else CASES
 
     temporary = None

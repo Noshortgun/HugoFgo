@@ -2,10 +2,6 @@ import { invoke as invokeTauri } from './tauri';
 
 export { isTauri } from './tauri';
 
-export function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  return invokeTauri<T>(command, args);
-}
-
 export interface DeviceInfo {
   serial: string;
   state: string;

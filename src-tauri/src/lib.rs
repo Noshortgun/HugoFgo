@@ -1,5 +1,6 @@
 mod device;
 mod history;
+mod paths;
 mod resources;
 mod run;
 mod settings;
@@ -15,16 +16,9 @@ struct AppState {
     resources: resources::ResourceState,
 }
 
-fn development_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("src-tauri must have a project parent")
-        .to_path_buf()
-}
-
 fn jobs_directory(app: &AppHandle) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
-        return Ok(development_root().join("jobs"));
+        return Ok(paths::project_root().join("jobs"));
     }
     app.path()
         .app_data_dir()
