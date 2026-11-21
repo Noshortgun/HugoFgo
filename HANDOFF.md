@@ -580,3 +580,12 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 留出集口径同步修正：17 帧中该页属于非必选，首轮按票据计 **15/17 通过**，其余两处问题（宝具卡光斑、撤退按钮偏移）已修复。
 - 该页现在保持 `unknown` 且不输出任何控件，不会误点。
 - 感知测试 52 项、回放 118/118。
+
+
+## 66. Retro 护栏：素材校验、特征实验台与文档指针（2026-11-21）
+
+- 机械护栏：`scripts/check-perception-fixtures.mjs` 校验感知回归素材的字段完整性、基页合法性、`basis` 来源（annotated/rule/inferred/holdout）、文件存在与去重，并按来源分组报告；新增 `npm run fixtures:check`，CI 同步执行。
+- CI 执行器测试统一为 `python -m unittest discover -s executor -t .`，新增 Python 测试模块不再需要单独加 CI 步骤。
+- 工具：`scripts/perception_lab.py` 输出每帧识别结果与宝具卡纹章特征（面积、宽高、长宽比、填充率、位置）和敌人血条，要求“先出特征表，再改阈值”；`evidence.emblem_candidates()` 让感知与实验共用同一份判据。
+- 文档：testing.md 增加素材防删规则与阈值实验流程，development.md 增加感知工具入口；新增 ADR-0006（双速感知）；GLOSSARY 明确 actionable=画面上可按，不等于流程允许。
+- 验证：执行器统一单测、素材校验、回放 118/118、构建通过。

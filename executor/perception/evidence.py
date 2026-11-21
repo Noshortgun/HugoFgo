@@ -175,18 +175,15 @@ def find_dialog_buttons(image: np.ndarray, region=cn.DIALOG_BUTTON_REGION) -> li
     return sorted(boxes)
 
 
-def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
-                     card_box: tuple[int, int, int, int]) -> bool:
-    """卡种纹章：卡面下部一块足够宽、尺寸在合理范围的纯色图形（绿/蓝/红）。
-
-    只取每种颜色的最大连通域：技能动画的巨型效果环会明显超出宝具卡纹章尺寸。
-    """
+def emblem_candidates(image: np.ndarray, box: tuple[int, int, int, int],
+                      card_box: tuple[int, int, int, int]) -> list[dict]:
+    """返回每种颜色族最大连通域的特征与判定，供感知和调参实验共用。"""
     x1, y1, x2, y2 = box
-    height = y2 - y1
     hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     low_ratio = 0.30
     card_top, card_height = card_box[1], card_box[3] - card_box[1]
+    candidates = []
     for index, hues in enumerate(cn.NP_EMBLEM_HUES):
         mask = np.zeros_like(hue, dtype=np.uint8)
         for low, high in hues:
@@ -198,30 +195,33 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
             continue
         largest = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest)
-        bounds = cn.NP_EMBLEM_BOUNDS[index]
-        if not (bounds['min_area'] <= area <= bounds['max_area']):
-            continue
         _x, y, width, h = cv2.boundingRect(largest)
-        if not (bounds['min_width'] <= width <= bounds['max_width']):
-            continue
-        # 蓝星的低面积候选要求更宽，避免把蓝色光斑当成 Arts 纹章。
-        if index == 1 and area < 1500 and width < 90:
-            continue
-        if h and not (bounds['min_aspect'] <= width / h <= bounds['max_aspect']):
-            continue
-        fill = area / (width * h) if h else 0.0
-        if fill < bounds['min_fill']:
-            continue
         top = y + y1
-        center_y = top + h / 2
-        if top + h > bounds['max_bottom']:
-            continue
-        ratio = (center_y - card_top) / card_height if card_height else 0
+        fill = area / (width * h) if h else 0.0
+        aspect = width / h if h else 0.0
+        ratio = (top + h / 2 - card_top) / card_height if card_height else 0.0
+        bounds = cn.NP_EMBLEM_BOUNDS[index]
         high_fill = fill >= bounds.get('high_fill_min', 1.0)
         max_ratio = bounds.get('high_fill_max_ratio', bounds['max_center_ratio']) if high_fill             else bounds['max_center_ratio']
-        if low_ratio <= ratio <= max_ratio:
-            return True
-    return False
+        hit = (
+            bounds['min_area'] <= area <= bounds['max_area']
+            and bounds['min_width'] <= width <= bounds['max_width']
+            and bounds['min_aspect'] <= aspect <= bounds['max_aspect']
+            and fill >= bounds['min_fill']
+            and not (index == 1 and area < 1500 and width < 90)
+            and top + h <= bounds['max_bottom']
+            and low_ratio <= ratio <= max_ratio
+        )
+        candidates.append({
+            'family': index, 'area': area, 'width': width, 'height': h,
+            'aspect': aspect, 'fill': fill, 'bottom': top + h, 'center_ratio': ratio, 'hit': hit,
+        })
+    return candidates
+
+
+def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
+                     card_box: tuple[int, int, int, int]) -> bool:
+    return any(candidate['hit'] for candidate in emblem_candidates(image, box, card_box))
 
 
 def measure_np_slots(image: np.ndarray, gray: np.ndarray,

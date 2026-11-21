@@ -14,8 +14,8 @@ npm run preflight -- --offline
 
 ```bash
 npm run build
-python -m unittest discover -s executor/domain/tests -t . -v
-python -m unittest discover -s executor/perception/tests -t . -v
+python -m unittest discover -s executor -t . -v
+npm run fixtures:check
 python -m executor.device --self-test
 npm run replay
 npm run issues:selftest
@@ -30,6 +30,8 @@ Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scr
 ## 2. 行为变更规则
 
 - 执行器或图像识别的每次行为变更，都要同步更新 `cv/replay.py` 的离线回放。
+- 新增基页、覆盖层或枚举必须对应票据词汇；票据范围外的识别需求先确认再施工。
+- 调整识别阈值前，先用 `scripts/perception_lab.py` 输出相关帧的特征表，再据表改参数。
 - 每个实机故障都要补一条回归用例。
 - 修改 `cv/requirements.txt` 的版本或安装方式后，必须重跑全部回放。
 - 测试断言外部可观察行为，包括画面分类、动作、坐标、停止和错误诊断。
@@ -46,12 +48,13 @@ Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scr
 - 每个日期目录用 `index.json` 登记来源、设备和画面含义。
 - 新增回放截图时，同时更新索引、回放引用和 `.gitignore`。
 - 过程调试图、OCR 临时输出和评审报告不进入 `captures/`。
+- 用户采集目录（`logs/`、`captures/`）只允许复制或移动，不允许删除；整理本地文件前，先检查测试、回放和行为基线中的路径引用。
 
 `logs/` 保存本地运行证据和回放报告，不入库。`.scratch/` 保存临时实验，默认不入库；现有 `.scratch/backend-rebuild/` 票据源是例外。清理本地文件前检查测试和行为基线中的路径引用。
 
 ## 4. CI
 
-`.github/workflows/ci.yml` 在 PR 和 main 推送时执行前端构建、领域单元测试、感知单元测试和离线回放。回放失败时上传 `logs/replay/latest.json`。票据漂移检查目前只提供信息，不阻断 CI。
+`.github/workflows/ci.yml` 在 PR 和 main 推送时执行前端构建、执行器单元测试（`python -m unittest discover -s executor -t .`）、感知素材校验（`npm run fixtures:check`）和离线回放。回放失败时上传 `logs/replay/latest.json`。票据漂移检查目前只提供信息，不阻断 CI。
 
 本地使用相同命令复现 CI，不另维护一套测试入口。
 

@@ -39,11 +39,11 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Run executor domain unit tests
-        run: python -m unittest discover -s executor/domain/tests -t . -v
+      - name: Run executor unit tests
+        run: python -m unittest discover -s executor -t . -v
 
-      - name: Run perception unit tests
-        run: python -m unittest discover -s executor/perception/tests -t . -v
+      - name: Check perception fixtures
+        run: node scripts/check-perception-fixtures.mjs
 
       - name: Run replay
         run: npm run replay
