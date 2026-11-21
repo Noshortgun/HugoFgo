@@ -6,7 +6,7 @@
  * 实机输入必须显式 --live 开启；未开启时预检只执行 adb 的只读查询。
  *
  * 用法：
- *   node scripts/preflight.mjs                     # 实机会话前：git + 回放依赖 + adb + 外部进程
+ *   node scripts/preflight.mjs                     # 实机会话前：git + 回放依赖 + 构建环境 + adb + 外部进程
  *   node scripts/preflight.mjs --offline           # 只做代码：跳过 adb 与外部进程检查
  *   node scripts/preflight.mjs --live              # 进入实机会话：外部冲突与设备问题提升为阻断（预检本身不发送输入）
  *   node scripts/preflight.mjs --allow-branch      # 确认在非施工分支上继续
@@ -25,7 +25,7 @@ import { probeReplayDeps, REPLAY_PACKAGES, requirementsInstallCommand, resolvePy
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isWindows = process.platform === 'win32';
-const SECTIONS = ['仓库', '回放环境', '设备', '外部自动化', '实机输入'];
+const SECTIONS = ['仓库', '回放环境', '构建环境', '设备', '外部自动化', '实机输入'];
 const WORK_BRANCH = /^(ticket|integration|feature|fix|chore|issue)\//;
 const SUPPORTED_WIDTH = 1280;
 const SUPPORTED_HEIGHT = 720;
@@ -293,6 +293,66 @@ function checkReplayAssets(python) {
   }
 }
 
+function resolveCargo() {
+  const fromPath = spawnSync('cargo', ['--version'], { encoding: 'utf8' });
+  if (!fromPath.error && fromPath.status === 0) return { command: 'cargo', version: fromPath.stdout.trim(), source: 'PATH' };
+
+  const home = process.env.USERPROFILE || process.env.HOME;
+  if (home) {
+    const local = path.join(home, '.cargo', 'bin', isWindows ? 'cargo.exe' : 'cargo');
+    if (fs.existsSync(local)) {
+      const result = spawnSync(local, ['--version'], { encoding: 'utf8' });
+      if (!result.error && result.status === 0) return { command: local, version: result.stdout.trim(), source: local };
+    }
+  }
+  return null;
+}
+
+function checkRust() {
+  const cargo = resolveCargo();
+  if (!cargo) {
+    add('构建环境', 'warn', '未找到 Rust 工具链（cargo）', {
+      detail: 'src-tauri 的改动将无法在本地编译验证，只能靠人工审阅；CI 的 Windows 安装包任务会编译',
+      fix: '见 docs/development.md 的「Windows 构建环境」：rustup + stable + VS Build Tools C++ 工作负载',
+    });
+    return;
+  }
+
+  add('构建环境', 'ok', `Rust 工具链可用：${cargo.version}`, { detail: `来源：${cargo.source}` });
+
+  if (!isWindows) return;
+  const link = spawnSync('where.exe', ['link.exe'], { encoding: 'utf8' });
+  const first = (link.stdout ?? '').split(/\r?\n/).filter(Boolean)[0] ?? '';
+  if (/Git[\\/]usr[\\/]bin[\\/]link\.exe/i.test(first)) {
+    add('构建环境', 'warn', 'PATH 里的 link.exe 是 Git 的 Unix 工具，不是 MSVC 链接器', {
+      detail: `当前解析到 ${first}；用它链接 Rust 会报 "link: extra operand"`,
+      fix: '见 docs/development.md 的「Windows 构建环境」：显式设置 CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER',
+    });
+  }
+}
+
+function checkTicketSources() {
+  const script = path.join(root, 'scripts', 'issue-sync.mjs');
+  if (!fs.existsSync(script)) return;
+  const result = spawnSync(process.execPath, [script, '--check'], { cwd: root, encoding: 'utf8', timeout: 120000 });
+  if (result.error) {
+    add('构建环境', 'warn', '票据源检查未能完成', {
+      detail: result.error.code === 'ETIMEDOUT' ? 'issue-sync --check 超时（需要网络与 gh）' : result.error.message,
+      fix: '网络可用后重跑 npm run issues:check',
+    });
+    return;
+  }
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
+  if (result.status === 0) {
+    add('构建环境', 'ok', '票据源与 GitHub 一致（issue-sync --check）');
+    return;
+  }
+  add('构建环境', 'fail', '票据源与 GitHub 存在漂移或结构问题', {
+    detail: output.split(/\r?\n/).slice(-12).join('\n'),
+    fix: 'npm run issues:check',
+  });
+}
+
 function checkDevice({ serial }) {
   let adb;
   try {
@@ -541,6 +601,8 @@ function main() {
 
   checkGit({ allowBranch });
   checkPython();
+  checkRust();
+  checkTicketSources();
 
   let device = { ready: false };
   let automation = 'unknown';
