@@ -1,5 +1,7 @@
 import { ref } from 'vue';
 
+import { fetchResourceJson, resourceRegion, resourceUrl, type Region } from './resources';
+
 export interface EquipInfo {
   id: number;
   name: string;
@@ -10,21 +12,29 @@ export interface EquipInfo {
 
 export const equipsById = ref<Map<number, EquipInfo>>(new Map());
 export const equipsList = ref<EquipInfo[]>([]);
+let loadedRegion: Region | null = null;
 let started: Promise<void> | null = null;
+let startedRegion: Region | null = null;
 
-export function loadEquips(): Promise<void> {
-  if (started) return started;
+export function loadEquips(region: Region = resourceRegion.value): Promise<void> {
+  if (loadedRegion === region) return Promise.resolve();
+  if (started && startedRegion === region) return started;
+  loadedRegion = null;
+  startedRegion = region;
   started = (async () => {
     try {
-      const response = await fetch('/data/equips-by-id.json');
-      if (!response.ok) return;
-      const data = (await response.json()) as Record<string, EquipInfo>;
+      const data = await fetchResourceJson<Record<string, EquipInfo>>('equips-by-id.json');
       const map = new Map<number, EquipInfo>();
-      Object.values(data).forEach((equip) => map.set(equip.id, equip));
+      Object.values(data).forEach((equip) => map.set(equip.id, { ...equip, icon: equip.icon ? resourceUrl(equip.icon) : null }));
       equipsById.value = map;
       equipsList.value = [...map.values()].sort((left, right) => right.rarity - left.rarity || left.id - right.id);
+      loadedRegion = region;
     } catch {
-      // 分享版不含礼装图库，保持为空。
+      equipsById.value = new Map();
+      equipsList.value = [];
+    } finally {
+      started = null;
+      startedRegion = null;
     }
   })();
   return started;

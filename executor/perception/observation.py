@@ -89,6 +89,8 @@ class CommandCardIdentity:
     noble_phantasm: bool = False
     svt_id: int | None = None
     support: bool = False
+    crit_rate: float | None = None
+    affinity: str | None = None
 
 
 @dataclass(frozen=True)

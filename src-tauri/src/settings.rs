@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum RecoveryItem {
+pub(crate) enum RecoveryItem {
     SaintQuartz,
     Gold,
     Silver,
@@ -14,11 +14,23 @@ enum RecoveryItem {
     Copper,
 }
 
+impl RecoveryItem {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::SaintQuartz => "saint_quartz",
+            Self::Gold => "gold",
+            Self::Silver => "silver",
+            Self::Bronze => "bronze",
+            Self::Copper => "copper",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-struct RecoveryPolicy {
-    allowed: Vec<RecoveryItem>,
-    drain_after_turns: bool,
+pub(crate) struct RecoveryPolicy {
+    pub(crate) allowed: Vec<RecoveryItem>,
+    pub(crate) drain_after_turns: bool,
 }
 
 impl Default for RecoveryPolicy {
@@ -32,9 +44,9 @@ impl Default for RecoveryPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-struct RunSettings {
-    battles: u32,
-    recovery: RecoveryPolicy,
+pub(crate) struct RunSettings {
+    pub(crate) battles: u32,
+    pub(crate) recovery: RecoveryPolicy,
 }
 
 impl Default for RunSettings {

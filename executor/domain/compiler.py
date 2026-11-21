@@ -14,6 +14,7 @@ from executor.domain.model import (
     CompileResult,
     Diagnostic,
     ExecutionPlan,
+    FallbackStrategy,
     FormationSlotPlan,
     TurnPlan,
     WavePlan,
@@ -37,6 +38,18 @@ def _formation_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> dict
             continue
         slots[slot] = entry['name'].strip()
     return slots
+
+
+def _compile_strategy(raw: dict[str, Any]) -> FallbackStrategy:
+    slots = raw.get('servantOrderSlots')
+    return FallbackStrategy(
+        allow_np=raw['allowNp'],
+        servant_order=tuple(raw['servantOrder']),
+        servant_order_slots=tuple(slots) if slots is not None else None,
+        cards=raw['cards'],
+        color_priority=tuple(raw['colorPriority']),
+        strategy_order=tuple(raw['strategyOrder']),
+    )
 
 
 def _compile_formation(raw: dict[str, Any]) -> tuple[FormationSlotPlan, ...]:
@@ -185,5 +198,8 @@ def compile_job(text: str) -> CompileResult:
         enemy_count=raw['enemyCount'],
         waves=waves,
         formation=_compile_formation(raw),
+        strategy=_compile_strategy(raw['strategy']),
+        strategy_by_wave={int(wave): _compile_strategy(strategy) if strategy is not None else None
+                          for wave, strategy in (raw.get('strategyByWave') or {}).items()},
     )
     return CompileResult(None if diagnostics else plan, diagnostics)

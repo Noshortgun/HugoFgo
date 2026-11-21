@@ -8,6 +8,7 @@ from typing import Protocol
 
 from executor.core.ap_policy import CONTROL_NAMES, RecoveryItem, select_recovery
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
+from executor.core.strategy import CardSelection, select_cards
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
 from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate, Variant
@@ -77,6 +78,26 @@ def card_requests(turn: TurnPlan) -> tuple[CardRequest, ...]:
     if any(item is None for item in requests):
         return ()
     return tuple(item for item in requests if item is not None)
+
+
+def scheduled_np_requests(turn: TurnPlan) -> tuple[tuple[int | None, CardRequest], ...]:
+    requests: list[CardRequest | None] = [None, None, None]
+    automatic: list[int] = []
+    for action in turn.actions:
+        if action.kind == 'attack' and action.member_slot is not None and action.member_slot not in automatic:
+            automatic.append(action.member_slot)
+    for slot, position in turn.np_positions.items():
+        if position == 'auto':
+            if slot not in automatic:
+                automatic.append(slot)
+        elif isinstance(position, int) and 1 <= position <= 3:
+            requests[position - 1] = CardRequest(slot, None, None, True)
+            if slot in automatic:
+                automatic.remove(slot)
+    for slot in automatic:
+        if None in requests:
+            requests[requests.index(None)] = CardRequest(slot, None, None, True)
+    return tuple((index + 1, request) for index, request in enumerate(requests) if request is not None)
 
 
 def matching_card_control(observation: Observation, wanted: CardRequest,
@@ -160,6 +181,7 @@ class Runner:
         self.stable_since: float | None = None
         self.stable_box: tuple[int, int, int, int] | None = None
         self.card_index = 0
+        self.card_selection: CardSelection | None = None
         self.confirming_card = False
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
@@ -170,6 +192,7 @@ class Runner:
         self.starting_next_run = False
         self.result_seen = False
         self.awaiting_attack_end = False
+        self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
         self.initial_target_pending = bool(plan.waves and plan.waves[0].target != 1)
@@ -427,6 +450,10 @@ class Runner:
         return None
 
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
+        if self.fallback_mode:
+            if self.tap_stable(observation, '攻击', now):
+                self.wait_for_page(BasePage.CARD, now)
+            return None
         wave = self.plan.waves[self.progress.wave - 1]
         if self.initial_target_pending:
             if self.tap_stable(observation, f'敌方{wave.target}', now):
@@ -492,27 +519,65 @@ class Runner:
         return None
 
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
-        turn = self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1]
-        requests = card_requests(turn)
-        if len(requests) != 3:
-            self.emit('failed', now, reason='card_mismatch', message='作业没有提供可执行的三张指令卡')
-            return self.result(RunStatus.STOPPED, 'card_mismatch')
-        reason = ('fallback_required' if turn.attack is not None and turn.attack.mode == 'prefer'
-                  else 'card_mismatch')
-        if self.card_index == 0 and not complete_card_controls(observation, requests):
-            self.emit('failed', now, reason=reason, card_position=1)
-            return self.result(RunStatus.STOPPED, reason)
-        wanted = requests[self.card_index]
-        control = matching_card_control(observation, wanted, set())
-        if control is None:
-            self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
-                      servant_slot=wanted.servant_slot, card_type=wanted.card_type,
-                      deck_index=wanted.deck_index, noble_phantasm=wanted.noble_phantasm)
-            return self.result(RunStatus.STOPPED, reason)
+        turn = (None if self.fallback_mode else
+                self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
+        use_strategy = self.fallback_mode or self.card_selection is not None or turn.attack is None or (
+            turn.attack is not None and turn.attack.mode == 'strategy')
+        if (turn is not None and turn.attack is not None and turn.attack.mode == 'prefer'
+                and self.card_index == 0):
+            preferred = card_requests(turn)
+            use_strategy = len(preferred) != 3 or not complete_card_controls(observation, preferred)
+        if use_strategy:
+            if self.card_selection is None:
+                reserved: list[tuple[int | None, Control]] = []
+                if turn is not None:
+                    for position, wanted in scheduled_np_requests(turn):
+                        reserved_control = matching_card_control(observation, wanted, set())
+                        if reserved_control is None:
+                            self.emit('failed', now, reason='fallback_cards_unavailable',
+                                      card_position=position, servant_slot=wanted.servant_slot,
+                                      message='作业宝具卡未在当前手牌中确认')
+                            return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
+                        reserved.append((position, reserved_control))
+                self.card_selection = select_cards(observation, self.plan.strategy,
+                                                   self.plan, self.progress.wave, tuple(reserved))
+                for warning in self.card_selection.warnings:
+                    self.emit('warning', now, reason='strategy_servant_slots', message=warning)
+            selection = self.card_selection
+            if selection.diagnostic is not None or len(selection.controls) != 3:
+                self.emit('failed', now, reason='fallback_cards_unavailable',
+                          message=selection.diagnostic or '补刀策略未选出三张卡',
+                          strategy_source=selection.source)
+                return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
+            wanted_control = selection.controls[self.card_index]
+            control = observation.control(wanted_control.name)
+            reason = 'fallback_cards_unavailable'
+            if control is None or not control.actionable or control.card != wanted_control.card:
+                self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
+                          message='已选指令卡在当前画面不可确认')
+                return self.result(RunStatus.STOPPED, reason)
+        else:
+            requests = card_requests(turn)
+            if len(requests) != 3:
+                self.emit('failed', now, reason='card_mismatch', message='作业没有提供可执行的三张指令卡')
+                return self.result(RunStatus.STOPPED, 'card_mismatch')
+            reason = ('fallback_required' if turn.attack is not None and turn.attack.mode == 'prefer'
+                      else 'card_mismatch')
+            if self.card_index == 0 and not complete_card_controls(observation, requests):
+                self.emit('failed', now, reason=reason, card_position=1)
+                return self.result(RunStatus.STOPPED, reason)
+            wanted = requests[self.card_index]
+            control = matching_card_control(observation, wanted, set())
+            if control is None:
+                self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
+                          servant_slot=wanted.servant_slot, card_type=wanted.card_type,
+                          deck_index=wanted.deck_index, noble_phantasm=wanted.noble_phantasm)
+                return self.result(RunStatus.STOPPED, reason)
         if not self.tap_stable(observation, control.name, now):
             return None
         if self.card_index == 2:
             self.card_index = 0
+            self.card_selection = None
             self.awaiting_attack_end = True
             self.wait_for_pages(now, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
         else:
@@ -624,12 +689,12 @@ class Runner:
     def unsupported_job(self) -> tuple[int, int, str] | None:
         for wave in self.plan.waves:
             for turn_number, turn in enumerate(wave.turns, start=1):
-                if turn.attack is not None and turn.attack.mode == 'strategy':
-                    return wave.number, turn_number, '补刀策略尚未接入执行器'
-                if len(card_requests(turn)) != 3:
-                    return wave.number, turn_number, '作业没有提供无需补刀策略的三张卡'
                 if any(action.secondary_selection for action in turn.actions):
                     return wave.number, turn_number, '二次选择的画面证据尚未接入执行器'
+                if turn.attack is None or turn.attack.mode != 'verify':
+                    continue
+                if len(card_requests(turn)) != 3:
+                    return wave.number, turn_number, '作业没有提供无需补刀策略的三张卡'
         return None
 
     def run(self) -> RunResult:
@@ -798,9 +863,7 @@ class Runner:
                         if not isinstance(wave, int) or not isinstance(turn, int) or (wave, turn) <= current:
                             confirmed = False
                         elif wave == current[0] and turn == current[1] + 1:
-                            if turn > len(self.plan.waves[wave - 1].turns):
-                                self.emit('failed', now, reason='fallback_required', wave=wave, turn=turn)
-                                return self.result(RunStatus.STOPPED, 'fallback_required')
+                            self.fallback_mode = turn > len(self.plan.waves[wave - 1].turns)
                             self.progress.turn = turn
                             self.progress.action_index = 0
                             self.emit('turn_started', now, wave=wave, turn=turn)
@@ -808,6 +871,7 @@ class Runner:
                             self.progress.wave = wave
                             self.progress.turn = 1
                             self.progress.action_index = 0
+                            self.fallback_mode = False
                             self.initial_target_pending = self.plan.waves[wave - 1].target != 1
                             self.emit('wave_started', now, wave=wave, turn=1)
                             self.emit('turn_started', now, wave=wave, turn=1)
@@ -828,6 +892,7 @@ class Runner:
                         self.progress.wave = 1
                         self.progress.turn = 1
                         self.progress.action_index = 0
+                        self.fallback_mode = False
                         self.active_slots = [0, 1, 2]
                         self.initial_target_pending = self.plan.waves[0].target != 1
                         self.run_settled = False

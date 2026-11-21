@@ -75,11 +75,23 @@ class FormationSlotPlan:
 
 
 @dataclass(frozen=True)
+class FallbackStrategy:
+    allow_np: bool = False
+    servant_order: tuple[str, ...] = ()
+    servant_order_slots: tuple[int, ...] | None = None
+    cards: str = 'buster'
+    color_priority: tuple[str, ...] = ('buster', 'arts', 'quick')
+    strategy_order: tuple[str, ...] = ('servant', 'cards', 'crit')
+
+
+@dataclass(frozen=True)
 class ExecutionPlan:
     mystic_id: str
     enemy_count: int
     waves: tuple[WavePlan, ...]
     formation: tuple[FormationSlotPlan, ...]
+    strategy: FallbackStrategy = field(default_factory=FallbackStrategy)
+    strategy_by_wave: dict[int, FallbackStrategy | None] = field(default_factory=dict)
 
 
 @dataclass

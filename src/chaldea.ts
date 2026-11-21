@@ -1,5 +1,6 @@
 import type { FallbackStrategy, HugoFgoJob, JobAction, JobCard, JobFormationSlot, JobTurn, JobWave, NpPosition, SelectedSkillOption } from './types';
 import type { EquipInfo } from './equips';
+import { fetchResourceJson, resourceRegion, type Region } from './resources';
 
 interface SecondarySkill {
   num: number;
@@ -124,22 +125,26 @@ export async function fetchChaldeaTeam(id: number): Promise<ChaldeaTeam> {
   return { id: row.id ?? id, questId: row.quest_id ?? row.questId, data };
 }
 
+let catalogRegion: Region | null = null;
 let catalogPromise: Promise<Record<number, ChaldeaServantInfo>> | null = null;
 
 export function loadChaldeaCatalog(): Promise<Record<number, ChaldeaServantInfo>> {
-  if (!catalogPromise) {
-    catalogPromise = fetch('/data/servants-by-id.json')
-      .then((response) => (response.ok ? (response.json() as Promise<Record<number, ChaldeaServantInfo>>) : {}))
+  const region = resourceRegion.value;
+  if (!catalogPromise || catalogRegion !== region) {
+    catalogRegion = region;
+    catalogPromise = fetchResourceJson<Record<number, ChaldeaServantInfo>>('servants-by-id.json')
       .catch(() => ({}));
   }
   return catalogPromise;
 }
 
+let secondaryCatalogRegion: Region | null = null;
 let secondaryCatalogPromise: Promise<SecondaryCatalog> | null = null;
 export function loadSecondaryCatalog(): Promise<SecondaryCatalog> {
-  if (!secondaryCatalogPromise) {
-    secondaryCatalogPromise = fetch('/data/atlas-nice-cn.json')
-      .then((response) => (response.ok ? (response.json() as Promise<SecondaryServant[]>) : []))
+  const region = resourceRegion.value;
+  if (!secondaryCatalogPromise || secondaryCatalogRegion !== region) {
+    secondaryCatalogRegion = region;
+    secondaryCatalogPromise = fetchResourceJson<SecondaryServant[]>('atlas-nice-cn.json')
       .then((servants) => Object.fromEntries(servants.map((servant) => [servant.id, servant])))
       .catch(() => ({}));
   }
