@@ -65,6 +65,11 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(ROOT / 'executor/perception/templates/cn', cn.TEMPLATE_DIR)
         self.assertEqual({'cn'}, {path.name for path in cn.TEMPLATE_DIR.parent.iterdir()})
 
+    def test_np_cards_use_emblems_not_card_art(self) -> None:
+        emblems = evidence.load_emblems()
+        self.assertIn('np_arts', emblems)
+        self.assertNotIn('np_quick', emblems)
+
     def test_master_skills_uses_layout_not_card_art(self) -> None:
         # 御主技能识别只依赖卡框边缘，不能退回到绑定某个礼装图标的模板。
         self.assertIn('master_skills', cn.FRAME_EDGE_PROBES)

@@ -151,6 +151,20 @@ SLOT_PROBES: dict[str, SlotProbe] = {
 
 BATTLE_SLOTS: tuple[str, ...] = tuple(SLOT_PROBES)
 
+# 宝具卡槽位：卡面位置固定。存在性看卡种纹章——Quick 看绿色圆环的面积/宽度，
+# Arts 看蓝星模板。纹章是通用 UI 资源，不随从者、礼装变化；Buster 尚无样本。
+NP_SLOTS: dict[str, Box] = {
+    'A': (300, 170, 525, 410),
+    'B': (525, 170, 755, 410),
+    'C': (755, 170, 985, 410),
+}
+NP_EMBLEM_THRESHOLD = 0.65
+NP_RING_MIN_AREA = 2500
+NP_RING_MIN_WIDTH = 120
+NP_RING_HUE = (35, 90)
+NP_RING_MIN_SAT = 90
+NP_RING_MIN_VALUE = 60
+
 # 亮度探针：平均灰度达到下限才算命中，用于“按钮已点亮 / 未置灰”这类颜色证据。
 INTENSITY_PROBES: dict[str, tuple[Box, float]] = {
     'order_change_ready': ((478, 591, 803, 661), 150.0),

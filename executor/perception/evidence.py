@@ -24,6 +24,13 @@ class Template:
 
 
 @dataclass(frozen=True)
+class Emblem:
+    name: str
+    patch: np.ndarray
+    threshold: float
+
+
+@dataclass(frozen=True)
 class Evidence:
     """一帧画面的全部同步证据：模板得分与亮度探针共享同一套 hit 判据。"""
 
@@ -32,6 +39,11 @@ class Evidence:
     means: Mapping[str, float]
     edges: Mapping[str, float]
     slots: Mapping[str, float] = field(default_factory=dict)
+    np_slots: Mapping[str, float] = field(default_factory=dict)
+    np_rings: Mapping[str, bool] = field(default_factory=dict)
+
+    def np_hit(self, slot: str) -> bool:
+        return bool(self.np_rings.get(slot)) or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD
 
     def hit(self, name: str) -> bool:
         template = self.templates.get(name)
@@ -97,6 +109,66 @@ def load_templates(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Template]:
     if not templates:
         raise PerceptionError(f'识别模板清单为空：{manifest_path}')
     return templates
+
+
+def _read_manifest(directory: Path) -> dict:
+    manifest_path = directory / 'manifest.json'
+    try:
+        return json.loads(manifest_path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        raise PerceptionError(f'缺少识别模板清单：{manifest_path}；先运行 python -m executor.perception.build_templates') from None
+    except json.JSONDecodeError as error:
+        raise PerceptionError(f'识别模板清单无法解析：{manifest_path}：{error}') from None
+
+
+def load_emblems(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Emblem]:
+    manifest = _read_manifest(directory)
+    emblems: dict[str, Emblem] = {}
+    for name, spec in manifest.get('emblems', {}).items():
+        path = directory / spec['file']
+        data = np.fromfile(str(path), dtype=np.uint8)
+        patch = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE) if data.size else None
+        if patch is None:
+            raise PerceptionError(f'缺少宝具纹章模板：{path}')
+        emblems[name] = Emblem(name=name, patch=patch, threshold=float(spec['threshold']))
+    return emblems
+
+
+def _has_quick_ring(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
+    x1, y1, x2, y2 = box
+    hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    low, high = cn.NP_RING_HUE
+    mask = (((hue > low) & (hue < high) & (sat > cn.NP_RING_MIN_SAT)
+             & (val > cn.NP_RING_MIN_VALUE)).astype(np.uint8)) * 255
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        if cv2.contourArea(contour) < cn.NP_RING_MIN_AREA:
+            continue
+        _x, _y, width, _height = cv2.boundingRect(contour)
+        if width >= cn.NP_RING_MIN_WIDTH:
+            return True
+    return False
+
+
+def measure_np_slots(image: np.ndarray, gray: np.ndarray,
+                     emblems: Mapping[str, Emblem]) -> tuple[dict[str, float], dict[str, bool]]:
+    """逐槽判断宝具卡：Quick 看绿环（面积+宽度），Arts 看蓝星模板。"""
+    scores: dict[str, float] = {}
+    rings: dict[str, bool] = {}
+    for slot, box in cn.NP_SLOTS.items():
+        x1, y1, x2, y2 = box
+        roi = gray[y1:y2, x1:x2]
+        best = 0.0
+        for emblem in emblems.values():
+            if roi.shape[0] < emblem.patch.shape[0] or roi.shape[1] < emblem.patch.shape[1]:
+                continue
+            result = cv2.matchTemplate(roi, emblem.patch, cv2.TM_CCOEFF_NORMED)
+            best = max(best, float(np.nan_to_num(result.max(), nan=0.0)))
+        scores[slot] = best
+        rings[slot] = _has_quick_ring(image, box)
+    return scores, rings
 
 
 def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict[str, float]:

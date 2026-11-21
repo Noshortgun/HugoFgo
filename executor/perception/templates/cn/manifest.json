@@ -324,5 +324,12 @@
       ],
       "threshold": 0.6
     }
+  },
+  "emblems": {
+    "np_arts": {
+      "file": "np_arts.png",
+      "source": "captures/2026-11-19-ember/key/11-np-selected.png",
+      "threshold": 0.65
+    }
   }
 }

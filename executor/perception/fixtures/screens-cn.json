@@ -133,7 +133,10 @@
       "variants": [],
       "overlays": [],
       "actionable": true,
-      "basis": "annotated"
+      "basis": "annotated",
+      "actionableControls": [
+        "宝具卡1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/card-np-selected.png",
@@ -141,7 +144,10 @@
       "variants": [],
       "overlays": [],
       "actionable": true,
-      "basis": "annotated"
+      "basis": "annotated",
+      "actionableControls": [
+        "宝具卡1"
+      ]
     },
     {
       "file": "captures/2026-11-20/key/result.png",
@@ -462,7 +468,11 @@
       "variants": [],
       "overlays": [],
       "actionable": true,
-      "basis": "inferred"
+      "basis": "inferred",
+      "actionableControls": [],
+      "absentControls": [
+        "宝具卡1"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/07-battle-wave2.png",
@@ -513,7 +523,10 @@
       "variants": [],
       "overlays": [],
       "actionable": true,
-      "basis": "annotated"
+      "basis": "annotated",
+      "actionableControls": [
+        "宝具卡1"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/11-np-selected.png",
@@ -521,7 +534,11 @@
       "variants": [],
       "overlays": [],
       "actionable": true,
-      "basis": "annotated"
+      "basis": "annotated",
+      "actionableControls": [
+        "宝具卡1",
+        "宝具卡2"
+      ]
     },
     {
       "file": "captures/2026-11-19-ember/key/12-battle-result-bond.png",

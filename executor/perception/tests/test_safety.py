@@ -80,7 +80,7 @@ class SafetyTest(unittest.TestCase):
     def test_card_page_only_offers_confirmed_cards(self) -> None:
         observation = self.read('captures/2026-11-20/key/card-select.png')
 
-        cards = [control for control in observation.controls if control.kind.value == 'card']
+        cards = [control for control in observation.controls if control.name.startswith('卡')]
         self.assertEqual(5, len(cards))
         self.assertTrue(all(control.actionable for control in cards))
         self.assertTrue(all(control.center[1] > 400 for control in cards))
@@ -102,6 +102,22 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual(set(), {name for name in listed if name.startswith(('从者2', '从者3'))})
         self.assertNotIn('敌方1', listed)
         self.assertNotIn('敌方3', listed)
+
+    def test_np_cards_follow_card_type_emblems(self) -> None:
+        quick = self.read('captures/2026-11-20/key/card-select.png')
+        arts = self.read('captures/2026-11-19-ember/key/10-np-card-select.png')
+        both = self.read('captures/2026-11-19-ember/key/11-np-selected.png')
+        none = self.read('captures/2026-11-19-ember/key/06-card-select.png')
+
+        def np_names(observation):
+            return [item.name for item in observation.controls if item.name.startswith('宝具卡')]
+
+        self.assertEqual(['宝具卡1'], np_names(quick))
+        self.assertEqual(['宝具卡1'], np_names(arts))
+        self.assertEqual(['宝具卡1', '宝具卡2'], np_names(both))
+        self.assertEqual([], np_names(none))
+        self.assertEqual('np_slot:B', quick.control('宝具卡1').reason)
+        self.assertEqual('np_slot:A', arts.control('宝具卡1').reason)
 
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')

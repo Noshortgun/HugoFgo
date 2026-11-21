@@ -72,6 +72,26 @@ def read_image(path: Path) -> np.ndarray:
     return image
 
 
+EMBLEMS = (
+    # (name, source, box, threshold)
+    ('np_arts', 'captures/2026-11-19-ember/key/11-np-selected.png', (330, 250, 430, 350), 0.65),
+)
+
+
+def build_emblems() -> dict:
+    emblems = {}
+    for name, source, box, threshold in EMBLEMS:
+        image = read_image(ROOT / source)
+        x1, y1, x2, y2 = box
+        patch = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+        ok, buffer = cv2.imencode('.png', patch)
+        if not ok:
+            raise SystemExit(f'无法编码纹章模板：{name}')
+        (cn.TEMPLATE_DIR / f'{name}.png').write_bytes(buffer.tobytes())
+        emblems[name] = {'file': f'{name}.png', 'source': source, 'threshold': threshold}
+    return emblems
+
+
 def build() -> dict:
     cn.TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     templates = {}
@@ -100,7 +120,8 @@ def build() -> dict:
                     min(cn.BASE_SIZE[0], x2 + right), min(cn.BASE_SIZE[1], y2 + bottom)],
             'threshold': anchor.threshold,
         }
-    manifest = {'region': cn.REGION, 'baseSize': list(cn.BASE_SIZE), 'templates': templates}
+    manifest = {'region': cn.REGION, 'baseSize': list(cn.BASE_SIZE), 'templates': templates,
+                'emblems': build_emblems()}
     (cn.TEMPLATE_DIR / 'manifest.json').write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     return manifest

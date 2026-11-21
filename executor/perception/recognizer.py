@@ -132,6 +132,11 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
                                             cn.SLOT_PROBES[f'enemy_slot_{slot}'].box, True,
                                             'enemy_hp_bar'))
 
+        if page is BasePage.CARD:
+            present = [(slot, box) for slot, box in cn.NP_SLOTS.items() if evidence.np_hit(slot)]
+            for index, (slot, box) in enumerate(present, start=1):
+                controls.append(Control(f'宝具卡{index}', ControlKind.CARD, box, True, f'np_slot:{slot}'))
+
         if page is BasePage.AP_RECOVERY:
             layout = 'ap_stone' if evidence.hit('ap_stone') else 'ap_bronze'
             for spec in cn.AP_ITEM_LAYOUTS[layout]:
@@ -174,8 +179,10 @@ class Perception:
     """国服画面感知；只读取画面，不点击、不推进状态机、不访问设备。"""
 
     def __init__(self, *, templates: Mapping[str, Template] | None = None,
+                 emblems: Mapping[str, evidence.Emblem] | None = None,
                  ocr_reader=None, clock=time.perf_counter, cache_size: int = 64) -> None:
         self._templates = dict(templates) if templates is not None else evidence.load_templates()
+        self._emblems = dict(emblems) if emblems is not None else evidence.load_emblems()
         self._worker = OcrWorker(ocr_reader)
         self._clock = clock
         self._cache_size = cache_size
@@ -218,6 +225,10 @@ class Perception:
         frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
                                   edges=edges, slots=slots)
         page, variants, overlays, confidence = _classify(frame_evidence)
+        if page is BasePage.CARD:
+            np_slots, np_rings = evidence.measure_np_slots(image, gray, self._emblems)
+            frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
+                                      edges=edges, slots=slots, np_slots=np_slots, np_rings=np_rings)
         return Observation(
             base_page=page,
             variants=variants,
@@ -226,7 +237,7 @@ class Perception:
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
-            evidence={name: round(value, 4) for name, value in {**scores, **means, **edges, **slots}.items()},
+            evidence={name: round(value, 4) for name, value in {**scores, **means, **edges, **slots, **frame_evidence.np_slots}.items()},
         )
 
     def _with_ocr(self, observation: Observation) -> Observation:
