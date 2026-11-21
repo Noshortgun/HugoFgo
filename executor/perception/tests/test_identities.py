@@ -35,6 +35,20 @@ class IdentityTest(unittest.TestCase):
                           for index in range(1, 4)])
         self.assertNotIn('support_identity', readiness_gaps(observation))
 
+    def test_support_identity_works_without_generated_atlas_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            perception = Perception(identity_root=Path(directory))
+            try:
+                observation = perception.read(
+                    load_frame('captures/2026-11-20/key/support-select-correct-ce.png'))
+            finally:
+                perception.close()
+
+        self.assertEqual([704700, 705000, 704700],
+                         [observation.control(f'助战卡片第{index}行').support.svt_id
+                          for index in range(1, 4)])
+        self.assertNotIn('support_identity', readiness_gaps(observation))
+
     def test_support_with_another_craft_essence_is_not_a_tea_match(self) -> None:
         observation = self.perception.read(
             load_frame('captures/2026-11-20/key/support-select-wrong-ce.png'))
@@ -60,17 +74,27 @@ class IdentityTest(unittest.TestCase):
 
     def test_rebinding_support_reloads_target_and_clears_frame_cache(self) -> None:
         frame = load_frame('captures/2026-11-20/key/support-select-wrong-ce.png')
-        self.perception.bind_formation((
-            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True, ce_id=9403520),
-        ))
-        first = self.perception.read(frame)
-        other = first.control('助战卡片第1行').support
-        self.assertTrue(other is None or other.svt_id is None)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for kind, name in [('faces', '305900-1.png'), ('ce', '9300520.png')]:
+                target = root / 'assets/atlas' / kind / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / 'executor/perception/fixtures/identities' / kind / name, target)
+            perception = Perception(identity_root=root)
+            try:
+                perception.bind_formation((
+                    FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True, ce_id=9403520),
+                ))
+                first = perception.read(frame)
+                other = first.control('助战卡片第1行').support
+                self.assertTrue(other is None or other.svt_id is None)
 
-        self.perception.bind_formation((
-            FormationSlotPlan(slot=0, name='因陀罗', svt_id=305900, support=True, ce_id=9300520),
-        ))
-        second = self.perception.read(frame)
+                perception.bind_formation((
+                    FormationSlotPlan(slot=0, name='因陀罗', svt_id=305900, support=True, ce_id=9300520),
+                ))
+                second = perception.read(frame)
+            finally:
+                perception.close()
 
         candidate = second.control('助战卡片第1行').support
         self.assertEqual((305900, 9300520), (candidate.svt_id, candidate.ce_id))
