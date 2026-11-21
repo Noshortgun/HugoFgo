@@ -196,7 +196,8 @@ class Perception:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         scores = evidence.match_templates(gray, self._templates)
         means = evidence.measure_probes(gray)
-        frame_evidence = Evidence(scores=scores, templates=self._templates, means=means)
+        edges = evidence.measure_frame_edges(gray)
+        frame_evidence = Evidence(scores=scores, templates=self._templates, means=means, edges=edges)
         page, variants, overlays, confidence = _classify(frame_evidence)
         return Observation(
             base_page=page,
@@ -206,7 +207,7 @@ class Perception:
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
-            evidence={name: round(value, 4) for name, value in {**scores, **means}.items()},
+            evidence={name: round(value, 4) for name, value in {**scores, **means, **edges}.items()},
         )
 
     def _with_ocr(self, observation: Observation) -> Observation:

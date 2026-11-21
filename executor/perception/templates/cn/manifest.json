@@ -236,17 +236,6 @@
       ],
       "threshold": 0.6
     },
-    "master_skills": {
-      "file": "master_skills.png",
-      "source": "captures/2026-11-20/key/60-current-master-expanded.png",
-      "roi": [
-        1026,
-        254,
-        1143,
-        372
-      ],
-      "threshold": 0.6
-    },
     "battle_chrome": {
       "file": "battle_chrome.png",
       "source": "captures/2026-11-20/key/battle-wave1.png",

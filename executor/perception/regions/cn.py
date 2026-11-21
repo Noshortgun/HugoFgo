@@ -102,13 +102,31 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.CLASS_INFO, ('class_info',)),
     OverlayRule(Overlay.BATTLE_MENU, ('battle_menu',), absent=('retreat_confirm',)),
     OverlayRule(Overlay.ORDER_CHANGE, ('order_change',)),
-    OverlayRule(Overlay.MASTER_SKILLS, ('master_skills',)),
+    # 御主技能面板只可能叠在战斗上，同时要求战斗 HUD 在场，避免助战卡片被误判成技能卡。
+    OverlayRule(Overlay.MASTER_SKILLS, ('master_skills', 'battle_chrome')),
 )
 
 # 这两个全屏界面没有基页锚点：助战编队确认归入 support，御主装备归入 team。
 OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
     Overlay.SUPPORT_PARTY_CONFIRM: BasePage.SUPPORT,
     Overlay.MASTER_EQUIPMENT: BasePage.TEAM,
+}
+
+@dataclass(frozen=True)
+class FrameEdgeProbe:
+    """卡框探针：只数长直线边缘，不看卡面图案，因此与御主礼装、从者立绘无关。"""
+
+    cards: tuple[Box, ...]
+    threshold: float
+    line_length: int = 30
+
+
+# 御主技能展开 = 固定位置出现三张带框技能卡。展开时得分 351–613，其它画面最高 166。
+FRAME_EDGE_PROBES: dict[str, FrameEdgeProbe] = {
+    'master_skills': FrameEdgeProbe(
+        cards=((868, 275, 945, 352), (957, 275, 1034, 352), (1046, 274, 1123, 352)),
+        threshold=250.0,
+    ),
 }
 
 # 亮度探针：平均灰度达到下限才算命中，用于“按钮已点亮 / 未置灰”这类颜色证据。

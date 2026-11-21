@@ -51,9 +51,7 @@ SOURCES: tuple[AnchorSource, ...] = (
     AnchorSource('command_spell_confirm', 'captures/2026-11-20/key/73-command-spell-confirm.png', (459, 308, 984, 347), 25, 0.62),
     AnchorSource('class_info', 'captures/2026-11-20/key/09-class-filter.png', (385, 130, 458, 151), 25, 0.62),
     AnchorSource('battle_menu', 'captures/2026-11-20/key/55-battle-menu.png', (708, 365, 855, 395), 25, 0.6),
-    # 御主技能按钮本身两种状态外观相同，用展开后的技能卡画面区分；换礼装后需重建这张模板。
-    AnchorSource('master_skills', 'captures/2026-11-20/key/60-current-master-expanded.png', (1046, 274, 1123, 352), 20, 0.6),
-    AnchorSource('battle_chrome', 'captures/2026-11-20/key/battle-wave1.png', (1141, 162, 1245, 250), 25, 0.6),
+        AnchorSource('battle_chrome', 'captures/2026-11-20/key/battle-wave1.png', (1141, 162, 1245, 250), 25, 0.6),
     AnchorSource('support_party_confirm', 'captures/2026-11-19-ember/34-grand-support-confirm.png', (965, 12, 1267, 57), 25, 0.6),
     AnchorSource('master_equipment', 'captures/2026-11-19-mystic/key/01-mystic-combat.png', (1049, 7, 1266, 61), 25, 0.6),
     AnchorSource('result_bond', 'captures/2026-11-20/key/result.png', (80, 169, 300, 205), 30, 0.6),

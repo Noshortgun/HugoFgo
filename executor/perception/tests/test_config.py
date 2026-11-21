@@ -35,7 +35,8 @@ class ConfigTest(unittest.TestCase):
                 if control.anchor is not None:
                     names.add(control.anchor)
 
-        self.assertEqual(set(cn.INTENSITY_PROBES), names - set(self.templates))
+        self.assertEqual(set(cn.INTENSITY_PROBES) | set(cn.FRAME_EDGE_PROBES),
+                         names - set(self.templates))
         self.assertEqual(set(), set(self.templates) - names)
 
     def test_control_boxes_stay_inside_the_base_frame(self) -> None:
@@ -62,6 +63,11 @@ class ConfigTest(unittest.TestCase):
                          {path.name for path in regions.iterdir()})
         self.assertEqual(ROOT / 'executor/perception/templates/cn', cn.TEMPLATE_DIR)
         self.assertEqual({'cn'}, {path.name for path in cn.TEMPLATE_DIR.parent.iterdir()})
+
+    def test_master_skills_uses_layout_not_card_art(self) -> None:
+        # 御主技能识别只依赖卡框边缘，不能退回到绑定某个礼装图标的模板。
+        self.assertIn('master_skills', cn.FRAME_EDGE_PROBES)
+        self.assertNotIn('master_skills', self.templates)
 
     def test_overlays_are_blocking_except_master_skills(self) -> None:
         # 御主技能展开时从者技能、攻击、敌人、战斗菜单、令咒仍然可点（人工核对）。

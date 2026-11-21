@@ -30,16 +30,20 @@ class Evidence:
     scores: Mapping[str, float]
     templates: Mapping[str, Template]
     means: Mapping[str, float]
+    edges: Mapping[str, float]
 
     def hit(self, name: str) -> bool:
         template = self.templates.get(name)
         if template is not None:
             return self.scores.get(name, 0.0) >= template.threshold
+        frame = cn.FRAME_EDGE_PROBES.get(name)
+        if frame is not None:
+            return self.edges.get(name, 0.0) >= frame.threshold
         probe = cn.INTENSITY_PROBES.get(name)
         return probe is not None and self.means.get(name, 0.0) >= probe[1]
 
     def score(self, name: str) -> float:
-        return self.scores.get(name, self.means.get(name, 0.0))
+        return self.scores.get(name, self.means.get(name, self.edges.get(name, 0.0)))
 
 
 def decode_frame(frame: Frame) -> np.ndarray:
@@ -104,6 +108,21 @@ def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict
             continue
         result = cv2.matchTemplate(roi, template.patch, cv2.TM_CCOEFF_NORMED)
         scores[name] = float(np.nan_to_num(result.max(), nan=0.0))
+    return scores
+
+
+def measure_frame_edges(gray: np.ndarray, probes=cn.FRAME_EDGE_PROBES) -> dict[str, float]:
+    """数每个卡框里的长水平/垂直边缘像素；取所有卡的最小值，缺一张框就不算展开。"""
+    scores: dict[str, float] = {}
+    for name, probe in probes.items():
+        per_card = []
+        for x1, y1, x2, y2 in probe.cards:
+            roi = gray[y1 - 3:y2 + 3, x1 - 3:x2 + 3]
+            edges = cv2.Canny(roi, 50, 150)
+            horizontal = cv2.morphologyEx(edges, cv2.MORPH_OPEN, np.ones((1, probe.line_length), np.uint8))
+            vertical = cv2.morphologyEx(edges, cv2.MORPH_OPEN, np.ones((probe.line_length, 1), np.uint8))
+            per_card.append(float((horizontal > 0).sum() + (vertical > 0).sum()))
+        scores[name] = min(per_card) if per_card else 0.0
     return scores
 
 
