@@ -49,7 +49,7 @@
 
 - **接口**：`read(帧) → 观察`（基页 + 画面变体 + 覆盖层 + 控件 + 字段状态）；`read_fields(帧, 字段, timeout)` 才等待后台 OCR。执行器只消费"观察"，永远不碰像素。
 - **双速**：同步快路径只用区域化模板、颜色与布局证据，禁止 OCR、网络与按次付费服务；OCR 在后台单线程按需补 NP、面/回合、AP 等字段，结果绑定帧哈希，画面已变则只进缓存。
-- **观察内容**：基页（`menu / support / team / battle / card / result / drops / ap_recovery / loading / unknown`）、版式变体（普通/冠位助战、普通/冠位队伍）、覆盖层（可与基页并存）、带基准坐标的控件、以及每个控件的可行动标记。`battle` 不代表攻击按钮可用，`card` 不代表还能选卡；`unknown / loading` 永远不输出可行动控件。
+- **观察内容**：基页（`menu / support / team / battle / card / result / drops / ap_recovery / story / loading / unknown`）、版式变体（普通/冠位助战、普通/冠位队伍）、覆盖层（可与基页并存）、带基准坐标的控件、以及每个控件的可行动标记。`battle` 不代表攻击按钮可用，`card` 不代表还能选卡；`unknown / loading` 永远不输出可行动控件。
 - **字段状态**：`not_applicable / not_read / pending / uncertain / confirmed`，不把"不需要读"和"读取失败"混成一个 `uncertain`。
 - **区服**：识别配置按区服隔离（当前只有 `executor/perception/regions/cn.py` 与 `templates/cn/`）；缺配置时报"该区服未支持"，不允许误识别后继续。
 - **注意**：观察必须能表达"不确定"，而不是强行给一个状态。被模态覆盖层或目标选择变体盖住时，基页控件**不输出**（而不是列一堆不可点）；御主技能展开是非模态，攻击、从者技能、敌人、战斗菜单、令咒此时仍可点。
