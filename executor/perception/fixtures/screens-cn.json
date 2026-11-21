@@ -1091,6 +1091,48 @@
         "否"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-21/key/gate.png",
+      "base": "menu",
+      "variants": [
+        "gate"
+      ],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "每日任务",
+        "菜单"
+      ],
+      "basis": "holdout"
+    },
+    {
+      "file": "captures/2026-11-21/key/card-np-blue-glow.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "宝具卡1"
+      ],
+      "absentControls": [
+        "宝具卡2"
+      ],
+      "basis": "holdout"
+    },
+    {
+      "file": "captures/2026-11-21/key/battle-retreat-lower.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "retreat_confirm"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "决定",
+        "取消"
+      ],
+      "basis": "holdout"
     }
   ]
 }

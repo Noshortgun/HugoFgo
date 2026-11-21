@@ -160,6 +160,21 @@ def find_enemy_bars(image: np.ndarray) -> list[tuple[int, int, int, int]]:
     return bars
 
 
+def find_dialog_buttons(image: np.ndarray, region=cn.DIALOG_BUTTON_REGION) -> list[tuple[int, int, int, int]]:
+    """在对话框里找白色胶囊按钮，按从左到右返回。"""
+    x1, y1, x2, y2 = region
+    hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    bright = ((hsv[..., 2] > 150) & (hsv[..., 1] < 80)).astype(np.uint8) * 255
+    bright = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if 180 <= w <= 380 and 40 <= h <= 90 and cv2.contourArea(contour) > 0.6 * w * h:
+            boxes.append((x + x1, y + y1, x + x1 + w, y + y1 + h))
+    return sorted(boxes)
+
+
 def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
                      card_box: tuple[int, int, int, int]) -> bool:
     """卡种纹章：卡面下部一块足够宽、尺寸在合理范围的纯色图形（绿/蓝/红）。
@@ -188,6 +203,9 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
             continue
         _x, y, width, h = cv2.boundingRect(largest)
         if not (bounds['min_width'] <= width <= bounds['max_width']):
+            continue
+        # 蓝星的低面积候选要求更宽，避免把蓝色光斑当成 Arts 纹章。
+        if index == 1 and area < 1500 and width < 90:
             continue
         if h and not (bounds['min_aspect'] <= width / h <= bounds['max_aspect']):
             continue

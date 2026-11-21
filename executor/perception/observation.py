@@ -37,6 +37,7 @@ class Variant(str, Enum):
     DROPS_LOOT = 'loot'
     SKILL_TARGET = 'skill_target'
     BATTLE_ANIMATION = 'animation'
+    GATE = 'gate'
 
 
 class Overlay(str, Enum):

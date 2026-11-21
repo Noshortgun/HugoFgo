@@ -74,6 +74,7 @@ PAGE_RULES: tuple[PageRule, ...] = (
     PageRule(BasePage.BATTLE, ('battle',)),
     PageRule(BasePage.MENU, ('menu',)),
     PageRule(BasePage.STORY, ('story_skip',)),
+    PageRule(BasePage.MENU, ('gate_daily',)),
 )
 
 VARIANT_RULES: tuple[VariantRule, ...] = (
@@ -82,6 +83,7 @@ VARIANT_RULES: tuple[VariantRule, ...] = (
     VariantRule(Variant.RESULT_BOND, BasePage.RESULT, ('result_bond',)),
     VariantRule(Variant.RESULT_EXP, BasePage.RESULT, ('result_exp',)),
     VariantRule(Variant.DROPS_LOOT, BasePage.DROPS, ('drops',)),
+    VariantRule(Variant.GATE, BasePage.MENU, ('gate_daily',)),
     # 己方单体技能选目标：与令咒目标同样显示“请选择对象”，但没有“是否使用”。
     VariantRule(Variant.SKILL_TARGET, BasePage.BATTLE, ('command_spell_target',),
                 absent=('command_spell_use',)),
@@ -169,6 +171,8 @@ BATTLE_SLOTS: tuple[str, ...] = tuple(SLOT_PROBES)
 
 # 敌人不再固定三格：扫描顶部区域的红色/紫色血条，支持两排共 6 只。
 ENEMY_BAR_REGION: Box = (0, 0, 820, 175)
+# 撤退确认等对话框的按钮会随布局上下浮动，改为在对话框区域内找两块亮色按钮。
+DIALOG_BUTTON_REGION: Box = (120, 240, 1180, 540)
 ENEMY_BAR_MIN_WIDTH = 80
 ENEMY_BAR_MAX_WIDTH = 190
 ENEMY_BAR_MIN_HEIGHT = 6
@@ -313,6 +317,10 @@ AP_ITEM_LAYOUTS: dict[str, tuple[ControlSpec, ...]] = {
 }
 
 VARIANT_CONTROLS: dict[Variant, tuple[ControlSpec, ...]] = {
+    Variant.GATE: (
+        ControlSpec('每日任务', ControlKind.BUTTON, (860, 340, 1240, 420)),
+        ControlSpec('菜单', ControlKind.BUTTON, (1120, 610, 1275, 695)),
+    ),
     Variant.GRAND_SUPPORT: _SUPPORT_TOP,
     Variant.GRAND_TEAM: tuple(
         ControlSpec('返回', ControlKind.BUTTON, (6, 5, 178, 85)) if spec.name == '返回'

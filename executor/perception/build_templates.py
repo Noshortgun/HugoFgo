@@ -60,6 +60,7 @@ SOURCES: tuple[AnchorSource, ...] = (
     AnchorSource('ap_bronze', 'captures/2026-11-20/key/ap-recovery-bronze.png', (455, 299, 574, 340), 30, 0.6),
     AnchorSource('repeat_star', 'captures/2026-11-20/key/repeat-dialog.png', (455, 425, 580, 452), (180, 12, 180, 12), 0.6),
     AnchorSource('repeat_bond_boost', 'captures/2026-11-20/key/repeat-dialog.png', (695, 425, 835, 452), (180, 12, 180, 12), 0.6),
+    AnchorSource('gate_daily', 'captures/2026-11-21/key/gate.png', (925, 357, 1086, 401), 30, 0.6),
     AnchorSource('story_skip', 'captures/2026-11-21/key/story.png', (1159, 22, 1223, 59), 20, 0.6),
     AnchorSource('story_skip_confirm', 'captures/2026-11-21/key/story-skip-confirm.png', (458, 300, 809, 339), 25, 0.6),
     AnchorSource('friend_request', 'captures/2026-11-21/key/friend-request.png', (509, 207, 757, 244), 25, 0.6),

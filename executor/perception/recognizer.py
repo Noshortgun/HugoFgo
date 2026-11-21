@@ -16,7 +16,7 @@ import numpy as np
 from executor.device.base import Frame
 from executor.perception import evidence
 from executor.perception.errors import StaleFrameError
-from executor.perception.evidence import Evidence, Template, find_enemy_bars
+from executor.perception.evidence import Evidence, Template, find_dialog_buttons, find_enemy_bars
 from executor.perception.observation import (
     BasePage,
     Control,
@@ -131,16 +131,10 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
         # 未知页面上只放行已识别的模态弹窗按钮（按钮本身是确认过存在的）。
         if modal is None:
             return ()
-        return tuple(
-            control for spec in cn.OVERLAY_CONTROLS.get(modal, ())
-            if (control := _make_control(spec, evidence, False, f'overlay:{modal.value}')) is not None
-        )
+        return _overlay_controls(modal, evidence, image)
 
     if modal is not None:
-        return tuple(
-            control for spec in cn.OVERLAY_CONTROLS.get(modal, ())
-            if (control := _make_control(spec, evidence, False, f'overlay:{modal.value}')) is not None
-        )
+        return _overlay_controls(modal, evidence, image)
 
     blocked = bool(overlays & cn.BLOCKING_OVERLAYS) or bool(variants & cn.BLOCKING_VARIANTS)
     controls: list[Control] = []
@@ -195,6 +189,21 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
             if control is not None:
                 controls.append(control)
     return tuple(controls)
+
+
+def _overlay_controls(overlay: Overlay, evidence: Evidence, image: np.ndarray) -> tuple[Control, ...]:
+    if overlay is Overlay.RETREAT_CONFIRM:
+        boxes = find_dialog_buttons(image)
+        if len(boxes) >= 2:
+            left, right = boxes[0], boxes[1]
+            return (
+                Control('决定', ControlKind.BUTTON, right, True, f'overlay:{overlay.value}'),
+                Control('取消', ControlKind.BUTTON, left, True, f'overlay:{overlay.value}'),
+            )
+    return tuple(
+        control for spec in cn.OVERLAY_CONTROLS.get(overlay, ())
+        if (control := _make_control(spec, evidence, False, f'overlay:{overlay.value}')) is not None
+    )
 
 
 def _fields(page: BasePage, cached: Mapping[str, Field] | None,

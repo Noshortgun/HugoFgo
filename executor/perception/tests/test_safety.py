@@ -126,6 +126,21 @@ class SafetyTest(unittest.TestCase):
             self.assertLessEqual(abs((x2 - x1) - (command[2] - command[0])), 60, control.name)
             self.assertLessEqual(abs((y2 - y1) - (command[3] - command[1])), 60, control.name)
 
+    def test_holdout_findings(self) -> None:
+        gate = self.read('captures/2026-11-21/key/gate.png')
+        glow = self.read('captures/2026-11-21/key/card-np-blue-glow.png')
+        retreat = self.read('captures/2026-11-21/key/battle-retreat-lower.png')
+
+        self.assertEqual('menu', gate.base_page.value)
+        self.assertEqual({'gate'}, {item.value for item in gate.variants})
+        self.assertTrue(gate.control('每日任务').actionable)
+
+        self.assertEqual(['宝具卡1'], [item.name for item in glow.controls
+                                       if item.name.startswith('宝具卡')])
+
+        self.assertEqual({'决定', '取消'}, {item.name for item in retreat.controls})
+        self.assertLess(retreat.control('取消').box[1], 420)
+
     def test_story_and_skip_dialog(self) -> None:
         story = self.read('captures/2026-11-21/key/story.png')
         dialog = self.read('captures/2026-11-21/key/story-skip-confirm.png')
