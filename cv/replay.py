@@ -224,6 +224,324 @@ def check_executor_core():
                'stop', f'reason={result.reason}; taps={device.actions}', ok, simulated_ocr=True)
 
 
+def check_strategy_servant_priority():
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False,
+        servant_order=('从者2', '从者1', '从者0'),
+        servant_order_slots=(2, 1, 0),
+        cards='buster',
+        color_priority=('buster', 'arts', 'quick'),
+        strategy_order=('servant', 'cards', 'crit'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=tuple(FormationSlotPlan(slot=slot, name=f'从者{slot}') for slot in range(3)),
+        strategy=strategy,
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(slot, 'buster', crit_rate=10, affinity='neutral'))
+        for index, slot in enumerate((0, 1, 0, 1, 2), 1)))
+
+    selection = select_cards(observation, strategy, plan, 1)
+    actual = [control.name for control in selection.controls]
+    expected = ['卡2', '卡4', '卡5']
+    add_report('strategy:servant-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', f'source={selection.source}; reason={selection.reason}',
+               actual == expected and selection.source == 'global', simulated_ocr=True)
+
+
+def check_strategy_color_priority():
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='arts',
+        color_priority=('arts', 'quick', 'buster'), strategy_order=('cards', 'servant', 'crit'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, color, crit_rate=10, affinity='neutral'))
+        for index, color in enumerate(('buster', 'arts', 'quick', 'arts', 'quick'), 1)))
+
+    selection = select_cards(observation, strategy, plan, 1)
+    actual = [control.name for control in selection.controls]
+    expected = ['卡2', '卡3', '卡4']
+    add_report('strategy:color-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
+
+
+def check_strategy_crit_priority():
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='buster',
+        color_priority=('buster', 'arts', 'quick'), strategy_order=('crit', 'servant', 'cards'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=crit, affinity='neutral'))
+        for index, crit in enumerate((10, 90, 20, 80, 30), 1)))
+
+    selection = select_cards(observation, strategy, plan, 1)
+    actual = [control.name for control in selection.controls]
+    expected = ['卡2', '卡4', '卡5']
+    add_report('strategy:crit-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
+
+
+def check_strategy_balanced_cards():
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='balanced',
+        color_priority=('quick', 'arts', 'buster'), strategy_order=('cards', 'servant', 'crit'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, color, crit_rate=10, affinity='neutral'))
+        for index, color in enumerate(('buster', 'buster', 'arts', 'arts', 'quick'), 1)))
+
+    selection = select_cards(observation, strategy, plan, 1)
+    actual = [control.name for control in selection.controls]
+    expected = ['卡1', '卡3', '卡5']
+    add_report('strategy:balanced-cards', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
+
+
+def check_strategy_affinity_and_uncertainty():
+    from dataclasses import replace
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='buster',
+        color_priority=('buster', 'arts', 'quick'), strategy_order=('servant', 'cards', 'crit'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity=affinity))
+        for index, affinity in enumerate(('resist', 'neutral', 'advantage', 'advantage', 'neutral'), 1)))
+
+    selection = select_cards(observation, strategy, plan, 1)
+    actual = [control.name for control in selection.controls]
+    expected = ['卡2', '卡3', '卡4']
+    add_report('strategy:affinity-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
+
+    uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, crit_rate=None))
+    uncertain = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
+                             strategy, plan, 1)
+    add_report('strategy:uncertain-card-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
+               'diagnostic', uncertain.diagnostic or 'selected', 'stop', uncertain.reason,
+               not uncertain.controls and uncertain.diagnostic is not None, simulated_ocr=True)
+
+
+def check_strategy_np_and_short_hand():
+    from dataclasses import replace
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='buster',
+        color_priority=('buster', 'arts', 'quick'), strategy_order=('servant', 'cards', 'crit'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+    )
+    normal = tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity='neutral'))
+        for index in range(1, 3))
+    np_card = Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True,
+                      card=CommandCardIdentity(0, 'buster', noble_phantasm=True,
+                                               crit_rate=0, affinity='neutral'))
+    observation = Observation(base_page=BasePage.CARD, controls=(*normal, np_card))
+
+    disabled = select_cards(observation, strategy, plan, 1)
+    add_report('strategy:np-disabled-short-hand', ROOT / 'captures/2026-11-20/key/card-select.png',
+               'diagnostic', disabled.diagnostic or 'selected', 'stop', disabled.reason,
+               not disabled.controls and disabled.diagnostic is not None, simulated_ocr=True)
+
+    enabled_strategy = replace(strategy, allow_np=True)
+    enabled = select_cards(observation, enabled_strategy, plan, 1)
+    actual = [control.name for control in enabled.controls]
+    expected = ['卡1', '卡2', '宝具卡1']
+    add_report('strategy:np-allowed', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', enabled.reason, actual == expected, simulated_ocr=True)
+
+    empty = select_cards(Observation(base_page=BasePage.CARD), strategy, plan, 1)
+    add_report('strategy:empty-hand-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
+               'diagnostic', empty.diagnostic or 'selected', 'stop', empty.reason,
+               not empty.controls and empty.diagnostic is not None, simulated_ocr=True)
+
+
+def check_strategy_scope_slots_and_region():
+    from dataclasses import replace
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    global_strategy = FallbackStrategy(
+        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='arts',
+        color_priority=('arts', 'quick', 'buster'), strategy_order=('cards', 'servant', 'crit'),
+    )
+    wave_strategy = replace(global_strategy, cards='quick', color_priority=('quick', 'arts', 'buster'))
+    waves = tuple(WavePlan(number=wave, target=1, turns=(TurnPlan(),)) for wave in (1, 2))
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3, waves=waves,
+        formation=(FormationSlotPlan(slot=0, name='从者0'),),
+        strategy=global_strategy, strategy_by_wave={1: wave_strategy},
+    )
+    observation = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(0, color, crit_rate=10, affinity='neutral'))
+        for index, color in enumerate(('buster', 'arts', 'quick', 'arts', 'quick'), 1)))
+    first = select_cards(observation, global_strategy, plan, 1)
+    second = select_cards(observation, global_strategy, plan, 2)
+    actual = ([control.name for control in first.controls], first.source,
+              [control.name for control in second.controls], second.source)
+    expected = (['卡2', '卡3', '卡5'], 'wave', ['卡2', '卡3', '卡4'], 'global')
+    add_report('strategy:wave-override-and-global', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '按面覆盖与全局回退', actual == expected, simulated_ocr=True)
+
+    same_name_strategy = FallbackStrategy(
+        allow_np=False, servant_order=('娄希', '奥伯龙', '娄希'), servant_order_slots=(1, 2, 0),
+        cards='buster', color_priority=('buster', 'arts', 'quick'),
+        strategy_order=('servant', 'cards', 'crit'),
+    )
+    same_name_plan = replace(plan, formation=(
+        FormationSlotPlan(slot=0, name='娄希'), FormationSlotPlan(slot=1, name='娄希'),
+        FormationSlotPlan(slot=2, name='奥伯龙')), strategy=same_name_strategy, strategy_by_wave={})
+    same_hand = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(slot, 'buster', crit_rate=10, affinity='neutral'))
+        for index, slot in enumerate((0, 1, 1, 2, 2), 1)))
+    selected = select_cards(same_hand, same_name_strategy, same_name_plan, 1)
+    actual = [control.name for control in selected.controls]
+    expected = ['卡2', '卡3', '卡4']
+    add_report('strategy:same-name-slots', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', selected.reason, actual == expected, simulated_ocr=True)
+    legacy = select_cards(same_hand, replace(same_name_strategy, servant_order_slots=None), same_name_plan, 1)
+    add_report('strategy:legacy-name-warning', ROOT / 'captures/2026-11-20/key/card-select.png',
+               True, bool(legacy.warnings), 'select', ';'.join(legacy.warnings),
+               bool(legacy.warnings), simulated_ocr=True)
+
+    animation = select_cards(replace(observation, base_page=BasePage.BATTLE), global_strategy, plan, 1)
+    add_report('strategy:attack-animation-not-hand', ROOT / 'captures/2026-11-19-ember/36-attack-animation.png',
+               'diagnostic', animation.diagnostic or 'selected', 'stop', animation.reason,
+               not animation.controls and animation.diagnostic is not None, simulated_ocr=True)
+
+
+def check_strategy_executor():
+    from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Variant)
+
+    def battle(wave=1, turn=1):
+        return Observation(base_page=BasePage.BATTLE, fields={
+            'wave': Field(FieldStatus.CONFIRMED, wave),
+            'turn': Field(FieldStatus.CONFIRMED, turn),
+            'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+        }, controls=(Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+
+    def make_plan(turn, strategy=None):
+        return ExecutionPlan(
+            mystic_id='default', enemy_count=3,
+            waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+            formation=tuple(FormationSlotPlan(slot=slot, name=f'从者{slot}') for slot in range(3)),
+            strategy=strategy or FallbackStrategy(strategy_order=('cards', 'crit')),
+        )
+
+    def command(index, slot, card_type='arts'):
+        boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+                 (811, 415, 976, 655), (1066, 415, 1231, 655))
+        return Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                       card=CommandCardIdentity(slot, card_type, crit_rate=10, affinity='neutral'))
+
+    np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
+                      card=CommandCardIdentity(0, 'buster', noble_phantasm=True,
+                                               crit_rate=0, affinity='neutral'))
+    cards = Observation(base_page=BasePage.CARD, controls=(
+        np_card, *(command(index, (index - 1) % 3) for index in range(1, 6))))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    plan = make_plan(TurnPlan(np_positions={0: 'auto'}))
+    result, device, events = run_core_scenario(
+        [battle(), battle(), cards, cards, cards, cards, cards, cards, unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡A', '卡1', '卡2']
+    add_report('strategy:executor-np-auto', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
+
+    next_battle = battle(turn=2)
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    normal_cards = Observation(base_page=BasePage.CARD, controls=tuple(
+        command(index, (index - 1) % 3) for index in range(1, 6)))
+    planned = TurnPlan(attack=AttackPlan(mode='verify', cards=tuple(
+        AttackCardPlan(slot=slot, type='arts') for slot in range(3))))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), normal_cards, normal_cards, normal_cards, normal_cards,
+         normal_cards, normal_cards, animation, next_battle, next_battle,
+         normal_cards, normal_cards, normal_cards, normal_cards, normal_cards, normal_cards,
+         unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0,
+         3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9], make_plan(planned))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
+    add_report('strategy:executor-unplanned-turn', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}; turn={result.progress.turn}',
+               result.reason == 'unknown_timeout' and result.progress.turn == 2 and controls == expected,
+               simulated_ocr=True)
+
+    short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))
+    result, device, events = run_core_scenario(
+        [battle(), battle(), short], [0.0, 0.5, 0.6],
+        make_plan(TurnPlan(attack=AttackPlan(mode='strategy', cards=()))))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.reason == 'fallback_cards_unavailable' and controls == ['攻击']
+          and len(device.actions) == 1 and events.events[-1].data.get('message'))
+    add_report('strategy:executor-short-hand-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
+               'fallback_cards_unavailable', result.reason, 'stop', f'controls={controls}',
+               bool(ok), simulated_ocr=True)
+
+
 def check_executor_self_target():
     from executor.core import RunOptions, run
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
@@ -544,12 +862,20 @@ def check_ocr_action(name, path, expected):
     add_report(name, path, expected, action, "observe", f"ocr={rows}", action == expected)
 
 
-def run(output: Path):
+def run(output: Path, name_filter: str | None = None):
     REPORTS.clear()
     check_classifications()
     check_perception()
     check_perception_identities()
     check_executor_core()
+    check_strategy_servant_priority()
+    check_strategy_color_priority()
+    check_strategy_crit_priority()
+    check_strategy_balanced_cards()
+    check_strategy_affinity_and_uncertainty()
+    check_strategy_np_and_short_hand()
+    check_strategy_scope_slots_and_region()
+    check_strategy_executor()
     check_executor_self_target()
     check_executor_repeat_support()
     check_executor_safety()
@@ -598,6 +924,8 @@ def run(output: Path):
     check_ocr_action("action:attack-animation-waits", ROOT / "captures/2026-11-19-ember/36-attack-animation.png", "wait")
     check_ocr_action("action:attack-button-ready", LOADING_IMAGE, "attack")
 
+    if name_filter:
+        REPORTS[:] = [item for item in REPORTS if name_filter in item['name']]
     failed = [item for item in REPORTS if not item["ok"]]
     output.parent.mkdir(parents=True, exist_ok=True)
     failure_dir = output.parent / f"failures-{datetime.now():%Y%m%d-%H%M%S}"
@@ -627,8 +955,9 @@ def run(output: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "logs/replay/latest.json")
+    parser.add_argument("--filter", dest='name_filter')
     args = parser.parse_args()
-    return run(args.output.resolve())
+    return run(args.output.resolve(), args.name_filter)
 
 
 if __name__ == "__main__":
