@@ -787,6 +787,11 @@ class Runner:
                 count = self.progress.recovery_used.get(item.value, 0) + 1
                 self.progress.recovery_used[item.value] = count
                 self.emit('recovery_used', now, item=item.value, count=count)
+                if Overlay.REPEAT_DIALOG in observation.overlays:
+                    self.pending_pages = None
+                    self.pending_since = None
+                    self.pending_frame_hash = None
+                    self.starting_next_run = False
 
             if self.startup:
                 observation, result = self.resume(observation, frame, now)

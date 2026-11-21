@@ -372,6 +372,26 @@ CASES = (
         completed_runs=1,
     ),
     ReplayCase(
+        name='ap-recovery-back-to-repeat',
+        frames=(
+            FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',
+            FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
+            FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 34.5),
+        actions=('下一步', '连续出击', '青铜果实', '连续出击'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('drops', 'battle', 'ap_recovery', 'battle', 'team', 'unknown'),
+        event_types=('action', 'action', 'action', 'recovery_used', 'action', 'warning', 'failed'),
+        options=RunOptions(run_count=2, write_evidence=False),
+        completed_runs=1,
+    ),
+    ReplayCase(
         name='ap-recovery-unconfirmed',
         frames=(
             FULL_LOOP + 'ap-recovery-bronze.png', FULL_LOOP + 'ap-recovery-bronze.png',

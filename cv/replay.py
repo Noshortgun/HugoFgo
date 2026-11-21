@@ -719,6 +719,17 @@ def check_executor_recovery():
                'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
 
     result, device, events = run_core_scenario(
+        [repeat, repeat, bronze, bronze, repeat, repeat, team],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8], plan,
+        options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = ['连续出击', '青铜果实', '连续出击']
+    ok = controls == expected and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-back-to-repeat', AP_RECOVERY_IMAGE, expected, controls,
+               'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
         [bronze, bronze, bronze], [0.0, 0.5, 31.0], plan)
     used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
     ok = (result.reason == 'action_confirmation_timeout' and len(device.actions) == 1 and not used
