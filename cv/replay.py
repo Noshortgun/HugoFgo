@@ -140,12 +140,17 @@ def check_perception_identities():
                    '编队槽位、从者、卡色与助战标记', actual == expected)
 
         old_path = ROOT / 'captures/2026-11-19-ember/key/06-card-select.png'
+        perception.bind_formation((
+            FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
         old = perception.read(Frame(image=old_path.read_bytes(), width=1280, height=720, captured_at=0.0))
         actual = [(old.control(f'卡{index}').card.svt_id if old.control(f'卡{index}').card else None)
                   for index in range(1, 6)]
-        expected = [2800100, None, 2800100, None, 705000]
+        expected = [2800100, 500800, 2800100, 500800, 705000]
         add_report('perception:identity:cross-session', old_path, expected, actual, 'observe',
-                   '未登记的从者保持未知', actual == expected)
+                   'Atlas 指令卡原图覆盖梅林等从者', actual == expected)
     finally:
         perception.close()
 

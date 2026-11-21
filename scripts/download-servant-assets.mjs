@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 下载从者卡面、头像与技能图标（Atlas Academy CN 静态资源）。
+ * 下载从者卡面、头像、指令卡原图与技能图标（Atlas Academy CN 静态资源）。
  * 输出到 data/assets/atlas/，并生成 index.json 供 GUI 使用。
  * 已存在的文件会跳过，可重复运行。
  */
@@ -43,6 +43,12 @@ for (const servant of raw) {
       if (ascensionCard) jobs.push({ url: ascensionCard, file: path.join(outRoot, 'cards', `${servant.id}-${stage}.png`) });
     }
   }
+  for (const [stage, url] of Object.entries(servant.extraAssets?.commands?.ascension ?? {})) {
+    jobs.push({ url, file: path.join(outRoot, 'commands', String(servant.id), `${stage}.png`) });
+  }
+  for (const [costume, url] of Object.entries(servant.extraAssets?.commands?.costume ?? {})) {
+    jobs.push({ url, file: path.join(outRoot, 'commands', String(servant.id), `costume-${costume}.png`) });
+  }
   if (servant.id === 800100) {
     jobs.push({ url: servant.extraAssets?.faces?.costume?.['800200'], file: path.join(outRoot, 'faces', '800100-paladin.png') });
     jobs.push({ url: servant.extraAssets?.charaGraph?.costume?.['800200'], file: path.join(outRoot, 'cards', '800100-paladin.png') });
@@ -67,6 +73,7 @@ async function download(job, attempt = 1) {
     const res = await fetch(job.url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buffer = Buffer.from(await res.arrayBuffer());
+    fs.mkdirSync(path.dirname(job.file), { recursive: true });
     fs.writeFileSync(job.file, buffer);
     return 'ok';
   } catch (error) {

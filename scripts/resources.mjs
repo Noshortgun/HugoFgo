@@ -160,6 +160,12 @@ function buildAssetJobs(raw) {
         add(servant.extraAssets?.charaGraph?.ascension?.[String(stage)], `data/assets/atlas/cards/${servant.id}-${stage}.png`);
       }
     }
+    for (const [stage, url] of Object.entries(servant.extraAssets?.commands?.ascension ?? {})) {
+      add(url, `data/assets/atlas/commands/${servant.id}/${stage}.png`);
+    }
+    for (const [costume, url] of Object.entries(servant.extraAssets?.commands?.costume ?? {})) {
+      add(url, `data/assets/atlas/commands/${servant.id}/costume-${costume}.png`);
+    }
     if (servant.id === 800100) {
       add(servant.extraAssets?.faces?.costume?.['800200'], 'data/assets/atlas/faces/800100-paladin.png');
       add(servant.extraAssets?.charaGraph?.costume?.['800200'], 'data/assets/atlas/cards/800100-paladin.png');

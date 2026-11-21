@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+import cv2
+import numpy as np
+
+from executor.device.base import Frame
 from executor.perception import BasePage, Perception
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
@@ -91,19 +95,64 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(-1, observation.control('卡1').card.servant_slot)
         self.assertIn('command_card_identity', readiness_gaps(observation))
 
-    def test_command_identity_templates_work_across_sessions(self) -> None:
+    def test_obscured_command_art_stays_unknown(self) -> None:
+        frame = load_frame('captures/2026-11-20/key/card-select.png')
+        image = cv2.imdecode(np.frombuffer(frame.image, dtype=np.uint8), cv2.IMREAD_COLOR)
+        image[350:560, 26:246] = 0
+        encoded = cv2.imencode('.png', image)[1].tobytes()
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+
+        observation = self.perception.read(Frame(image=encoded, width=1280, height=720, captured_at=0.0))
+
+        self.assertIsNone(observation.control('卡1').card)
+        self.assertEqual(705000, observation.control('卡4').card.svt_id)
+
+    def test_command_catalog_rebinding_is_scoped_to_the_current_formation(self) -> None:
+        frame = load_frame('captures/2026-11-20/key/card-select.png')
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='奥伯龙', svt_id=2800100),
+        ))
+        first = self.perception.read(frame)
+        self.assertEqual(2800100, first.control('卡1').card.svt_id)
+        self.assertIsNone(first.control('卡4').card)
+
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+        ))
+        second = self.perception.read(frame)
+
+        self.assertIsNone(second.control('卡1').card)
+        self.assertEqual(705000, second.control('卡4').card.svt_id)
+
+    def test_atlas_command_assets_work_across_sessions(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
         observation = self.perception.read(load_frame('captures/2026-11-19-ember/key/06-card-select.png'))
 
         self.assertEqual((2800100, 'buster', False),
                          (observation.control('卡1').card.svt_id,
                           observation.control('卡1').card.card_type,
                           observation.control('卡1').card.support))
+        self.assertEqual((500800, 'arts', True), (observation.control('卡2').card.svt_id,
+                                                 observation.control('卡2').card.card_type,
+                                                 observation.control('卡2').card.support))
         self.assertEqual((2800100, 'buster'), (observation.control('卡3').card.svt_id,
                                                observation.control('卡3').card.card_type))
+        self.assertEqual((500800, 'arts', True), (observation.control('卡4').card.svt_id,
+                                                 observation.control('卡4').card.card_type,
+                                                 observation.control('卡4').card.support))
         self.assertEqual((705000, 'quick'), (observation.control('卡5').card.svt_id,
                                              observation.control('卡5').card.card_type))
-        self.assertIsNone(observation.control('卡2').card)
-        self.assertIsNone(observation.control('卡4').card)
+        self.assertEqual([2, 0, 2, 0, 1],
+                         [observation.control(f'卡{index}').card.servant_slot
+                          for index in range(1, 6)])
 
 
 if __name__ == '__main__':

@@ -18,8 +18,16 @@ class IdentityTemplate:
     patch: np.ndarray
 
 
+@dataclass(frozen=True)
+class CommandTemplate:
+    entity_id: int
+    keypoints: tuple
+    descriptors: np.ndarray
+
+
 class IdentityMatcher:
     _catalog_cache: dict[tuple[str, str, frozenset[int] | None], list[IdentityTemplate]] = {}
+    _command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or cn.PROJECT_ROOT / 'data'
@@ -27,11 +35,14 @@ class IdentityMatcher:
         self._equips = self._metadata('equips-by-id.json')
         self._face_templates: list[IdentityTemplate] | None = None
         self._ce_templates: list[IdentityTemplate] | None = None
-        self._command_templates: list[IdentityTemplate] | None = None
+        self._command_templates: list[CommandTemplate] | None = None
         self._support_tag: np.ndarray | None = None
         self._formation_slots: dict[tuple[int, bool], int] = {}
         self._required_face_ids: frozenset[int] | None = None
         self._required_ce_ids: frozenset[int] | None = None
+        self._required_command_ids: frozenset[int] | None = None
+        self._sift = cv2.SIFT_create(nfeatures=cn.COMMAND_SIFT_FEATURES)
+        self._feature_matcher = cv2.BFMatcher()
 
     def bind_formation(self, formation) -> None:
         slots: dict[tuple[int, bool], int] = {}
@@ -46,8 +57,11 @@ class IdentityMatcher:
                                             if member.svt_id is not None)
         self._required_ce_ids = frozenset(member.ce_id for member in support
                                           if member.ce_id is not None)
+        self._required_command_ids = frozenset(member.svt_id for member in formation
+                                               if member.svt_id is not None)
         self._face_templates = None
         self._ce_templates = None
+        self._command_templates = None
 
     def _metadata(self, name: str) -> dict[int, dict]:
         path = self._root / name
@@ -149,14 +163,63 @@ class IdentityMatcher:
             ce_id=equip[0] if equip is not None else None,
         )
 
-    def _load_commands(self) -> list[IdentityTemplate]:
-        directory = cn.TEMPLATE_DIR / 'identities' / 'commands'
+    def _load_commands(self) -> list[CommandTemplate]:
+        cache_key = (str(self._root), self._required_command_ids)
+        if cache_key in self._command_cache:
+            return self._command_cache[cache_key]
+        directory = self._root / 'assets/atlas/commands'
+        builtin = cn.TEMPLATE_DIR / 'identities' / 'commands'
+        paths: dict[str, tuple[int, Path]] = {}
+        for source in (builtin, directory):
+            if not source.exists():
+                continue
+            for path in source.glob('*/*.png'):
+                try:
+                    entity_id = int(path.parent.name)
+                except ValueError:
+                    continue
+                if ((self._required_command_ids is None and source == builtin)
+                        or (self._required_command_ids is not None
+                            and entity_id in self._required_command_ids)):
+                    paths[str(path.relative_to(source))] = (entity_id, path)
         templates = []
-        for path in directory.glob('*.png'):
-            patch = self._read(path)
-            if patch is not None:
-                templates.append(IdentityTemplate(int(path.stem), patch))
+        for entity_id, path in paths.values():
+            data = np.fromfile(str(path), dtype=np.uint8)
+            asset = cv2.imdecode(data, cv2.IMREAD_UNCHANGED) if data.size else None
+            if asset is None or asset.ndim != 3 or asset.shape[2] != 4:
+                continue
+            gray = cv2.cvtColor(asset[..., :3], cv2.COLOR_BGR2GRAY)
+            keypoints, descriptors = self._sift.detectAndCompute(gray, asset[..., 3])
+            if descriptors is not None:
+                templates.append(CommandTemplate(entity_id, tuple(keypoints), descriptors))
+        self._command_cache[cache_key] = templates
         return templates
+
+    def _command_servant(self, query: np.ndarray) -> int | None:
+        query_keypoints, query_descriptors = self._sift.detectAndCompute(query, None)
+        if query_descriptors is None or len(query_descriptors) < 2:
+            return None
+        best: dict[int, int] = {}
+        for template in self._command_templates or ():
+            matches = self._feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
+            good = [first for first, second in matches
+                    if first.distance < cn.COMMAND_SIFT_RATIO * second.distance]
+            if len(good) < 4:
+                continue
+            source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
+            target = np.float32([query_keypoints[match.trainIdx].pt for match in good]).reshape(-1, 1, 2)
+            _homography, mask = cv2.findHomography(source, target, cv2.RANSAC,
+                                                   cn.COMMAND_SIFT_RANSAC_THRESHOLD)
+            if mask is None:
+                continue
+            inliers = int(mask.sum())
+            best[template.entity_id] = max(inliers, best.get(template.entity_id, 0))
+        ranked = sorted(best.items(), key=lambda item: item[1], reverse=True)
+        if not ranked or ranked[0][1] < cn.COMMAND_SIFT_MIN_INLIERS:
+            return None
+        if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < cn.COMMAND_SIFT_MIN_MARGIN:
+            return None
+        return ranked[0][0]
 
     def command(self, image: np.ndarray, box: tuple[int, int, int, int]) -> CommandCardIdentity | None:
         if self._command_templates is None:
@@ -166,15 +229,10 @@ class IdentityMatcher:
             return None
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x1, y1, x2, _y2 = box
-        top, left, bottom, right = cn.COMMAND_FACE_QUERY_OFFSETS
+        top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
         query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
-        scores = []
-        for template in self._command_templates:
-            result = cv2.matchTemplate(query, template.patch, cv2.TM_CCOEFF_NORMED)
-            scores.append((template.entity_id, float(np.nan_to_num(result.max(), nan=0.0))))
-        scores.sort(key=lambda item: item[1], reverse=True)
-        if (len(scores) < 2 or scores[0][1] < cn.COMMAND_FACE_THRESHOLD
-                or scores[0][1] - scores[1][1] < cn.COMMAND_FACE_MARGIN):
+        servant_id = self._command_servant(query)
+        if servant_id is None:
             return None
 
         type_top, type_bottom = cn.COMMAND_TYPE_Y_OFFSETS
@@ -197,5 +255,5 @@ class IdentityMatcher:
             tag_region = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
             result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
             support = float(np.nan_to_num(result.max(), nan=0.0)) >= cn.COMMAND_SUPPORT_THRESHOLD
-        return CommandCardIdentity(servant_slot=self._formation_slots.get((scores[0][0], support), -1),
-                                   card_type=card_type, svt_id=scores[0][0], support=support)
+        return CommandCardIdentity(servant_slot=self._formation_slots.get((servant_id, support), -1),
+                                   card_type=card_type, svt_id=servant_id, support=support)
