@@ -158,8 +158,8 @@ mod tests {
         fs::write(run_dir.join("failure.png"), "frame").unwrap();
 
         let artifacts = run_artifacts_at(&path, "run-failed").unwrap();
-        assert_eq!(run_dir.join("events.jsonl").to_string_lossy(), artifacts.log_file);
-        assert_eq!(vec![run_dir.join("failure.png").to_string_lossy()], artifacts.screenshots);
+        assert_eq!(run_dir.join("events.jsonl").to_string_lossy().into_owned(), artifacts.log_file);
+        assert_eq!(vec![run_dir.join("failure.png").to_string_lossy().into_owned()], artifacts.screenshots);
         fs::remove_dir_all(root).unwrap();
     }
 }
