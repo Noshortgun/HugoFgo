@@ -7,7 +7,7 @@ from unittest import mock
 from executor.device.base import Frame, FrameFormat
 from executor.perception import BasePage, FieldStatus, Perception, evidence
 from executor.perception.tests.fixtures import ROOT, load_frame
-from executor.perception.observation import ControlKind
+from executor.perception.observation import CommandCardIdentity, Control, ControlKind, SupportCandidate
 
 
 class RecordingReader:
@@ -92,6 +92,24 @@ class ContractTest(unittest.TestCase):
         updated = observation.with_fields({})
         self.assertIsNot(observation, updated)
         self.assertIs(FieldStatus.NOT_READ, observation.field('wave').status)
+
+    def test_support_candidate_identity_is_structured(self) -> None:
+        candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker',
+                                     ce='迦勒底午茶时光', ce_id=9403520)
+        control = Control('助战卡片第1行', ControlKind.ROW, (0, 200, 1000, 400), True,
+                          support=candidate)
+
+        self.assertIs(candidate, control.support)
+        self.assertEqual((705000, 9403520, False),
+                         (control.support.svt_id, control.support.ce_id, control.support.grand))
+
+    def test_command_card_identity_is_structured(self) -> None:
+        identity = CommandCardIdentity(servant_slot=2, card_type='arts', deck_index=4)
+        control = Control('卡5', ControlKind.CARD, (1066, 415, 1231, 655), True, card=identity)
+
+        self.assertIs(identity, control.card)
+        self.assertEqual((2, 'arts', 4),
+                         (control.card.servant_slot, control.card.card_type, control.card.deck_index))
 
     def test_controls_carry_base_coordinates(self) -> None:
         card = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))

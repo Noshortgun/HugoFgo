@@ -82,6 +82,26 @@ Box = tuple[int, int, int, int]
 
 
 @dataclass(frozen=True)
+class CommandCardIdentity:
+    servant_slot: int
+    card_type: str
+    deck_index: int | None = None
+    noble_phantasm: bool = False
+
+
+@dataclass(frozen=True)
+class SupportCandidate:
+    name: str
+    svt_id: int | None = None
+    role: str | None = None
+    ce: str | None = None
+    ce_id: int | None = None
+    grand: bool = False
+    grand_ce: dict[str, object] | None = None
+    grand_ce_ids: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
 class Control:
     """画面上的一个可点目标。box 是 1280×720 基准坐标下的 (x1, y1, x2, y2)。"""
 
@@ -90,6 +110,8 @@ class Control:
     box: Box
     actionable: bool
     reason: str = ''
+    card: CommandCardIdentity | None = None
+    support: SupportCandidate | None = None
 
     @property
     def center(self) -> tuple[int, int]:
