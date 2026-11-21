@@ -914,6 +914,28 @@
         "开关星光之砂",
         "开关牵绊2倍"
       ]
+    },
+    {
+      "file": "captures/2026-11-21/key/battle-purple-hp.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "敌方3"
+      ],
+      "basis": "inferred"
+    },
+    {
+      "file": "captures/2026-11-21/key/card-effect-ring.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "absentControls": [
+        "宝具卡1"
+      ],
+      "basis": "inferred"
     }
   ]
 }

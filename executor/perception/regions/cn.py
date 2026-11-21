@@ -57,6 +57,7 @@ class ControlSpec:
     anchor: str | None = None
     hide_when_missing: bool = False
     always_disabled: bool = False
+    follow_anchor: bool = False
 
 
 # 顺序即优先级：加载、结算残留、卡牌都要先于 battle 判定。
@@ -181,6 +182,9 @@ NP_SEARCH: dict[str, Box] = {
 NP_EMBLEM_THRESHOLD = 0.65
 NP_EMBLEM_MIN_AREA = 2500
 NP_EMBLEM_MIN_WIDTH = 120
+NP_EMBLEM_MAX_AREA = 8000
+NP_RING_MAX_AREA = 7000
+NP_RING_MAX_WIDTH = 210
 # 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记。
 NP_EMBLEM_Y_RANGE = (0.15, 0.80)
 NP_EMBLEM_HUES: tuple[tuple[tuple[int, int], ...], ...] = (
@@ -336,9 +340,11 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('连续出击', ControlKind.BUTTON, (709, 554, 970, 612)),
         ControlSpec('关闭', ControlKind.BUTTON, (313, 554, 574, 612)),
         ControlSpec('开关星光之砂', ControlKind.BUTTON, (437, 428, 595, 513),
-                    anchor='repeat_star', hide_when_missing=True, always_disabled=True),
+                    anchor='repeat_star', hide_when_missing=True, always_disabled=True,
+                    follow_anchor=True),
         ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518),
-                    anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True),
+                    anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True,
+                    follow_anchor=True),
     ),
     Overlay.ORDER_CHANGE: (
         ControlSpec('关闭', ControlKind.BUTTON, (1185, 94, 1260, 174)),

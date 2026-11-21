@@ -41,6 +41,7 @@ class Evidence:
     slots: Mapping[str, float] = field(default_factory=dict)
     np_slots: Mapping[str, float] = field(default_factory=dict)
     np_blobs: Mapping[str, bool] = field(default_factory=dict)
+    locations: Mapping[str, tuple[int, int]] = field(default_factory=dict)
 
     def np_hit(self, slot: str) -> bool:
         return bool(self.np_blobs.get(slot)) or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD
@@ -135,28 +136,38 @@ def load_emblems(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Emblem]:
 
 
 def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
-    """卡种纹章：卡面下部一块足够宽的纯色图形（绿/蓝/红三类）。"""
+    """卡种纹章：卡面下部一块足够宽、尺寸在合理范围的纯色图形（绿/蓝/红）。
+
+    只取每种颜色的最大连通域：技能动画的巨型效果环会明显超出宝具卡纹章尺寸。
+    """
     x1, y1, x2, y2 = box
     height = y2 - y1
     hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     low_ratio, high_ratio = cn.NP_EMBLEM_Y_RANGE
-    for hues in cn.NP_EMBLEM_HUES:
+    for index, hues in enumerate(cn.NP_EMBLEM_HUES):
         mask = np.zeros_like(hue, dtype=np.uint8)
         for low, high in hues:
             mask |= ((hue >= low) & (hue < high)).astype(np.uint8)
         mask = (mask & (sat > 110) & (val > 70)).astype(np.uint8) * 255
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for contour in contours:
-            if cv2.contourArea(contour) < cn.NP_EMBLEM_MIN_AREA:
-                continue
-            _x, y, width, h = cv2.boundingRect(contour)
-            center_y = y + h / 2
-            if width < cn.NP_EMBLEM_MIN_WIDTH:
-                continue
-            if low_ratio * height < center_y < high_ratio * height:
-                return True
+        if not contours:
+            continue
+        largest = max(contours, key=cv2.contourArea)
+        area = cv2.contourArea(largest)
+        is_ring = index == 0
+        max_area = cn.NP_RING_MAX_AREA if is_ring else cn.NP_EMBLEM_MAX_AREA
+        if not (cn.NP_EMBLEM_MIN_AREA <= area <= max_area):
+            continue
+        _x, y, width, h = cv2.boundingRect(largest)
+        if width < cn.NP_EMBLEM_MIN_WIDTH:
+            continue
+        if is_ring and width > cn.NP_RING_MAX_WIDTH:
+            continue
+        center_y = y + h / 2
+        if low_ratio * height < center_y < high_ratio * height:
+            return True
     return False
 
 
@@ -179,10 +190,12 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
     return scores, blobs
 
 
-def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict[str, float]:
-    """在每个锚点自己的 ROI 内做一次模板匹配，返回归一化最佳得分。"""
+def match_templates(gray: np.ndarray,
+                    templates: Mapping[str, Template]) -> tuple[dict[str, float], dict[str, tuple[int, int]]]:
+    """在每个锚点自己的 ROI 内做一次模板匹配，返回归一化得分与最佳位置。"""
     height, width = gray.shape[:2]
     scores: dict[str, float] = {}
+    locations: dict[str, tuple[int, int]] = {}
     for name, template in templates.items():
         x1, y1, x2, y2 = template.roi
         roi = gray[max(0, y1):min(height, y2), max(0, x1):min(width, x2)]
@@ -191,8 +204,11 @@ def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict
             scores[name] = 0.0
             continue
         result = cv2.matchTemplate(roi, template.patch, cv2.TM_CCOEFF_NORMED)
-        scores[name] = float(np.nan_to_num(result.max(), nan=0.0))
-    return scores
+        clean = np.nan_to_num(result, nan=0.0)
+        _min, maximum, _min_loc, max_loc = cv2.minMaxLoc(clean)
+        scores[name] = float(maximum)
+        locations[name] = (max(0, x1) + int(max_loc[0]), max(0, y1) + int(max_loc[1]))
+    return scores, locations
 
 
 def measure_slots(image: np.ndarray, gray: np.ndarray, probes=cn.SLOT_PROBES) -> dict[str, float]:
@@ -206,8 +222,9 @@ def measure_slots(image: np.ndarray, gray: np.ndarray, probes=cn.SLOT_PROBES) ->
             scores[name] = float((edges > 0).sum())
         else:
             h, sat, val = hsv[y1:y2, x1:x2, 0], hsv[y1:y2, x1:x2, 1], hsv[y1:y2, x1:x2, 2]
-            red = ((h < 10) | (h > 170)) & (sat > 120) & (val > 120)
-            scores[name] = float(red.sum())
+            red = ((h < 10) | (h > 170)) & (sat > 110) & (val > 100)
+            purple = (h > 120) & (h < 165) & (sat > 90) & (val > 90)
+            scores[name] = float((red | purple).sum())
     return scores
 
 

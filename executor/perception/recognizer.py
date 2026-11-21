@@ -90,15 +90,22 @@ def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
 
 
 def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Control | None:
+    box = spec.box
+    if spec.follow_anchor and spec.anchor is not None and spec.anchor in evidence.locations:
+        template = evidence.templates.get(spec.anchor)
+        if template is not None:
+            x, y = evidence.locations[spec.anchor]
+            patch_height, patch_width = template.patch.shape[:2]
+            box = (x - 60, y - 15, x + patch_width + 20, y + patch_height + 55)
     if spec.anchor is not None and not evidence.hit(spec.anchor):
         if spec.hide_when_missing:
             return None
-        return Control(spec.name, spec.kind, spec.box, False, f'anchor_missing:{spec.anchor}')
+        return Control(spec.name, spec.kind, box, False, f'anchor_missing:{spec.anchor}')
     if spec.always_disabled:
-        return Control(spec.name, spec.kind, spec.box, False, 'not_for_automation')
+        return Control(spec.name, spec.kind, box, False, 'not_for_automation')
     if blocked:
-        return Control(spec.name, spec.kind, spec.box, False, 'blocked_by_overlay')
-    return Control(spec.name, spec.kind, spec.box, True, reason)
+        return Control(spec.name, spec.kind, box, False, 'blocked_by_overlay')
+    return Control(spec.name, spec.kind, box, True, reason)
 
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
@@ -236,17 +243,18 @@ class Perception:
     def _recognize(self, frame: Frame, digest: str) -> Observation:
         image = evidence.decode_frame(frame)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        scores = evidence.match_templates(gray, self._templates)
+        scores, locations = evidence.match_templates(gray, self._templates)
         means = evidence.measure_probes(gray)
         edges = evidence.measure_frame_edges(gray)
         slots = evidence.measure_slots(image, gray)
         frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
-                                  edges=edges, slots=slots)
+                                  edges=edges, slots=slots, locations=locations)
         page, variants, overlays, confidence = _classify(frame_evidence)
         if page is BasePage.CARD:
             np_slots, np_blobs = evidence.measure_np_slots(image, gray, self._emblems)
             frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
-                                      edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs)
+                                      edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs,
+                                      locations=locations)
         return Observation(
             base_page=page,
             variants=variants,

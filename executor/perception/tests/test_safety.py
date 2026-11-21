@@ -147,7 +147,19 @@ class SafetyTest(unittest.TestCase):
         actionable = {item.name for item in repeat.controls if item.actionable}
         self.assertTrue({'连续出击', '关闭'} <= actionable)
         self.assertIsNone(repeat.control('开关星光之砂'))
-        self.assertFalse(repeat.control('开关牵绊2倍').actionable)
+        switch = repeat.control('开关牵绊2倍')
+        self.assertFalse(switch.actionable)
+        # 开关位置跟随文案锚点，而不是写死的旧坐标。
+        self.assertTrue(480 <= switch.box[0] <= 620, switch.box)
+        self.assertTrue(600 <= switch.box[2] <= 800, switch.box)
+
+    def test_purple_enemy_bar_and_effect_ring(self) -> None:
+        purple = self.read('captures/2026-11-21/key/battle-purple-hp.png')
+        effect = self.read('captures/2026-11-21/key/card-effect-ring.png')
+
+        self.assertTrue(purple.control('敌方3').actionable)
+        names = [item.name for item in effect.controls if item.name.startswith('宝具卡')]
+        self.assertEqual([], names)
 
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
