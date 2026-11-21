@@ -40,14 +40,21 @@ async function prepareNode(root) {
     const response = await fetch(`https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-x64.zip`);
     if (!response.ok) throw new Error(`Node.js 下载失败：HTTP ${response.status}`);
     fs.writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
-    const result = spawnSync('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      'Expand-Archive -LiteralPath $env:HUGOFGO_NODE_ARCHIVE -DestinationPath $env:HUGOFGO_NODE_EXTRACT -Force',
-    ], {
-      stdio: 'inherit',
-      env: { ...process.env, HUGOFGO_NODE_ARCHIVE: archive, HUGOFGO_NODE_EXTRACT: extracted },
-    });
-    if (result.status !== 0) throw new Error('无法解压 Node.js 运行时');
+    fs.mkdirSync(extracted, { recursive: true });
+    const tar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+    const extractedByTar = spawnSync(tar, ['-xf', archive, '-C', extracted], { stdio: 'inherit' });
+    if (extractedByTar.error || extractedByTar.status !== 0) {
+      const result = spawnSync('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-Command',
+        'Expand-Archive -LiteralPath $env:HUGOFGO_NODE_ARCHIVE -DestinationPath $env:HUGOFGO_NODE_EXTRACT -Force',
+      ], {
+        stdio: 'inherit',
+        // GitHub runners leak PowerShell 7's module path into Windows PowerShell,
+        // which loads an Archive module that needs a .NET overload 5.1 lacks.
+        env: { ...process.env, PSModulePath: undefined, HUGOFGO_NODE_ARCHIVE: archive, HUGOFGO_NODE_EXTRACT: extracted },
+      });
+      if (result.status !== 0) throw new Error('无法解压 Node.js 运行时');
+    }
     fs.mkdirSync(output, { recursive: true });
     fs.copyFileSync(path.join(unpacked, 'node.exe'), path.join(output, 'node.exe'));
     fs.copyFileSync(path.join(unpacked, 'LICENSE'), path.join(output, 'LICENSE.txt'));
