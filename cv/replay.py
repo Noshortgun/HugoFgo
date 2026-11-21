@@ -97,6 +97,55 @@ def check_perception():
         perception.close()
 
 
+def check_perception_identities():
+    from executor.domain import FormationSlotPlan
+
+    perception = Perception()
+    perception.bind_formation((
+        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+        FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+        FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+    ))
+    try:
+        support_path = ROOT / 'captures/2026-11-20/key/support-select-correct-ce.png'
+        support = perception.read(Frame(image=support_path.read_bytes(), width=1280, height=720,
+                                        captured_at=0.0))
+        candidate = support.control('助战卡片第2行').support
+        actual = (candidate.svt_id, candidate.ce_id) if candidate is not None else None
+        add_report('perception:identity:support', support_path, (705000, 9403520), actual, 'observe',
+                   '从者与概念礼装身份', actual == (705000, 9403520))
+
+        wrong_support_path = ROOT / 'captures/2026-11-20/key/support-select-wrong-ce.png'
+        wrong_support = perception.read(Frame(image=wrong_support_path.read_bytes(), width=1280,
+                                              height=720, captured_at=0.0))
+        wrong_candidate = wrong_support.control('助战卡片第2行').support
+        actual = ((wrong_candidate.svt_id, wrong_candidate.ce_id)
+                  if wrong_candidate is not None else None)
+        add_report('perception:identity:support-wrong-ce', wrong_support_path, (705000, 9400480), actual,
+                   'observe', '同从者不同概念礼装不得混淆', actual == (705000, 9400480))
+
+        card_path = ROOT / 'captures/2026-11-20/key/card-select.png'
+        card = perception.read(Frame(image=card_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        expected = [(2, 2800100, 'quick', False), (0, 705000, 'quick', True),
+                    (0, 705000, 'quick', True), (1, 705000, 'quick', False),
+                    (1, 705000, 'arts', False)]
+        actual = [(control.card.servant_slot, control.card.svt_id, control.card.card_type,
+                   control.card.support) if (control := card.control(f'卡{index}')).card else None
+                  for index in range(1, 6)]
+        add_report('perception:identity:command-cards', card_path, expected, actual, 'observe',
+                   '编队槽位、从者、卡色与助战标记', actual == expected)
+
+        old_path = ROOT / 'captures/2026-11-19-ember/key/06-card-select.png'
+        old = perception.read(Frame(image=old_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = [(old.control(f'卡{index}').card.svt_id if old.control(f'卡{index}').card else None)
+                  for index in range(1, 6)]
+        expected = [2800100, None, 2800100, None, 705000]
+        add_report('perception:identity:cross-session', old_path, expected, actual, 'observe',
+                   '未登记的从者保持未知', actual == expected)
+    finally:
+        perception.close()
+
+
 def recorder():
     taps = []
 
@@ -485,6 +534,7 @@ def run(output: Path):
     REPORTS.clear()
     check_classifications()
     check_perception()
+    check_perception_identities()
     check_executor_core()
     check_executor_self_target()
     check_executor_repeat_support()

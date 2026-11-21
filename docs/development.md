@@ -12,7 +12,7 @@ cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Li
 npm run resources:update
 ```
 
-`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。
+`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。资源更新会下载各再临阶段的从者头像，供助战身份的区域图库匹配使用；感知运行时不访问网络。
 
 ## 2. 每次施工前预检
 

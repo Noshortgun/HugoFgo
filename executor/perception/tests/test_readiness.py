@@ -27,20 +27,23 @@ class ReadinessTest(unittest.TestCase):
 
     def test_real_frames_report_executor_gaps(self) -> None:
         cases = (
-            ('captures/2026-11-20/key/support-select-correct-ce.png', 'support_identity'),
-            ('captures/2026-11-20/key/card-select.png', 'command_card_identity'),
-            ('captures/2026-11-20/key/battle-wave1.png', 'turn_boundary'),
-            ('captures/2026-11-20/key/result.png', 'result_control'),
+            ('captures/2026-11-20/key/support-select-correct-ce.png', 'support_identity', 0),
+            ('captures/2026-11-20/key/card-select.png', 'command_card_identity', 2),
+            ('captures/2026-11-20/key/battle-wave1.png', 'turn_boundary', 2),
+            ('captures/2026-11-20/key/result.png', 'result_control', 2),
         )
-        for path, expected in cases:
+        for path, expected, expected_exit in cases:
             with self.subTest(path=path):
                 output = io.StringIO()
                 with redirect_stdout(output):
                     exit_code = main([path, '--ready', '--json'])
                 payload = json.loads(output.getvalue())
-                self.assertEqual(2, exit_code)
-                self.assertFalse(payload['ready'])
-                self.assertIn(expected, payload['missing'])
+                self.assertEqual(expected_exit, exit_code)
+                self.assertEqual(not expected_exit, payload['ready'])
+                if expected_exit:
+                    self.assertIn(expected, payload['missing'])
+                else:
+                    self.assertNotIn(expected, payload['missing'])
 
 
 if __name__ == '__main__':

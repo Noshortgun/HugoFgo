@@ -4,9 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from executor.core import run
-from executor.core.smoke import FrameBudget, main
+from executor.core.smoke import ConfirmedStartPerception, FrameBudget, main
 from executor.core.tests.test_runner import button, observe, scripted, single_wave_plan
 from executor.device.__main__ import make_png
 from executor.perception import BasePage
@@ -27,6 +28,15 @@ class FrameBudgetTest(unittest.TestCase):
 
 
 class SmokeCliTest(unittest.TestCase):
+    def test_confirmed_start_forwards_formation_binding(self) -> None:
+        delegate = mock.Mock()
+        perception = ConfirmedStartPerception(delegate, 1, 1)
+        formation = object()
+
+        perception.bind_formation(formation)
+
+        delegate.bind_formation.assert_called_once_with(formation)
+
     def test_cli_returns_success_only_for_the_expected_bounded_stop(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

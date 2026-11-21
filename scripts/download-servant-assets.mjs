@@ -35,11 +35,11 @@ for (const servant of raw) {
   const cardUrl = servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'];
   if (faceUrl) jobs.push({ url: faceUrl, file: path.join(outRoot, 'faces', `${servant.id}.png`) });
   if (cardUrl) jobs.push({ url: cardUrl, file: path.join(outRoot, 'cards', `${servant.id}.png`) });
-  if (ascensionServantIds.has(servant.id)) {
-    for (let stage = 1; stage <= 4; stage++) {
-      const ascensionFace = servant.extraAssets?.faces?.ascension?.[String(stage)];
+  for (let stage = 1; stage <= 4; stage++) {
+    const ascensionFace = servant.extraAssets?.faces?.ascension?.[String(stage)];
+    if (ascensionFace) jobs.push({ url: ascensionFace, file: path.join(outRoot, 'faces', `${servant.id}-${stage}.png`) });
+    if (ascensionServantIds.has(servant.id)) {
       const ascensionCard = servant.extraAssets?.charaGraph?.ascension?.[String(stage)];
-      if (ascensionFace) jobs.push({ url: ascensionFace, file: path.join(outRoot, 'faces', `${servant.id}-${stage}.png`) });
       if (ascensionCard) jobs.push({ url: ascensionCard, file: path.join(outRoot, 'cards', `${servant.id}-${stage}.png`) });
     }
   }

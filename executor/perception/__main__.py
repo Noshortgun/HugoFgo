@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from executor.device.base import Frame
@@ -27,6 +28,8 @@ def describe(observation) -> dict:
                 'center': list(control.center),
                 'actionable': control.actionable,
                 'reason': control.reason,
+                'card': asdict(control.card) if control.card is not None else None,
+                'support': asdict(control.support) if control.support is not None else None,
             }
             for control in observation.controls
         ],

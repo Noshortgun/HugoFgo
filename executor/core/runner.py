@@ -28,6 +28,8 @@ FLOW_OVERLAYS = frozenset({
 
 
 class FramePerception(Protocol):
+    def bind_formation(self, formation) -> None: ...
+
     def read(self, frame: Frame) -> Observation: ...
 
     def read_fields(self, frame: Frame, names, *, timeout: float | None = None) -> Observation: ...
@@ -857,6 +859,9 @@ def run(plan: ExecutionPlan, device: Device, perception: FramePerception, events
         run_dir = str(Path('logs/farm') / datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
     evidence = RunEvidence(run_dir, plan, device, events) if run_options.write_evidence else None
     try:
+        bind_formation = getattr(perception, 'bind_formation', None)
+        if bind_formation is not None:
+            bind_formation(plan.formation)
         result = Runner(plan, device, perception, evidence or events, run_options, control).run()
         return evidence.finish(result) if evidence is not None else result
     finally:

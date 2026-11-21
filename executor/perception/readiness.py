@@ -17,9 +17,11 @@ def readiness_gaps(observation: Observation) -> list[str]:
         ):
             missing.append('support_identity')
     elif page is BasePage.CARD:
-        cards = [control for control in observation.controls if control.kind is ControlKind.CARD]
+        cards = [control for control in observation.controls
+                 if control.kind is ControlKind.CARD and control.name.startswith('卡')]
         if not cards or any(not control.actionable or control.card is None
-                            or not control.card.card_type for control in cards):
+                            or not control.card.card_type or control.card.svt_id is None
+                            or control.card.servant_slot < 0 for control in cards):
             missing.append('command_card_identity')
     elif page is BasePage.BATTLE:
         wave = observation.field('wave')

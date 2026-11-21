@@ -154,9 +154,9 @@ function buildAssetJobs(raw) {
   for (const servant of raw.servants) {
     add(servant.extraAssets?.faces?.ascension?.['1'] ?? servant.extraAssets?.faces?.ascension?.['0'], `data/assets/atlas/faces/${servant.id}.png`);
     add(servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'], `data/assets/atlas/cards/${servant.id}.png`);
-    if (ascensionServantIds.has(servant.id)) {
-      for (let stage = 1; stage <= 4; stage++) {
-        add(servant.extraAssets?.faces?.ascension?.[String(stage)], `data/assets/atlas/faces/${servant.id}-${stage}.png`);
+    for (let stage = 1; stage <= 4; stage++) {
+      add(servant.extraAssets?.faces?.ascension?.[String(stage)], `data/assets/atlas/faces/${servant.id}-${stage}.png`);
+      if (ascensionServantIds.has(servant.id)) {
         add(servant.extraAssets?.charaGraph?.ascension?.[String(stage)], `data/assets/atlas/cards/${servant.id}-${stage}.png`);
       }
     }
