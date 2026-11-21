@@ -156,13 +156,16 @@ mod tests {
         let path = root.join("logs/run-history.jsonl");
         assert!(list_run_history_at(&path, None).unwrap().is_empty());
         write_record(&root, "run-failed", "failed");
-        let run_dir = root.join("logs/farm/run-failed");
+        let run_dir = root.join("logs").join("farm").join("run-failed");
         fs::write(run_dir.join("events.jsonl"), "{}\n").unwrap();
         fs::write(run_dir.join("failure.png"), "frame").unwrap();
 
         let artifacts = run_artifacts_at(&path, "run-failed").unwrap();
-        assert_eq!(run_dir.join("events.jsonl").to_string_lossy().into_owned(), artifacts.log_file);
-        assert_eq!(vec![run_dir.join("failure.png").to_string_lossy().into_owned()], artifacts.screenshots);
+        assert_eq!(run_dir.join("events.jsonl"), PathBuf::from(&artifacts.log_file));
+        assert_eq!(
+            vec![run_dir.join("failure.png")],
+            artifacts.screenshots.iter().map(PathBuf::from).collect::<Vec<_>>()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }
