@@ -106,8 +106,8 @@ export function lookupAtlasById(id?: number): AtlasServant | undefined {
   return id === undefined ? undefined : byId.get(id);
 }
 
-export async function loadAtlas(region: Region = resourceRegion.value): Promise<void> {
-  if (loadedRegion === region) return;
+export async function loadAtlas(region: Region = resourceRegion.value, force = false): Promise<void> {
+  if (!force && loadedRegion === region) return;
   if (loading && loadingRegion === region) return loading;
   loadedRegion = null;
   loadingRegion = region;

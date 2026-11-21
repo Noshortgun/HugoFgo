@@ -49,6 +49,8 @@ svg { flex: 0 0 auto; }
 .formation-topline > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 .formation-kicker { color: #d1e0e5; font-size: 8px; letter-spacing: 1.4px; }
 .formation-topline strong { font-size: 16px; font-weight: 500; }
+.empty-gallery-prompt { display: flex; align-items: center; gap: 10px; padding: 5px 9px; border: 1px solid rgba(239,212,147,.5); border-radius: 5px; color: #f3e5c5; background: rgba(21,43,53,.72); font-size: 9px; }
+.empty-gallery-prompt button { padding: 4px 8px; border: 0; border-radius: 3px; color: #fff; background: #327886; font-size: 9px; }
 .party-cost { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border: 1px solid rgba(255,255,255,.24); border-radius: 5px; background: rgba(21,43,53,.52); }
 .party-cost > span { color: #c3d2d7; font-size: 8px; }
 .party-cost strong { font-size: 13px; }
@@ -915,6 +917,7 @@ svg { flex: 0 0 auto; }
 .servant-picker-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid #dfe7ea; border-radius: 7px; background: #fff; }
 .servant-picker-card:hover { border-color: #79a7b1; }
 .servant-picker-grid .servant-select { width: 100%; min-height: 79px; padding: 8px; border: 0; border-radius: 0; }
+.servant-picker-grid .servant-picker-placeholder { width: 54px; height: 61px; display: grid; grid-row: span 2; place-items: center; border-radius: 5px; color: #a8bcc5; background: #e8eff1; }
 .servant-picker-grid .servant-select small { margin-right: 20px; }
 .servant-picker-grid .servant-favorite { position: absolute; top: 5px; right: 5px; z-index: 1; width: 25px; height: 25px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #9aaab2; background: rgba(255,255,255,.9); font-size: 19px; }
 .servant-picker-grid .servant-favorite.active { color: #d99b22; }

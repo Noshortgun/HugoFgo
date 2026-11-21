@@ -27,6 +27,7 @@ interface ResourceTaskEvent {
 
 type ResourceAction = 'check' | 'update' | 'verify' | 'refresh';
 
+const emit = defineEmits<{ updated: [region: Region] }>();
 const manifest = ref<ResourceManifest | null>(null);
 const runningAction = ref<ResourceAction | null>(null);
 const taskOutput = ref('');
@@ -87,6 +88,7 @@ async function runTask(action: ResourceAction) {
       return;
     }
     await loadManifest();
+    if (action === 'update' || action === 'refresh') emit('updated', resourceRegion.value);
     if (action !== 'verify') latestHash.value = manifest.value?.version.hash ?? '';
     message.value = action === 'verify'
       ? `${resourceRegion.value} 本地资源校验通过，可展开日志查看。`

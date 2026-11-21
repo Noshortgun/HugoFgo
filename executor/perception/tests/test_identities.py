@@ -4,12 +4,14 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import cv2
 import numpy as np
 
 from executor.device.base import Frame
 from executor.perception import BasePage, Perception
+from executor.perception.identity import default_identity_root
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
 from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
@@ -18,6 +20,13 @@ from executor.perception.tests.fixtures import ROOT, isolated_perception, load_f
 class IdentityTest(unittest.TestCase):
     def setUp(self) -> None:
         self.perception = isolated_perception(self.addCleanup)
+
+    def test_identity_root_uses_desktop_app_data_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict('os.environ', {'HUGOFGO_DATA_ROOT': directory}, clear=True):
+                self.assertEqual(Path(directory) / 'CN', default_identity_root())
+            with mock.patch.dict('os.environ', {'HUGOFGO_DATA_ROOT': directory, 'HUGOFGO_REGION': 'JP'}, clear=True):
+                self.assertEqual(Path(directory) / 'JP', default_identity_root())
 
     def test_support_candidate_includes_servant_and_craft_essence(self) -> None:
         observation = self.perception.read(
