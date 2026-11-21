@@ -148,7 +148,7 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
     height = y2 - y1
     hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    low_ratio, high_ratio = cn.NP_EMBLEM_Y_RANGE
+    low_ratio = 0.30
     card_top, card_height = card_box[1], card_box[3] - card_box[1]
     for index, hues in enumerate(cn.NP_EMBLEM_HUES):
         mask = np.zeros_like(hue, dtype=np.uint8)
@@ -161,21 +161,22 @@ def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
             continue
         largest = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest)
-        min_area, min_width, max_area, max_width = cn.NP_EMBLEM_BOUNDS[index]
-        if not (min_area <= area <= max_area):
+        bounds = cn.NP_EMBLEM_BOUNDS[index]
+        if not (bounds['min_area'] <= area <= bounds['max_area']):
             continue
         _x, y, width, h = cv2.boundingRect(largest)
-        if not (min_width <= width <= max_width):
+        if not (bounds['min_width'] <= width <= bounds['max_width']):
             continue
-        # 纹章是“宽扁”的卡种图形；职阶图标/人物色块多为竖长，用长宽比排除。
-        if h and width / h < 1.15:
+        if h and width / h < bounds['min_aspect']:
+            continue
+        if h and area / (width * h) < bounds['min_fill']:
             continue
         top = y + y1
         center_y = top + h / 2
-        if top + h > cn.NP_EMBLEM_MAX_BOTTOM:
+        if top + h > bounds['max_bottom']:
             continue
         ratio = (center_y - card_top) / card_height if card_height else 0
-        if low_ratio <= ratio <= high_ratio:
+        if low_ratio <= ratio <= bounds['max_center_ratio']:
             return True
     return False
 

@@ -181,14 +181,15 @@ NP_SEARCH: dict[str, Box] = {
 }
 NP_EMBLEM_THRESHOLD = 0.65
 # 三种纹章的大小范围：绿环最大，蓝/红允许更小（宝具卡本身也会缩放）。
-NP_EMBLEM_BOUNDS: tuple[tuple[float, float, float, float], ...] = (
-    (2500, 120, 7000, 210),   # Quick 绿环：min_area, min_width, max_area, max_width
-    (1400, 80, 9000, 260),    # Arts 蓝星
-    (1400, 80, 9000, 260),    # Buster 红色
+# 三种纹章的大小范围：绿环最大，蓝/红允许更小；Buster 爆裂纹章更接近方形、位置更靠下。
+NP_EMBLEM_BOUNDS: tuple[dict, ...] = (
+    dict(min_area=2500, min_width=120, max_area=7000, max_width=210,
+         min_aspect=1.15, min_fill=0.0, max_bottom=370, max_center_ratio=1.10),  # Quick 绿环
+    dict(min_area=1400, min_width=80, max_area=9000, max_width=260,
+         min_aspect=1.15, min_fill=0.0, max_bottom=370, max_center_ratio=1.10),  # Arts 蓝星
+    dict(min_area=1400, min_width=80, max_area=9000, max_width=260,
+         min_aspect=1.0, min_fill=0.22, max_bottom=430, max_center_ratio=1.20),  # Buster 红
 )
-# 纹章落在卡面下部；排除指令卡顶部的“克制/暴击星”小标记和技能特效文字。
-NP_EMBLEM_Y_RANGE = (0.30, 1.10)
-NP_EMBLEM_MAX_BOTTOM = 370
 # 卡面亮度占比：宝具卡槽位 ≥0.35，背景/特效槽位最多 0.18。
 NP_FACE_MIN_FRACTION = 0.30
 NP_EMBLEM_HUES: tuple[tuple[tuple[int, int], ...], ...] = (
