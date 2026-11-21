@@ -39,10 +39,37 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual(1, rows[-1]['data']['completed_runs'])
             self.assertTrue((run_dir / 'events.jsonl').is_file())
 
+    def test_completed_run_appends_a_persistent_history_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_dir = root / 'logs' / 'farm' / 'run-completed'
+            result = subprocess.run(
+                command(run_dir, '--fake-interval', '0'),
+                cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20,
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            history = root / 'logs' / 'run-history.jsonl'
+            records = [json.loads(line) for line in history.read_text(encoding='utf-8').splitlines()]
+            self.assertEqual(1, len(records))
+            record = records[0]
+            self.assertEqual('run-completed', record['id'])
+            self.assertEqual('换人 + 固定卡序 测试样本', record['jobName'])
+            self.assertEqual(str(JOB.resolve()), record['jobFile'])
+            self.assertEqual('fake', record['serial'])
+            self.assertEqual('CN', record['region'])
+            self.assertEqual('completed', record['result'])
+            self.assertEqual(1, record['battlesCompleted'])
+            self.assertEqual({}, record['recoveryUsed'])
+            self.assertEqual(str(run_dir.resolve()), record['runDir'])
+            self.assertIsNone(record['error'])
+            self.assertGreaterEqual(record['finishedAt'], record['startedAt'])
+            self.assertEqual(record['finishedAt'] - record['startedAt'], record['durationMs'])
+
     def test_stdin_stop_ends_fake_run_without_later_actions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             process = subprocess.Popen(
-                command(Path(directory) / 'run', '--fake-interval', '5'),
+                command(Path(directory) / 'logs' / 'farm' / 'run-stopped', '--fake-interval', '5'),
                 cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding='utf-8',
             )
@@ -53,6 +80,28 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual('stopped', rows[-1]['type'])
             self.assertEqual('manual_stop', rows[-1]['data']['reason'])
             self.assertFalse(any(row['type'] == 'action' for row in rows))
+            history = Path(directory) / 'logs' / 'run-history.jsonl'
+            record = json.loads(history.read_text(encoding='utf-8').strip())
+            self.assertEqual('stopped', record['result'])
+            self.assertEqual('manual_stop', record['reason'])
+            self.assertIsNone(record['error'])
+
+    def test_failed_run_records_the_error_and_evidence_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_dir = root / 'logs' / 'farm' / 'run-failed'
+            result = subprocess.run(
+                [str(root / 'missing.json') if arg == str(JOB) else arg for arg in command(run_dir)],
+                cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20,
+            )
+
+            self.assertEqual(1, result.returncode)
+            history = root / 'logs' / 'run-history.jsonl'
+            record = json.loads(history.read_text(encoding='utf-8').strip())
+            self.assertEqual('failed', record['result'])
+            self.assertEqual('process_error', record['reason'])
+            self.assertTrue(record['error'])
+            self.assertEqual(str(run_dir.resolve()), record['runDir'])
 
 
 if __name__ == '__main__':
