@@ -13,6 +13,7 @@ import FormationHome from './components/FormationHome.vue';
 import BattlePlanDrawer from './components/BattlePlanDrawer.vue';
 import PickerDialog from './components/PickerDialog.vue';
 import RunOverlay from './components/RunOverlay.vue';
+import RunSettingsPanel from './components/RunSettingsPanel.vue';
 import SupportDialog from './components/SupportDialog.vue';
 import SupportAssignDialog from './components/SupportAssignDialog.vue';
 import DevicePanel from './components/DevicePanel.vue';
@@ -77,6 +78,7 @@ const savedPlan = ref<string | null>(null);
 const planDrawer = ref<{ getSnapshot: () => string; markSaved: () => void } | null>(null);
 const fallbackOpen = ref(false);
 const running = ref(false);
+const recoveryUsed = ref<Record<string, number>>({});
 const utility = ref<'jobs' | 'history' | 'settings' | null>(null);
 const importSource = ref('');
 const jobFileInput = ref<HTMLInputElement | null>(null);
@@ -446,14 +448,14 @@ async function handleJobFileChange(event: Event) {
   <SupportDialog v-if="supportSlot !== null" :slot="supportSlot" :member="members[supportSlot]" :members="members" :equips="equipsList" @close="supportSlot = null" @save="saveSupport" @relocate="relocateSupport" />
   <SupportAssignDialog v-if="supportPick" :members="pendingImport ? pendingImport.members : members" :candidates="supportPick.candidates" :required="supportPick.required" :duplicate-names="supportPick.duplicateNames" :initial-selection="supportPick.selected" :job-name="pendingImport ? jobNameForMembers(pendingImport.members) : jobName" :importing="Boolean(pendingImport)" @confirm="confirmSupportAssignment" @close="cancelSupportPick" />
   <FallbackDialog v-if="fallbackOpen" :fallback="fallback" :fallback-by-wave="fallbackByWave" :members="members" :dirty="strategyDirty" @close="fallbackOpen = false" @update="updateFallback" @reset="resetFallback" @reset-all="resetStrategy" @save="applyStrategyAndClose" />
-  <RunOverlay v-if="running" @close="running = false" />
+  <RunOverlay v-if="running" :recovery-used="recoveryUsed" @close="running = false" />
 
   <div v-if="utility" class="utility-backdrop">
     <section class="utility-dialog">
       <header><div><span class="picker-kicker">HUGOFGO</span><h2>{{ { jobs: '作业库', history: '运行记录', settings: '设置与资源' }[utility] }}</h2></div><button title="关闭" @click="utility = null"><AppIcon name="close" /></button></header>
       <div v-if="utility === 'jobs'" class="utility-content"><p v-if="jobLibraryReadOnly" class="job-file-message">浏览器预览为只读：作业可以导入、导出与查看，保存、打开、删除和资源任务请使用桌面版。</p><p v-else>作业保存在桌面应用数据目录的 jobs/ 文件夹（开发期为项目 jobs/），并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading || jobLibraryReadOnly" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><div class="job-library-actions"><button @click="openSavedJob(entry)">打开</button><button @click="removeSavedJob(entry)">删除</button></div></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 选卡策略 + 可选固定卡序；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><ul v-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
       <div v-else-if="utility === 'history'" class="utility-content"><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>深蓝的航路 · 完成 10 次</strong><small>今天 14:32 · 用时 18 分 42 秒</small></div><span>成功</span></div><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>每日宝库速巡 · 完成 3 次</strong><small>昨天 20:16 · 用时 4 分 08 秒</small></div><span>成功</span></div><p class="utility-note">运行记录只在需要时从这里查看，不占主界面导航。</p></div>
-      <div v-else class="utility-content"><DevicePanel /><div class="resource-row"><div><strong>图像识别运行时</strong><small>Python CV · RapidOCR · 本地运行</small></div><span class="ready-text">未接入</span></div><div class="resource-row"><div><strong>编队检查方式</strong><small>开始前检测一次 · 不自动配队 · 自有礼装不校验</small></div><span class="ready-text">手动编队</span></div><ResourceCenter /></div>
+      <div v-else class="utility-content"><RunSettingsPanel /><DevicePanel /><div class="resource-row"><div><strong>图像识别运行时</strong><small>Python CV · RapidOCR · 本地运行</small></div><span class="ready-text">未接入</span></div><div class="resource-row"><div><strong>编队检查方式</strong><small>开始前检测一次 · 不自动配队 · 自有礼装不校验</small></div><span class="ready-text">手动编队</span></div><ResourceCenter /></div>
     </section>
   </div>
 </template>

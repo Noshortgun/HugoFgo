@@ -8,10 +8,11 @@ from unittest import mock
 from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run as core_run
+from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
 from executor.device.base import DeviceError
 from executor.device.fake import FakeDevice
-from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
-                             TurnPlan, WavePlan)
+from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy,
+                             FormationSlotPlan, TurnPlan, WavePlan)
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
                                  FieldStatus, Observation, Overlay, SupportCandidate, Variant)
 from executor.session import MemoryEventSink, RunControl
@@ -530,6 +531,29 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['攻击', '卡1', '宝具卡A', '卡2'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
+    def test_strategy_fills_cards_around_scheduled_np(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={0: 2})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),),
+                       strategy=FallbackStrategy(strategy_order=('cards', 'crit')))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
+                          card=CommandCardIdentity(servant_slot=0, card_type='buster', noble_phantasm=True,
+                                                   crit_rate=0, affinity='neutral'))
+        normal = [replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+                  for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))]
+        card = observe(BasePage.CARD, np_card, *normal)
+        observations = [battle, battle, card, card, card, card, card, card,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        device, perception = scripted(observations, [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '宝具卡A', '卡2'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_third_command_card_stops_input_and_waits_for_attack(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
@@ -634,6 +658,34 @@ class RunnerTest(unittest.TestCase):
         self.assertTrue(any(event.type == 'turn_started' and event.data['turn'] == 2
                             for event in events.events))
 
+    def test_unplanned_turn_continues_with_fallback_strategy(self) -> None:
+        base = single_wave_plan()
+        plan = replace(base, strategy=FallbackStrategy(strategy_order=('cards', 'crit')))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        next_battle = battle.with_fields({
+            'wave': Field(FieldStatus.CONFIRMED, 1),
+            'turn': Field(FieldStatus.CONFIRMED, 2),
+        })
+        card = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        observations = [battle, battle, card, card, card, card, card, card, animation,
+                        next_battle, next_battle, card, card, card, card, card, card,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5,
+                 3.0, 3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(2, result.progress.turn)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_repeat_can_continue_through_support_selection(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
@@ -697,21 +749,26 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, controls.count('开始任务'), controls)
         self.assertEqual(2, controls.count('攻击'), controls)
 
-    def test_prefer_mode_stops_with_fallback_reason_when_cards_do_not_match(self) -> None:
+    def test_prefer_mode_uses_strategy_when_cards_do_not_match(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0],
                        attack=replace(base.waves[0].turns[0].attack, mode='prefer'))
-        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),),
+                       strategy=FallbackStrategy(strategy_order=('cards', 'crit'), cards='buster'))
         battle = observe(BasePage.BATTLE, button('攻击'))
-        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
-        device, perception = scripted([battle, battle, wrong_cards], [0.0, 0.5, 0.6])
+        cards = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, card_type='buster', crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))))
+        observations = [battle, battle, cards, cards, cards, cards, cards, cards,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        device, perception = scripted(observations, [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4])
         events = MemoryEventSink()
 
         result = run(plan, device, perception, events)
 
-        self.assertEqual(RunStatus.STOPPED, result.status)
-        self.assertEqual('fallback_required', result.reason)
-        self.assertEqual(1, len(device.actions))
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_battle_start_without_turn_boundary_evidence_stops(self) -> None:
         battle = Observation(base_page=BasePage.BATTLE, controls=(button('攻击'),))
@@ -854,16 +911,82 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('stopped', rows[-1]['type'])
         self.assertEqual(directory, rows[-1]['data']['evidence_dir'])
 
+    def test_default_policy_uses_visible_bronze_and_emits_cumulative_count(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
+        team = observe(BasePage.TEAM)
+        device, perception = scripted([recovery, recovery, team], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(['tap'], [action['action'] for action in device.actions])
+        used = [event for event in events.events if event.type == 'recovery_used']
+        self.assertEqual(1, len(used))
+        self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
+
+    def test_default_policy_scrolls_once_to_find_bronze(self) -> None:
+        top = observe(BasePage.AP_RECOVERY,
+                      Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
+                      Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),
+                      Control('白银果实', ControlKind.ITEM, (315, 414, 981, 559), True))
+        bottom = observe(BasePage.AP_RECOVERY,
+                         Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True))
+        team = observe(BasePage.TEAM)
+        device, perception = scripted([top, top, bottom, bottom, team], [0.0, 0.5, 0.6, 1.1, 1.2])
+        events = MemoryEventSink()
+
+        run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(['swipe', 'tap'], [action['action'] for action in device.actions])
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual('AP 恢复列表向下', actions[0].data['control'])
+        self.assertEqual(1, len([event for event in events.events if event.type == 'recovery_used']))
+
     def test_ap_recovery_stops_without_using_items(self) -> None:
-        recovery = observe(BasePage.AP_RECOVERY, button('青铜苹果', (100, 100, 300, 200)))
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
         device, perception = scripted([recovery], [0.0])
         events = MemoryEventSink()
 
-        result = run(single_wave_plan(), device, perception, events)
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset())))
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('ap_recovery', result.reason)
         self.assertEqual([], device.actions)
+
+    def test_non_whitelisted_items_are_not_used(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('白银果实', ControlKind.ITEM, (100, 100, 300, 200), True),
+                           Control('青铜果实', ControlKind.ITEM, (100, 200, 300, 300), True))
+        device, perception = scripted([recovery], [0.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.GOLD}))))
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual([], device.actions)
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
+
+    def test_drain_completes_at_recovery_without_using_an_item(self) -> None:
+        repeat = Observation(base_page=BasePage.DROPS,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击'),))
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (100, 100, 300, 200), True))
+        device, perception = scripted([repeat, repeat, recovery], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(drain_after_turns=True)))
+
+        self.assertEqual(RunStatus.COMPLETED, result.status)
+        self.assertEqual('ap_drained', result.reason)
+        self.assertEqual(['连续出击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
 
     def test_drops_fallback_is_limited_to_confirmed_drops_page(self) -> None:
         drops = observe(BasePage.DROPS)
@@ -907,7 +1030,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('resume_uncertain', result.reason)
         self.assertEqual([], device.actions)
 
-    def test_prefer_mode_validates_all_three_cards_before_the_first_tap(self) -> None:
+    def test_prefer_mode_falls_back_without_tapping_when_hand_is_uncertain(self) -> None:
         base = single_wave_plan()
         wanted = (AttackCardPlan(slot=0, type='arts'), AttackCardPlan(slot=1, type='arts'),
                   AttackCardPlan(slot=2, type='arts'))
@@ -921,24 +1044,31 @@ class RunnerTest(unittest.TestCase):
 
         result = run(plan, device, perception, events)
 
-        self.assertEqual('fallback_required', result.reason)
+        self.assertEqual('fallback_cards_unavailable', result.reason)
         self.assertEqual(['攻击'], [event.data['control'] for event in events.events
                                     if event.type == 'action'])
+        self.assertEqual('指令卡身份、暴击率或克制信息不确定', events.events[-1].data['message'])
 
-    def test_strategy_mode_is_rejected_before_reading_the_device(self) -> None:
+    def test_strategy_mode_selects_three_cards(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=AttackPlan(mode='strategy', cards=()))
-        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),),
+                       strategy=FallbackStrategy(strategy_order=('cards', 'crit')))
         battle = observe(BasePage.BATTLE, button('攻击'))
-        device, perception = scripted([battle], [0.0])
+        card = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))))
+        observations = [battle, battle, card, card, card, card, card, card,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        device, perception = scripted(observations, [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4])
         events = MemoryEventSink()
 
         result = run(plan, device, perception, events)
 
-        self.assertEqual(RunStatus.FAILED, result.status)
-        self.assertEqual('unsupported_job', result.reason)
-        self.assertEqual([], device.actions)
-        self.assertEqual([], [event for event in events.events if event.type == 'state_changed'])
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(4, len(device.actions))
 
     def test_verify_mode_stops_when_required_card_is_not_dealt(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))

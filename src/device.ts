@@ -1,5 +1,11 @@
 import { invoke as invokeTauri } from './tauri';
 
+export { isTauri } from './tauri';
+
+export function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return invokeTauri<T>(command, args);
+}
+
 export interface DeviceInfo {
   serial: string;
   state: string;
@@ -41,9 +47,7 @@ export interface RunStatus {
   status: string;
 }
 
-export { isTauri } from './tauri';
-
-function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+function invokeDevice<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   return invokeTauri<T>(
     command,
     args,
@@ -52,12 +56,12 @@ function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const deviceApi = {
-  listDevices: () => invoke<DeviceInfo[]>('list_devices'),
-  getDeviceInfo: (serial: string) => invoke<DeviceMetrics>('get_device_info', { serial }),
-  captureFrame: (serial: string) => invoke<CapturedFrame>('capture_frame', { serial }),
+  listDevices: () => invokeDevice<DeviceInfo[]>('list_devices'),
+  getDeviceInfo: (serial: string) => invokeDevice<DeviceMetrics>('get_device_info', { serial }),
+  captureFrame: (serial: string) => invokeDevice<CapturedFrame>('capture_frame', { serial }),
   tapNormalized: (serial: string, x: number, y: number, width?: number, height?: number) =>
-    invoke<TapResult>('tap_normalized', { serial, x, y, width, height }),
+    invokeDevice<TapResult>('tap_normalized', { serial, x, y, width, height }),
   startRun: (serial: string, jobName: string) =>
-    invoke<RunStatus>('start_run', { serial, jobName }),
-  stopRun: () => invoke<RunStatus>('stop_run'),
+    invokeDevice<RunStatus>('start_run', { serial, jobName }),
+  stopRun: () => invokeDevice<RunStatus>('stop_run'),
 };

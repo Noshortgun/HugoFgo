@@ -1,5 +1,6 @@
 mod device;
 mod resources;
+mod settings;
 mod storage;
 
 use std::path::PathBuf;
@@ -158,7 +159,9 @@ pub fn run() {
             delete_job,
             check_resources,
             update_resources,
-            verify_resources
+            verify_resources,
+            settings::get_run_settings,
+            settings::save_run_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running HugoFgo");
