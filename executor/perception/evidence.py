@@ -40,10 +40,10 @@ class Evidence:
     edges: Mapping[str, float]
     slots: Mapping[str, float] = field(default_factory=dict)
     np_slots: Mapping[str, float] = field(default_factory=dict)
-    np_rings: Mapping[str, bool] = field(default_factory=dict)
+    np_blobs: Mapping[str, bool] = field(default_factory=dict)
 
     def np_hit(self, slot: str) -> bool:
-        return bool(self.np_rings.get(slot)) or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD
+        return bool(self.np_blobs.get(slot)) or self.np_slots.get(slot, 0.0) >= cn.NP_EMBLEM_THRESHOLD
 
     def hit(self, name: str) -> bool:
         template = self.templates.get(name)
@@ -134,21 +134,29 @@ def load_emblems(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Emblem]:
     return emblems
 
 
-def _has_quick_ring(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
+def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int]) -> bool:
+    """卡种纹章：卡面下部一块足够宽的纯色图形（绿/蓝/红三类）。"""
     x1, y1, x2, y2 = box
+    height = y2 - y1
     hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    low, high = cn.NP_RING_HUE
-    mask = (((hue > low) & (hue < high) & (sat > cn.NP_RING_MIN_SAT)
-             & (val > cn.NP_RING_MIN_VALUE)).astype(np.uint8)) * 255
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    for contour in contours:
-        if cv2.contourArea(contour) < cn.NP_RING_MIN_AREA:
-            continue
-        _x, _y, width, _height = cv2.boundingRect(contour)
-        if width >= cn.NP_RING_MIN_WIDTH:
-            return True
+    low_ratio, high_ratio = cn.NP_EMBLEM_Y_RANGE
+    for hues in cn.NP_EMBLEM_HUES:
+        mask = np.zeros_like(hue, dtype=np.uint8)
+        for low, high in hues:
+            mask |= ((hue >= low) & (hue < high)).astype(np.uint8)
+        mask = (mask & (sat > 110) & (val > 70)).astype(np.uint8) * 255
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            if cv2.contourArea(contour) < cn.NP_EMBLEM_MIN_AREA:
+                continue
+            _x, y, width, h = cv2.boundingRect(contour)
+            center_y = y + h / 2
+            if width < cn.NP_EMBLEM_MIN_WIDTH:
+                continue
+            if low_ratio * height < center_y < high_ratio * height:
+                return True
     return False
 
 
@@ -156,7 +164,7 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
                      emblems: Mapping[str, Emblem]) -> tuple[dict[str, float], dict[str, bool]]:
     """逐槽判断宝具卡：Quick 看绿环（面积+宽度），Arts 看蓝星模板。"""
     scores: dict[str, float] = {}
-    rings: dict[str, bool] = {}
+    blobs: dict[str, bool] = {}
     for slot, box in cn.NP_SLOTS.items():
         x1, y1, x2, y2 = box
         roi = gray[y1:y2, x1:x2]
@@ -167,8 +175,8 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
             result = cv2.matchTemplate(roi, emblem.patch, cv2.TM_CCOEFF_NORMED)
             best = max(best, float(np.nan_to_num(result.max(), nan=0.0)))
         scores[slot] = best
-        rings[slot] = _has_quick_ring(image, box)
-    return scores, rings
+        blobs[slot] = _has_card_emblem(image, box)
+    return scores, blobs
 
 
 def match_templates(gray: np.ndarray, templates: Mapping[str, Template]) -> dict[str, float]:

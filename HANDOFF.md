@@ -409,3 +409,8 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 验证：card-select、card-np-selected、10-np、11-np 四张全部命中（11 为两张），无宝具卡的 06 帧为空；卡片页冷读约 31 ms（比未做宝具卡时多约 10 ms）。
 - 未支持：Buster 宝具卡（没有样本）；拿到一张 Buster 宝具卡截图即可补第三个纹章判据。
 - 感知测试 36 项、回放 100/100。
+
+
+## 46. 宝具卡纹章判据泛化到三色（#16，2026-11-21）
+
+- 按“宝具卡与指令卡大小相近、只有文字和位置不同”的思路，把判据从 Quick 绿环泛化为**卡种纹章颜色族**：卡面下部（纵向 15
