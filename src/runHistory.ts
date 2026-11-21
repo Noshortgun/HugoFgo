@@ -1,4 +1,4 @@
-import { invoke, isTauri } from './device';
+import { invoke, isTauri } from './tauri';
 
 export type RunResult = 'completed' | 'stopped' | 'failed';
 

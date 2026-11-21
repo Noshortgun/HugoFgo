@@ -97,11 +97,18 @@ def run_fake(plan, settings, run_dir: Path, interval: float,
         jsonl.close()
 
 
+def executable_region(value: str) -> str:
+    if value != 'CN':
+        raise argparse.ArgumentTypeError(f'区服 {value} 暂不支持执行；当前仅支持 CN，请在“设置与资源”中选择国服')
+    return value
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog='python -m executor', description='HugoFgo 执行器进程')
     result.add_argument('job', help='作业 JSON 路径')
     result.add_argument('--serial', required=True, help='设备 serial；假运行使用 fake')
-    result.add_argument('--region', default='CN', help='设备区服，默认 CN')
+    result.add_argument('--region', required=True, type=executable_region,
+                        help='设备区服；当前仅支持 CN，必须显式指定')
     result.add_argument('--run-dir', help='运行记录目录')
     result.add_argument('--battles', type=int, default=1, help='连续出击场数')
     result.add_argument('--recovery', nargs='*', choices=[item.value for item in RecoveryItem],

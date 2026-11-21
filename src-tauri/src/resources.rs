@@ -42,16 +42,9 @@ fn valid_region(region: &str) -> Result<(), String> {
     }
 }
 
-fn project_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("src-tauri must have a project parent")
-        .to_path_buf()
-}
-
 fn data_root(app: &AppHandle) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
-        return Ok(project_root().join("data"));
+        return Ok(crate::paths::project_root().join("data"));
     }
     app.path()
         .app_data_dir()
@@ -61,7 +54,7 @@ fn data_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn script_root(app: &AppHandle) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
-        return Ok(project_root());
+        return Ok(crate::paths::project_root());
     }
     app.path()
         .resource_dir()

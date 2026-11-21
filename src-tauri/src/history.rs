@@ -36,6 +36,9 @@ pub(crate) struct RunArtifacts {
 fn history_path(app: &AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
 
+    if cfg!(debug_assertions) {
+        return Ok(crate::paths::project_root().join("logs").join("run-history.jsonl"));
+    }
     app.path()
         .app_data_dir()
         .map(|directory| directory.join("logs").join("run-history.jsonl"))

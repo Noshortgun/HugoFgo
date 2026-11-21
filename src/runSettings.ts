@@ -1,4 +1,4 @@
-import { invoke, isTauri } from './device';
+import { invoke, isTauri } from './tauri';
 
 export const recoveryItems = ['saint_quartz', 'gold', 'silver', 'bronze', 'copper'] as const;
 export type RecoveryItem = (typeof recoveryItems)[number];

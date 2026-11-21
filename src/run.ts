@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { invoke, isTauri } from './device';
+import type { Region } from './resources';
 import type { RunSettings } from './runSettings';
+import { invoke, isTauri } from './tauri';
 import { emptyRunState, type RunEvent, type RunPhase, type RunState } from './runState';
 
 interface RunStatusPayload {
@@ -26,7 +27,7 @@ export interface StartRunInput {
   serial: string;
   jobPath: string;
   settings: RunSettings;
-  region?: string;
+  region: Region;
 }
 
 export const browserRunDisabledReason = '浏览器预览不能启动执行器；请使用 Tauri 桌面版运行作业';
@@ -60,7 +61,7 @@ export const runApi = {
       serial: input.serial,
       jobPath: input.jobPath,
       settings: input.settings,
-      region: input.region ?? 'CN',
+      region: input.region,
     });
     return fromStatus(status);
   },
