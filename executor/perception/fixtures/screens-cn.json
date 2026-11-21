@@ -195,6 +195,10 @@
       "actionableControls": [
         "连续出击",
         "关闭"
+      ],
+      "absentControls": [
+        "开关星光之砂",
+        "开关牵绊2倍"
       ]
     },
     {
@@ -878,7 +882,10 @@
       "actionableControls": [
         "结束"
       ],
-      "basis": "inferred"
+      "basis": "inferred",
+      "absentControls": [
+        "申请好友"
+      ]
     },
     {
       "file": "captures/2026-11-21/key/result-bond.png",
@@ -902,7 +909,11 @@
         "连续出击",
         "关闭"
       ],
-      "basis": "inferred"
+      "basis": "inferred",
+      "absentControls": [
+        "开关星光之砂",
+        "开关牵绊2倍"
+      ]
     }
   ]
 }

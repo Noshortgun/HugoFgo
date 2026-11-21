@@ -94,6 +94,8 @@ def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Contr
         if spec.hide_when_missing:
             return None
         return Control(spec.name, spec.kind, spec.box, False, f'anchor_missing:{spec.anchor}')
+    if spec.always_disabled:
+        return Control(spec.name, spec.kind, spec.box, False, 'not_for_automation')
     if blocked:
         return Control(spec.name, spec.kind, spec.box, False, 'blocked_by_overlay')
     return Control(spec.name, spec.kind, spec.box, True, reason)

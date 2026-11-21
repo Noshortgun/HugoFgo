@@ -134,7 +134,9 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual('support', friend.base_page.value)
         self.assertEqual(frozenset(), friend.variants)
         self.assertEqual({'friend_request'}, {item.value for item in friend.overlays})
-        self.assertEqual(['结束'], [item.name for item in friend.controls])
+        self.assertEqual(['结束', '申请好友'], [item.name for item in friend.controls])
+        self.assertTrue(friend.control('结束').actionable)
+        self.assertFalse(friend.control('申请好友').actionable)
 
         self.assertEqual('result', bond.base_page.value)
         self.assertEqual({'bond'}, {item.value for item in bond.variants})
@@ -144,6 +146,8 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual('unknown', repeat.base_page.value)
         actionable = {item.name for item in repeat.controls if item.actionable}
         self.assertTrue({'连续出击', '关闭'} <= actionable)
+        self.assertIsNone(repeat.control('开关星光之砂'))
+        self.assertFalse(repeat.control('开关牵绊2倍').actionable)
 
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')

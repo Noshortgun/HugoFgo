@@ -56,6 +56,7 @@ class ControlSpec:
     box: Box
     anchor: str | None = None
     hide_when_missing: bool = False
+    always_disabled: bool = False
 
 
 # 顺序即优先级：加载、结算残留、卡牌都要先于 battle 判定。
@@ -321,9 +322,10 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
     Overlay.MASTER_EQUIPMENT: (
         ControlSpec('关闭', ControlKind.BUTTON, (6, 9, 172, 78)),
     ),
-    # 好友申请页：自动化只走「结束」，不点「申请好友」。
+    # 好友申请页：「结束」可点；「申请好友」在本样本中已置灰（对方申请上限），标为不可点。
     Overlay.FRIEND_REQUEST: (
-        ControlSpec('结束', ControlKind.BUTTON, (166, 600, 493, 698)),
+        ControlSpec('结束', ControlKind.BUTTON, (167, 582, 493, 649)),
+        ControlSpec('申请好友', ControlKind.BUTTON, (790, 582, 1110, 649), always_disabled=True),
     ),
     Overlay.RETREAT_CONFIRM: (
         # 按钮框按亮区实测，中心即文字中心。
@@ -333,8 +335,10 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
     Overlay.REPEAT_DIALOG: (
         ControlSpec('连续出击', ControlKind.BUTTON, (709, 554, 970, 612)),
         ControlSpec('关闭', ControlKind.BUTTON, (313, 554, 574, 612)),
-        ControlSpec('开关星光之砂', ControlKind.BUTTON, (437, 428, 595, 513)),
-        ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518)),
+        ControlSpec('开关星光之砂', ControlKind.BUTTON, (437, 428, 595, 513),
+                    anchor='repeat_star', hide_when_missing=True, always_disabled=True),
+        ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518),
+                    anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True),
     ),
     Overlay.ORDER_CHANGE: (
         ControlSpec('关闭', ControlKind.BUTTON, (1185, 94, 1260, 174)),

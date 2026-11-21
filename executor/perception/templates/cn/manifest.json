@@ -313,6 +313,28 @@
       ],
       "threshold": 0.6
     },
+    "repeat_star": {
+      "file": "repeat_star.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        275,
+        413,
+        760,
+        464
+      ],
+      "threshold": 0.6
+    },
+    "repeat_bond_boost": {
+      "file": "repeat_bond_boost.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        515,
+        413,
+        1015,
+        464
+      ],
+      "threshold": 0.6
+    },
     "friend_request": {
       "file": "friend_request.png",
       "source": "captures/2026-11-21/key/friend-request.png",
