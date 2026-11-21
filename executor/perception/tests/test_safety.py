@@ -98,9 +98,9 @@ class SafetyTest(unittest.TestCase):
 
         self.assertEqual('battle', solo.base_page.value)
         listed = {item.name for item in solo.controls}
-        self.assertTrue({'从者1技能1', '从者1技能2', '从者1技能3', '敌方2'} <= listed)
+        self.assertTrue({'从者1技能1', '从者1技能2', '从者1技能3', '敌方1'} <= listed)
         self.assertEqual(set(), {name for name in listed if name.startswith(('从者2', '从者3'))})
-        self.assertNotIn('敌方1', listed)
+        self.assertNotIn('敌方2', listed)
         self.assertNotIn('敌方3', listed)
 
     def test_np_cards_follow_card_type_emblems(self) -> None:
@@ -152,6 +152,13 @@ class SafetyTest(unittest.TestCase):
         # 开关位置跟随文案锚点，而不是写死的旧坐标。
         self.assertTrue(480 <= switch.box[0] <= 620, switch.box)
         self.assertTrue(600 <= switch.box[2] <= 800, switch.box)
+
+    def test_six_enemy_rows_are_listed_in_order(self) -> None:
+        observation = self.read('captures/2026-11-21/key/battle-six-enemies.png')
+
+        enemies = [item.name for item in observation.controls if item.name.startswith('敌方')]
+        self.assertEqual([f'敌方{i}' for i in range(1, 7)], enemies)
+        self.assertLess(observation.control('敌方1').box[1], observation.control('敌方4').box[1])
 
     def test_support_rows_follow_scroll(self) -> None:
         cases = {

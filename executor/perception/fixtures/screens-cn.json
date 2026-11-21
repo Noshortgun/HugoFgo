@@ -654,12 +654,12 @@
       "basis": "annotated",
       "actionableControls": [
         "从者1技能1",
-        "敌方2"
+        "敌方1"
       ],
       "absentControls": [
         "从者2技能1",
         "从者3技能1",
-        "敌方1",
+        "敌方2",
         "敌方3"
       ]
     },
@@ -1007,6 +1007,18 @@
       ],
       "absentControls": [
         "宝具卡3"
+      ],
+      "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-21/key/battle-six-enemies.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "敌方1",
+        "敌方6"
       ],
       "basis": "annotated"
     }

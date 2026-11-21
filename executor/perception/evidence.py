@@ -138,6 +138,28 @@ def load_emblems(directory: Path = cn.TEMPLATE_DIR) -> dict[str, Emblem]:
     return emblems
 
 
+def find_enemy_bars(image: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """逐条找敌人血条（红/紫），按上→下、左→右排序；宽血条才算，排除职阶图标。"""
+    x1, y1, x2, y2 = cn.ENEMY_BAR_REGION
+    hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    red = ((hue < 10) | (hue > 170)) & (sat > 110) & (val > 100)
+    purple = (hue > 120) & (hue < 165) & (sat > 90) & (val > 90)
+    mask = ((red | purple).astype(np.uint8)) * 255
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bars = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if not (cn.ENEMY_BAR_MIN_WIDTH <= w <= cn.ENEMY_BAR_MAX_WIDTH):
+            continue
+        if not (cn.ENEMY_BAR_MIN_HEIGHT <= h <= cn.ENEMY_BAR_MAX_HEIGHT):
+            continue
+        bars.append((x + x1, y + y1, w, h))
+    bars.sort(key=lambda item: (item[1] // 40, item[0]))
+    return bars
+
+
 def _has_card_emblem(image: np.ndarray, box: tuple[int, int, int, int],
                      card_box: tuple[int, int, int, int]) -> bool:
     """卡种纹章：卡面下部一块足够宽、尺寸在合理范围的纯色图形（绿/蓝/红）。

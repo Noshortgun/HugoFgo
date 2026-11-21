@@ -16,7 +16,7 @@ import numpy as np
 from executor.device.base import Frame
 from executor.perception import evidence
 from executor.perception.errors import StaleFrameError
-from executor.perception.evidence import Evidence, Template
+from executor.perception.evidence import Evidence, Template, find_enemy_bars
 from executor.perception.observation import (
     BasePage,
     Control,
@@ -124,7 +124,7 @@ def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Contr
 
 
 def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[Overlay],
-              evidence: Evidence, gray: np.ndarray) -> tuple[Control, ...]:
+              evidence: Evidence, gray: np.ndarray, image: np.ndarray) -> tuple[Control, ...]:
     modal = next((item for item in cn.MODAL_OVERLAYS if item in overlays), None)
 
     if page in (BasePage.UNKNOWN, BasePage.LOADING) or Variant.BATTLE_ANIMATION in variants:
@@ -166,11 +166,9 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
                            cn.SKILL_ICON_BOX[3])
                     controls.append(Control(f'从者{slot}技能{skill}', ControlKind.SKILL, box, True,
                                             f'slot_visible:{slot}'))
-            for slot in (1, 2, 3):
-                if evidence.hit(f'enemy_slot_{slot}'):
-                    controls.append(Control(f'敌方{slot}', ControlKind.ENEMY,
-                                            cn.SLOT_PROBES[f'enemy_slot_{slot}'].box, True,
-                                            'enemy_hp_bar'))
+            for index, (x, y, w, h) in enumerate(find_enemy_bars(image), start=1):
+                box = (max(0, x - 120), max(0, y - 40), min(1280, x + w + 80), y + h + 45)
+                controls.append(Control(f'敌方{index}', ControlKind.ENEMY, box, True, 'enemy_hp_bar'))
 
         if page is BasePage.CARD:
             present = [(slot, box) for slot, box in cn.NP_SLOTS.items() if evidence.np_hit(slot)]
@@ -274,7 +272,7 @@ class Perception:
             base_page=page,
             variants=variants,
             overlays=overlays,
-            controls=_controls(page, variants, overlays, frame_evidence, gray),
+            controls=_controls(page, variants, overlays, frame_evidence, gray, image),
             fields=_fields(page, None, False),
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),

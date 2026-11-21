@@ -165,6 +165,13 @@ SLOT_PROBES: dict[str, SlotProbe] = {
 
 BATTLE_SLOTS: tuple[str, ...] = tuple(SLOT_PROBES)
 
+# 敌人不再固定三格：扫描顶部区域的红色/紫色血条，支持两排共 6 只。
+ENEMY_BAR_REGION: Box = (0, 0, 820, 175)
+ENEMY_BAR_MIN_WIDTH = 80
+ENEMY_BAR_MAX_WIDTH = 190
+ENEMY_BAR_MIN_HEIGHT = 6
+ENEMY_BAR_MAX_HEIGHT = 24
+
 # 宝具卡槽位：卡面位置固定，存在性看底部卡种纹章。
 # 纹章是通用 UI 资源（Quick 绿、Arts 蓝、Buster 红），不随从者、礼装变化。
 # 输出框按“和指令卡差不多大”给：约 180×230。位置随卡面状态会小幅浮动，框中心落在卡内即可。
