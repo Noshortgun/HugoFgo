@@ -9,12 +9,17 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "cv"))
 
 import farm_ember as farm
 from image_io import read_image, write_image
 from state_classifier import load_templates, result_for_image
+from executor.device.base import Frame
+from executor.perception import Perception
+
+PERCEPTION_FIXTURES = ROOT / "executor/perception/fixtures/screens-cn.json"
 
 SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/key/02-support-select.png"
 GRAND_SUPPORT_IMAGE = ROOT / "captures/2026-11-19-ember/34-grand-support-confirm.png"
@@ -61,6 +66,33 @@ def check_classifications():
             f"classify:{path.name}", path, expected, actual, "observe",
             f"confidence={output['confidence']:.3f}" if output else "截图读取失败", ok,
         )
+
+
+def check_perception():
+    """双速感知的逐屏回放：28 屏开发/回归集 + 跨会话关键帧，覆盖覆盖层与第三张卡之后的动作安全。"""
+    perception = Perception()
+    try:
+        fixtures = json.loads(PERCEPTION_FIXTURES.read_text(encoding="utf-8"))
+        for group in ("regression", "crossSession"):
+            for case in fixtures[group]:
+                path = ROOT / case["file"]
+                frame = Frame(image=path.read_bytes(), width=1280, height=720, captured_at=0.0)
+                observation = perception.read(frame)
+                overlays = sorted(item.value for item in observation.overlays)
+                variants = sorted(item.value for item in observation.variants)
+                blocked = [name for name in case.get("absentControls", ())
+                           if (control := observation.control(name)) is not None and control.actionable]
+                missing = [name for name in case.get("actionableControls", ())
+                           if (control := observation.control(name)) is None or not control.actionable]
+                expected = f"{case['base']}/{sorted(case['overlays'])}/actionable={case['actionable']}"
+                actual = f"{observation.base_page.value}/{overlays}/actionable={observation.actionable}"
+                ok = (actual == expected and variants == sorted(case["variants"])
+                      and not blocked and not missing)
+                name = case["file"].replace("captures/", "").replace("/", "-")
+                add_report(f"perception:{group}:{name}", path, expected, actual, "observe",
+                           f"variants={variants} 越权可点={blocked} 缺失可点={missing}", ok)
+    finally:
+        perception.close()
 
 
 def recorder():
@@ -202,6 +234,7 @@ def check_ocr_action(name, path, expected):
 def run(output: Path):
     REPORTS.clear()
     check_classifications()
+    check_perception()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))
     check_result_action("action:unknown-waits", [("加载中", 640, 360)], "wait")

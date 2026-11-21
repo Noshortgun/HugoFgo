@@ -1,0 +1,38 @@
+{
+  "device": {
+    "emulator": "LDPlayer 14",
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-21",
+  "source": "实时监控 scripts/perception_monitor.py（只读截图，用户操作）",
+  "notes": [
+    "friend-request / result-bond / repeat-over-support 为监控按 s 保存的原图。",
+    "battle-purple-hp / card-effect-ring 由会话缓存恢复，分辨率 1000×563（原图在整理时误删），仅用于回归判据，不作为像素级基准。",
+    "110028 单只从者型敌人的浮动信息条仍未识别，未入库。"
+  ],
+  "keyFrames": [
+    {
+      "file": "key/friend-request.png",
+      "state": "好友申请确认页（结束可点，申请好友置灰）"
+    },
+    {
+      "file": "key/result-bond.png",
+      "state": "牵绊结算面板"
+    },
+    {
+      "file": "key/repeat-over-support.png",
+      "state": "连续出击弹窗叠在好友申请页上，仅牵绊2倍开关"
+    },
+    {
+      "file": "key/battle-purple-hp.png",
+      "state": "三只敌人，第三只血条为紫色（1000×563 恢复图）"
+    },
+    {
+      "file": "key/card-effect-ring.png",
+      "state": "技能“效果获得”绿色环，无宝具卡（1000×563 恢复图）"
+    }
+  ]
+}

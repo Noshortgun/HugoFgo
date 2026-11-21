@@ -1,0 +1,390 @@
+{
+  "region": "cn",
+  "baseSize": [
+    1280,
+    720
+  ],
+  "templates": {
+    "menu": {
+      "file": "menu.png",
+      "source": "captures/2026-11-19-ember/key/01-daily-quest-list.png",
+      "roi": [
+        1032,
+        0,
+        1280,
+        84
+      ],
+      "threshold": 0.55
+    },
+    "support": {
+      "file": "support.png",
+      "source": "captures/2026-11-20/key/support-select-correct-ce.png",
+      "roi": [
+        1010,
+        0,
+        1280,
+        92
+      ],
+      "threshold": 0.6
+    },
+    "grand_support": {
+      "file": "grand_support.png",
+      "source": "captures/2026-11-20/key/163-grand-support.png",
+      "roi": [
+        78,
+        160,
+        183,
+        714
+      ],
+      "threshold": 0.7
+    },
+    "support_confirm": {
+      "file": "support_confirm.png",
+      "source": "captures/2026-11-20/key/support-list-update-confirm.png",
+      "roi": [
+        494,
+        310,
+        773,
+        407
+      ],
+      "threshold": 0.6
+    },
+    "team": {
+      "file": "team.png",
+      "source": "captures/2026-11-20/key/team-confirm.png",
+      "roi": [
+        1081,
+        629,
+        1252,
+        714
+      ],
+      "threshold": 0.6
+    },
+    "grand_team": {
+      "file": "grand_team.png",
+      "source": "captures/2026-11-20/key/165-grand-team.png",
+      "roi": [
+        580,
+        2,
+        700,
+        88
+      ],
+      "threshold": 0.62
+    },
+    "battle": {
+      "file": "battle.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        754,
+        0,
+        883,
+        65
+      ],
+      "threshold": 0.58
+    },
+    "attack": {
+      "file": "attack.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        1044,
+        539,
+        1221,
+        662
+      ],
+      "threshold": 0.6
+    },
+    "card": {
+      "file": "card.png",
+      "source": "captures/2026-11-20/key/card-select.png",
+      "roi": [
+        1059,
+        49,
+        1212,
+        127
+      ],
+      "threshold": 0.6
+    },
+    "result": {
+      "file": "result.png",
+      "source": "captures/2026-11-20/key/result.png",
+      "roi": [
+        504,
+        9,
+        774,
+        112
+      ],
+      "threshold": 0.62
+    },
+    "drops": {
+      "file": "drops.png",
+      "source": "captures/2026-11-20/key/drops.png",
+      "roi": [
+        130,
+        11,
+        360,
+        94
+      ],
+      "threshold": 0.6
+    },
+    "ap_recovery": {
+      "file": "ap_recovery.png",
+      "source": "captures/2026-11-20/key/ap-recovery.png",
+      "roi": [
+        546,
+        12,
+        734,
+        93
+      ],
+      "threshold": 0.6
+    },
+    "loading": {
+      "file": "loading.png",
+      "source": "captures/2026-11-20/key/12-battle-start.png",
+      "roi": [
+        902,
+        651,
+        1037,
+        720
+      ],
+      "threshold": 0.6
+    },
+    "repeat_dialog": {
+      "file": "repeat_dialog.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        447,
+        68,
+        823,
+        157
+      ],
+      "threshold": 0.6
+    },
+    "order_change": {
+      "file": "order_change.png",
+      "source": "captures/2026-11-20/key/61-order-change-select.png",
+      "roi": [
+        560,
+        581,
+        722,
+        669
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_repair": {
+      "file": "command_spell_repair.png",
+      "source": "captures/2026-11-20/key/70-command-spell-open.png",
+      "roi": [
+        263,
+        436,
+        440,
+        519
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_target": {
+      "file": "command_spell_target.png",
+      "source": "captures/2026-11-20/key/72-command-spell-target-select.png",
+      "roi": [
+        540,
+        146,
+        747,
+        241
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_use": {
+      "file": "command_spell_use.png",
+      "source": "captures/2026-11-20/key/72-command-spell-target-select.png",
+      "roi": [
+        429,
+        280,
+        617,
+        378
+      ],
+      "threshold": 0.6
+    },
+    "command_spell_confirm": {
+      "file": "command_spell_confirm.png",
+      "source": "captures/2026-11-20/key/73-command-spell-confirm.png",
+      "roi": [
+        434,
+        283,
+        1009,
+        372
+      ],
+      "threshold": 0.62
+    },
+    "class_info": {
+      "file": "class_info.png",
+      "source": "captures/2026-11-20/key/09-class-filter.png",
+      "roi": [
+        360,
+        105,
+        483,
+        176
+      ],
+      "threshold": 0.62
+    },
+    "battle_menu": {
+      "file": "battle_menu.png",
+      "source": "captures/2026-11-20/key/55-battle-menu.png",
+      "roi": [
+        683,
+        340,
+        880,
+        420
+      ],
+      "threshold": 0.6
+    },
+    "battle_chrome": {
+      "file": "battle_chrome.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "roi": [
+        1116,
+        137,
+        1270,
+        275
+      ],
+      "threshold": 0.6
+    },
+    "support_party_confirm": {
+      "file": "support_party_confirm.png",
+      "source": "captures/2026-11-19-ember/34-grand-support-confirm.png",
+      "roi": [
+        940,
+        0,
+        1280,
+        82
+      ],
+      "threshold": 0.6
+    },
+    "master_equipment": {
+      "file": "master_equipment.png",
+      "source": "captures/2026-11-19-mystic/key/01-mystic-combat.png",
+      "roi": [
+        1024,
+        0,
+        1280,
+        86
+      ],
+      "threshold": 0.6
+    },
+    "result_bond": {
+      "file": "result_bond.png",
+      "source": "captures/2026-11-20/key/result.png",
+      "roi": [
+        50,
+        139,
+        330,
+        235
+      ],
+      "threshold": 0.6
+    },
+    "result_exp": {
+      "file": "result_exp.png",
+      "source": "captures/2026-11-20/key/result-exp.png",
+      "roi": [
+        621,
+        156,
+        861,
+        255
+      ],
+      "threshold": 0.6
+    },
+    "ap_stone": {
+      "file": "ap_stone.png",
+      "source": "captures/2026-11-20/key/ap-recovery.png",
+      "roi": [
+        426,
+        100,
+        574,
+        194
+      ],
+      "threshold": 0.6
+    },
+    "ap_bronze": {
+      "file": "ap_bronze.png",
+      "source": "captures/2026-11-20/key/ap-recovery-bronze.png",
+      "roi": [
+        425,
+        269,
+        604,
+        370
+      ],
+      "threshold": 0.6
+    },
+    "repeat_star": {
+      "file": "repeat_star.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        275,
+        413,
+        760,
+        464
+      ],
+      "threshold": 0.6
+    },
+    "repeat_bond_boost": {
+      "file": "repeat_bond_boost.png",
+      "source": "captures/2026-11-20/key/repeat-dialog.png",
+      "roi": [
+        515,
+        413,
+        1015,
+        464
+      ],
+      "threshold": 0.6
+    },
+    "story_skip": {
+      "file": "story_skip.png",
+      "source": "captures/2026-11-21/key/story.png",
+      "roi": [
+        1139,
+        2,
+        1243,
+        79
+      ],
+      "threshold": 0.6
+    },
+    "story_skip_confirm": {
+      "file": "story_skip_confirm.png",
+      "source": "captures/2026-11-21/key/story-skip-confirm.png",
+      "roi": [
+        433,
+        275,
+        834,
+        364
+      ],
+      "threshold": 0.6
+    },
+    "friend_request": {
+      "file": "friend_request.png",
+      "source": "captures/2026-11-21/key/friend-request.png",
+      "roi": [
+        484,
+        182,
+        782,
+        269
+      ],
+      "threshold": 0.6
+    },
+    "retreat_confirm": {
+      "file": "retreat_confirm.png",
+      "source": "captures/2026-11-19-mystic/key/12-retreat-confirm.png",
+      "roi": [
+        517,
+        235,
+        754,
+        337
+      ],
+      "threshold": 0.6
+    }
+  },
+  "emblems": {
+    "np_arts": {
+      "file": "np_arts.png",
+      "source": "captures/2026-11-19-ember/key/11-np-selected.png",
+      "threshold": 0.65
+    }
+  }
+}

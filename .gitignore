@@ -21,6 +21,9 @@ data/atlas-mystic-cn.json
 captures/**/*.png
 !captures/*/key/*.png
 !captures/2026-11-19/07-battle-loading.png
+!captures/2026-11-19/13-cards-selected.png
+!captures/2026-11-19/19-cards2-selected.png
+!captures/2026-11-19/25-cards3-selected.png
 !captures/2026-11-19-ember/01-gate.png
 !captures/2026-11-19-ember/05-quest-start.png
 !captures/2026-11-19-ember/34-grand-support-confirm.png
