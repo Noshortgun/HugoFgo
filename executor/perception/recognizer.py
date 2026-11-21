@@ -8,6 +8,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict, deque
+from pathlib import Path
 from typing import Iterable, Mapping
 
 import cv2
@@ -234,10 +235,11 @@ class Perception:
 
     def __init__(self, *, templates: Mapping[str, Template] | None = None,
                  emblems: Mapping[str, evidence.Emblem] | None = None,
-                 ocr_reader=None, clock=time.perf_counter, cache_size: int = 64) -> None:
+                 ocr_reader=None, clock=time.perf_counter, cache_size: int = 64,
+                 identity_root: Path | None = None) -> None:
         self._templates = dict(templates) if templates is not None else evidence.load_templates()
         self._emblems = dict(emblems) if emblems is not None else evidence.load_emblems()
-        self._identities = IdentityMatcher()
+        self._identities = IdentityMatcher(identity_root)
         self._worker = OcrWorker(ocr_reader)
         self._clock = clock
         self._cache_size = cache_size

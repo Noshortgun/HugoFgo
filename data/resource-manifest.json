@@ -6,13 +6,29 @@
     "hash": "36f3b9",
     "timestamp": 1795250448
   },
-  "updatedAt": "2026-11-21T14:17:44.428Z",
+  "updatedAt": "2026-11-21T14:39:48.432Z",
   "counts": {
     "servants": 461,
     "equips": 2508,
     "mysticCodes": 26,
     "files": 6939,
     "remoteUnavailable": 6
+  },
+  "assetCategories": {
+    "cards.ascension": 8,
+    "cards.base": 461,
+    "cards.costume": 2,
+    "ce": 2508,
+    "classes": 15,
+    "commands.ascension": 1350,
+    "commands.costume": 138,
+    "faces.ascension": 1800,
+    "faces.base": 461,
+    "faces.costume": 2,
+    "mystic.figure": 52,
+    "mystic.item": 52,
+    "skills.mystic": 35,
+    "skills.servant": 52
   },
   "files": {
     "data/assets/atlas/faces/100100.png": {

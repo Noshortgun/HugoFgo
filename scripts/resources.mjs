@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { assetCategoryGaps, buildAssetJobs, countAssetCategories } from './asset-jobs.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(root, 'data/resource-manifest.json');
@@ -23,8 +24,6 @@ const generatedFiles = [
   'data/assets/atlas/index.json',
   'data/assets/atlas/mystic/index.json',
 ];
-const classIconIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 23, 25, 28, 33];
-const ascensionServantIds = new Set([800100, 4000100]);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
 const relative = (file) => path.relative(root, file).split(path.sep).join('/');
@@ -146,52 +145,8 @@ function currentRawData() {
   };
 }
 
-function buildAssetJobs(raw) {
-  const jobs = new Map();
-  const add = (url, file) => {
-    if (url && file) jobs.set(file, { url, file: absolute(file) });
-  };
-  for (const servant of raw.servants) {
-    add(servant.extraAssets?.faces?.ascension?.['1'] ?? servant.extraAssets?.faces?.ascension?.['0'], `data/assets/atlas/faces/${servant.id}.png`);
-    add(servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'], `data/assets/atlas/cards/${servant.id}.png`);
-    for (let stage = 1; stage <= 4; stage++) {
-      add(servant.extraAssets?.faces?.ascension?.[String(stage)], `data/assets/atlas/faces/${servant.id}-${stage}.png`);
-      if (ascensionServantIds.has(servant.id)) {
-        add(servant.extraAssets?.charaGraph?.ascension?.[String(stage)], `data/assets/atlas/cards/${servant.id}-${stage}.png`);
-      }
-    }
-    for (const [stage, url] of Object.entries(servant.extraAssets?.commands?.ascension ?? {})) {
-      add(url, `data/assets/atlas/commands/${servant.id}/${stage}.png`);
-    }
-    for (const [costume, url] of Object.entries(servant.extraAssets?.commands?.costume ?? {})) {
-      add(url, `data/assets/atlas/commands/${servant.id}/costume-${costume}.png`);
-    }
-    if (servant.id === 800100) {
-      add(servant.extraAssets?.faces?.costume?.['800200'], 'data/assets/atlas/faces/800100-paladin.png');
-      add(servant.extraAssets?.charaGraph?.costume?.['800200'], 'data/assets/atlas/cards/800100-paladin.png');
-      add(servant.extraAssets?.faces?.costume?.['800190'], 'data/assets/atlas/faces/800100-ortenaus.png');
-      add(servant.extraAssets?.charaGraph?.costume?.['800190'], 'data/assets/atlas/cards/800100-ortenaus.png');
-    }
-    for (const skill of servant.skills ?? []) {
-      if (skill.icon) add(skill.icon, `data/assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`);
-    }
-  }
-  for (const equip of raw.equips) {
-    if (equip.type !== 'servantEquip') continue;
-    add(equip.extraAssets?.equipFace?.equip?.[String(equip.id)], `data/assets/atlas/ce/${equip.id}.png`);
-  }
-  for (const code of raw.mystics) {
-    const assets = code.extraAssets ?? {};
-    add(assets.item?.female, `data/assets/atlas/mystic/items/female-${code.id}.png`);
-    add(assets.item?.male, `data/assets/atlas/mystic/items/male-${code.id}.png`);
-    add(assets.masterFigure?.female, `data/assets/atlas/mystic/figures/female-${code.id}.png`);
-    add(assets.masterFigure?.male, `data/assets/atlas/mystic/figures/male-${code.id}.png`);
-    for (const skill of code.skills ?? []) {
-      if (skill.icon) add(skill.icon, `data/assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`);
-    }
-  }
-  for (const id of classIconIds) add(`${api.replace('api.', 'static.')}/CN/ClassIcons/class3_${id}.png`, `public/assets/classes/${id}.png`);
-  return [...jobs.values()];
+function plannedAssetJobs(raw) {
+  return buildAssetJobs(raw).map((job) => ({ ...job, file: absolute(job.file) }));
 }
 
 function regenerateIndexes() {
@@ -242,6 +197,7 @@ function writeManifest(info, raw, jobs) {
       files: Object.values(files).filter((entry) => entry.sha256).length,
       remoteUnavailable: Object.values(files).filter((entry) => entry.remoteUnavailable).length,
     },
+    assetCategories: countAssetCategories(jobs),
     files,
   };
   atomicWrite(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -292,12 +248,27 @@ async function verify() {
   console.log(`校验通过：${manifest.counts.files} 个文件的 SHA-256 均与清单一致`);
 }
 
+function contract() {
+  const manifest = readManifest();
+  if (!manifest) throw new Error('尚未建立资源清单，请先运行 npm run resources:update');
+  const gaps = assetCategoryGaps(manifest);
+  if (gaps.length) {
+    console.error(`资源类别合约失败：缺少非空类别 ${gaps.join(', ')}`);
+    console.error('修改资源类别后先运行 npm run resources:update，并提交更新后的资源清单。');
+    process.exitCode = 1;
+    return;
+  }
+  const categories = Object.entries(manifest.assetCategories)
+    .map(([name, count]) => `${name}=${count}`).join(', ');
+  console.log(`资源类别合约通过：${categories}`);
+}
+
 async function update() {
   const previous = readManifest();
   for (const [file, entry] of Object.entries(previous?.files ?? {})) {
     if (entry.remoteUnavailable) unavailableFiles.add(file);
   }
-  const oldJobs = previous ? [] : buildAssetJobs(currentRawData());
+  const oldJobs = previous ? [] : plannedAssetJobs(currentRawData());
   const oldUrls = new Map(oldJobs.map((job) => [relative(job.file), job.url]));
   const invalid = previous ? verifyManifest(previous) : [];
   const rawInvalid = invalid.some((item) => rawDefinitions.some((definition) => definition.file === item.file));
@@ -307,7 +278,7 @@ async function update() {
   const raw = changed ? await refreshRawData() : currentRawData();
   if (!previous) console.log('首次建立清单：URL 未变化的已有文件会直接纳入，后续可检测本地损坏。');
 
-  const jobs = buildAssetJobs(raw);
+  const jobs = plannedAssetJobs(raw);
   const jobsToDownload = [];
   for (const job of jobs) {
     const file = relative(job.file);
@@ -329,9 +300,27 @@ async function update() {
 
 const command = process.argv[2] ?? 'check';
 if (command === 'self-test') {
-  const jobs = buildAssetJobs({ servants: [{ id: 1, extraAssets: {}, skills: [{ icon: 'https://example.test/skill.png' }, { icon: 'https://example.test/skill.png' }] }], equips: [], mystics: [] });
-  assert.equal(jobs.length, 1);
-  assert.equal(sha256('hugofgo'), 'a50054b94984a3926e94175ad5b485917ec7913cc2977cf6bf362576576e6ab5');
+  const jobs = buildAssetJobs({
+    servants: [{
+      id: 1,
+      extraAssets: {
+        faces: { ascension: { 1: 'https://example.test/face.png' } },
+        commands: { ascension: { 1: 'https://example.test/command.png', 2: 'https://example.test/command2.png' } },
+      },
+      skills: [{ icon: 'https://example.test/skill.png' }, { icon: 'https://example.test/skill.png' }],
+    }],
+    equips: [],
+    mystics: [],
+  });
+  const categories = countAssetCategories(jobs);
+  assert.equal(categories['faces.ascension'], 1);
+  assert.equal(categories['commands.ascension'], 2);
+  assert.equal(categories['skills.servant'], 1);
+  assert.equal(categories.classes, 15);
+  assert.deepEqual(assetCategoryGaps(readManifest()), []);
+  assert.deepEqual(assetCategoryGaps({ assetCategories: { 'commands.ascension': 0 } }),
+    ['faces.ascension', 'commands.ascension', 'ce', 'skills.servant']);
+  assert.equal(sha256('hugofgo'), '2212e77a8b58479809a0e21d448299900cd9eb570458f15b07510cecb56c4ec8');
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: hashFile(absolute('data/name-overrides.json')) } } }).length, 0);
   assert.equal(verifyManifest({ files: { 'data/name-overrides.json': { sha256: 'broken' } } }).length, 1);
   assert.equal(verifyManifest({ files: { 'data/not-published.png': { remoteUnavailable: true } } }).length, 0);
@@ -339,4 +328,5 @@ if (command === 'self-test') {
 } else if (command === 'check') await check();
 else if (command === 'update') await update();
 else if (command === 'verify') await verify();
-else throw new Error(`未知命令：${command}；可用 check / update / verify`);
+else if (command === 'contract') contract();
+else throw new Error(`未知命令：${command}；可用 check / update / verify / contract / self-test`);

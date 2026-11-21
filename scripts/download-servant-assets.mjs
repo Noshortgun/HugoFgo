@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
 import { loadRemoteUnavailable } from './resource-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,42 +26,12 @@ for (const dir of ['faces', 'cards', 'skills']) fs.mkdirSync(path.join(outRoot, 
 
 const concurrency = 8;
 const jobs = [];
-const seenSkills = new Set();
-const ascensionServantIds = new Set([800100, 4000100]);
 
 for (const servant of raw) {
   const info = slim[servant.id];
   if (!info) continue;
-  const faceUrl = servant.extraAssets?.faces?.ascension?.['1'] ?? servant.extraAssets?.faces?.ascension?.['0'];
-  const cardUrl = servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'];
-  if (faceUrl) jobs.push({ url: faceUrl, file: path.join(outRoot, 'faces', `${servant.id}.png`) });
-  if (cardUrl) jobs.push({ url: cardUrl, file: path.join(outRoot, 'cards', `${servant.id}.png`) });
-  for (let stage = 1; stage <= 4; stage++) {
-    const ascensionFace = servant.extraAssets?.faces?.ascension?.[String(stage)];
-    if (ascensionFace) jobs.push({ url: ascensionFace, file: path.join(outRoot, 'faces', `${servant.id}-${stage}.png`) });
-    if (ascensionServantIds.has(servant.id)) {
-      const ascensionCard = servant.extraAssets?.charaGraph?.ascension?.[String(stage)];
-      if (ascensionCard) jobs.push({ url: ascensionCard, file: path.join(outRoot, 'cards', `${servant.id}-${stage}.png`) });
-    }
-  }
-  for (const [stage, url] of Object.entries(servant.extraAssets?.commands?.ascension ?? {})) {
-    jobs.push({ url, file: path.join(outRoot, 'commands', String(servant.id), `${stage}.png`) });
-  }
-  for (const [costume, url] of Object.entries(servant.extraAssets?.commands?.costume ?? {})) {
-    jobs.push({ url, file: path.join(outRoot, 'commands', String(servant.id), `costume-${costume}.png`) });
-  }
-  if (servant.id === 800100) {
-    jobs.push({ url: servant.extraAssets?.faces?.costume?.['800200'], file: path.join(outRoot, 'faces', '800100-paladin.png') });
-    jobs.push({ url: servant.extraAssets?.charaGraph?.costume?.['800200'], file: path.join(outRoot, 'cards', '800100-paladin.png') });
-    jobs.push({ url: servant.extraAssets?.faces?.costume?.['800190'], file: path.join(outRoot, 'faces', '800100-ortenaus.png') });
-    jobs.push({ url: servant.extraAssets?.charaGraph?.costume?.['800190'], file: path.join(outRoot, 'cards', '800100-ortenaus.png') });
-  }
-  for (const skill of servant.skills ?? []) {
-    if (!skill.icon) continue;
-    const base = path.basename(new URL(skill.icon).pathname);
-    if (seenSkills.has(base)) continue;
-    seenSkills.add(base);
-    jobs.push({ url: skill.icon, file: path.join(outRoot, 'skills', base) });
+  for (const job of servantAssetJobs(servant)) {
+    jobs.push({ ...job, file: path.join(root, job.file) });
   }
 }
 
@@ -131,7 +102,7 @@ const index = raw.map((servant) => {
   const cardUrl = servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'];
   const faceFile = `/data/assets/atlas/faces/${servant.id}.png`;
   const cardFile = `/data/assets/atlas/cards/${servant.id}.png`;
-  const ascensionAssets = ascensionServantIds.has(servant.id) ? Object.fromEntries([1, 2, 3, 4].map((stage) => [stage, {
+  const ascensionAssets = ASCENSION_CARD_IDS.has(servant.id) ? Object.fromEntries([1, 2, 3, 4].map((stage) => [stage, {
     face: fs.existsSync(path.join(outRoot, 'faces', `${servant.id}-${stage}.png`)) ? `/data/assets/atlas/faces/${servant.id}-${stage}.png` : null,
     card: fs.existsSync(path.join(outRoot, 'cards', `${servant.id}-${stage}.png`)) ? `/data/assets/atlas/cards/${servant.id}-${stage}.png` : null,
   }])) : undefined;

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -9,7 +12,7 @@ from executor.device.base import Frame
 from executor.perception import BasePage, Perception
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
-from executor.perception.tests.fixtures import load_frame
+from executor.perception.tests.fixtures import ROOT, load_frame
 
 
 class IdentityTest(unittest.TestCase):
@@ -110,6 +113,26 @@ class IdentityTest(unittest.TestCase):
 
         self.assertIsNone(observation.control('卡1').card)
         self.assertEqual(705000, observation.control('卡4').card.svt_id)
+
+    def test_command_catalog_loads_non_builtin_servant_from_resource_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = Path(directory) / 'assets/atlas/commands/100100'
+            catalog.mkdir(parents=True)
+            shutil.copyfile(
+                ROOT / 'executor/perception/templates/cn/identities/commands/500800/2.png',
+                catalog / '2.png',
+            )
+            perception = Perception(identity_root=Path(directory))
+            perception.bind_formation((FormationSlotPlan(slot=0, name='测试从者', svt_id=100100),))
+            try:
+                observation = perception.read(
+                    load_frame('captures/2026-11-19-ember/key/06-card-select.png'))
+            finally:
+                perception.close()
+
+        self.assertEqual(100100, observation.control('卡2').card.svt_id)
+        self.assertEqual(100100, observation.control('卡4').card.svt_id)
+        self.assertIsNone(observation.control('卡1').card)
 
     def test_command_catalog_rebinding_is_scoped_to_the_current_formation(self) -> None:
         frame = load_frame('captures/2026-11-20/key/card-select.png')
