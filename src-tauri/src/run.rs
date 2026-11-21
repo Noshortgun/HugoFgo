@@ -392,7 +392,7 @@ impl RunManager {
                             ),
                         };
                         manager.apply_event(&event);
-                        let _ = monitor_app.emit_all(RUN_EVENT, &event);
+                        let _ = monitor_app.emit(RUN_EVENT, &event);
                     }
                     Err(error) => {
                         let event = RunEvent::new(
@@ -401,7 +401,7 @@ impl RunManager {
                             0.0,
                             json!({"reason": "stdout_read_error", "message": error.to_string()}),
                         );
-                        let _ = monitor_app.emit_all(RUN_EVENT, &event);
+                        let _ = monitor_app.emit(RUN_EVENT, &event);
                         break;
                     }
                 }
@@ -475,7 +475,7 @@ impl RunManager {
             }
         }
         if let Some(event) = synthetic {
-            let _ = app.emit_all(RUN_EVENT, &event);
+            let _ = app.emit(RUN_EVENT, &event);
         }
     }
 
