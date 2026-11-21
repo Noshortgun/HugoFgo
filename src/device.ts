@@ -1,3 +1,11 @@
+import { invoke as invokeTauri } from './tauri';
+
+export { isTauri } from './tauri';
+
+export function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return invokeTauri<T>(command, args);
+}
+
 export interface DeviceInfo {
   serial: string;
   state: string;
@@ -30,26 +38,18 @@ export interface TapResult {
   norm_y: number;
 }
 
-type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
-
-function tauriInvoke(): TauriInvoke | undefined {
-  const internals = (window as unknown as { __TAURI_INTERNALS__?: { invoke?: TauriInvoke } })
-    .__TAURI_INTERNALS__;
-  return typeof internals?.invoke === 'function' ? internals.invoke : undefined;
-}
-
-export const isTauri = Boolean(tauriInvoke());
-
-export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const run = tauriInvoke();
-  if (!run) throw new Error('此命令仅在 Tauri 桌面版中可用，当前是浏览器预览');
-  return (await run(command, args)) as T;
+function invokeDevice<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return invokeTauri<T>(
+    command,
+    args,
+    '设备控制仅在 Tauri 桌面版中可用，当前是浏览器预览',
+  );
 }
 
 export const deviceApi = {
-  listDevices: () => invoke<DeviceInfo[]>('list_devices'),
-  getDeviceInfo: (serial: string) => invoke<DeviceMetrics>('get_device_info', { serial }),
-  captureFrame: (serial: string) => invoke<CapturedFrame>('capture_frame', { serial }),
+  listDevices: () => invokeDevice<DeviceInfo[]>('list_devices'),
+  getDeviceInfo: (serial: string) => invokeDevice<DeviceMetrics>('get_device_info', { serial }),
+  captureFrame: (serial: string) => invokeDevice<CapturedFrame>('capture_frame', { serial }),
   tapNormalized: (serial: string, x: number, y: number, width?: number, height?: number) =>
-    invoke<TapResult>('tap_normalized', { serial, x, y, width, height }),
+    invokeDevice<TapResult>('tap_normalized', { serial, x, y, width, height }),
 };

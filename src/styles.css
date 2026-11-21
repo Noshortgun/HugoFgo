@@ -833,6 +833,7 @@ svg { flex: 0 0 auto; }
 .job-library-list strong { display: block; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .job-library-list small { display: block; margin-top: 3px; color: #8a9ba5; font-size: 9px; }
 .job-library-list button { min-height: 28px; padding: 0 11px; border: 1px solid #cfe0e4; border-radius: 5px; color: #3f6f7c; background: #f6fbfb; font-size: 9px; white-space: nowrap; }
+.job-library-actions { display: flex; gap: 6px; }
 .job-library-empty { justify-content: center; color: #8a9ba5; font-size: 10px; }
 
 .sequence-card-plan { margin: 8px 13px 0; padding: 8px 9px; border: 1px solid #e0e8eb; border-radius: 5px; background: #f7fafb; }
@@ -922,10 +923,12 @@ svg { flex: 0 0 auto; }
 
 .resource-center { margin-top: 18px; padding-top: 17px; border-top: 1px solid #dfe7ea; }
 .resource-center-heading { display: flex; align-items: center; justify-content: space-between; }
+.resource-region-picker { display: flex; align-items: center; gap: 7px; }
+.resource-region-picker select { min-height: 32px; padding: 0 8px; border: 1px solid #cfe0e4; border-radius: 5px; color: #36515f; background: #fff; font-size: 10px; }
 .resource-center-heading h3 { margin-top: 4px; font-size: 14px; }
 .resource-center-heading button { display: flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 11px; border: 0; border-radius: 5px; color: #fff; background: #327886; font-size: 10px; }
 .resource-center-heading button:disabled { opacity: .6; }
-.resource-version-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 13px; }
+.resource-version-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 13px; }
 .resource-version-grid div { padding: 9px; border: 1px solid #e0e8eb; border-radius: 6px; background: #fff; }
 .resource-version-grid span { display: block; color: #8b9ca5; font-size: 8px; }
 .resource-version-grid strong { display: block; margin-top: 4px; overflow: hidden; color: #36515f; font-size: 10px; text-overflow: ellipsis; }

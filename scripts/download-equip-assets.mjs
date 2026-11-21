@@ -3,11 +3,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable } from './resource-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/atlas-equip-cn.json'), 'utf8'));
-const outDir = path.join(root, 'data/assets/atlas/ce');
+const paths = resourcePaths(root);
+const { region } = paths;
+const raw = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-equip-cn.json`), 'utf8'));
+const outDir = paths.regionFile('assets/atlas/ce');
 fs.mkdirSync(outDir, { recursive: true });
 
 const jobs = [];
@@ -15,14 +18,14 @@ const entries = [];
 for (const equip of raw) {
   if (equip.type !== 'servantEquip') continue;
   const url = equip.extraAssets?.equipFace?.equip?.[String(equip.id)];
-  const icon = url ? `/data/assets/atlas/ce/${equip.id}.png` : null;
+  const icon = url ? paths.webPath(`assets/atlas/ce/${equip.id}.png`) : null;
   const bondBonus = equip.rarity === 5 && (equip.skills ?? []).some((skill) => /牵绊|羁绊/.test(skill.detail ?? ''));
   const defaultCommon = bondBonus || equip.name === '万华镜' || equip.name === '黑之圣杯';
   entries.push({ id: equip.id, name: equip.name, rarity: equip.rarity, icon, ...(defaultCommon ? { commonDefault: true } : {}) });
   if (url) jobs.push({ url, file: path.join(outDir, `${equip.id}.png`) });
 }
 
-const remoteUnavailable = loadRemoteUnavailable(root);
+const remoteUnavailable = loadRemoteUnavailable(root, region);
 async function download(job, attempt = 1) {
   const relative = path.relative(root, job.file).split(path.sep).join('/');
   if (remoteUnavailable.has(relative)) return 'remote-unavailable';
@@ -54,9 +57,9 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 
-const available = entries.map((entry) => (entry.icon && fs.existsSync(path.join(root, entry.icon)) ? entry : { ...entry, icon: null }));
-fs.writeFileSync(path.join(root, 'data/equips.json'), JSON.stringify(available));
-fs.writeFileSync(path.join(root, 'data/equips-by-id.json'), JSON.stringify(Object.fromEntries(available.map((entry) => [entry.id, entry]))));
+const available = entries.map((entry) => (entry.icon && fs.existsSync(path.join(outDir, `${entry.id}.png`)) ? entry : { ...entry, icon: null }));
+fs.writeFileSync(paths.absolute(`data/${region}/equips.json`), JSON.stringify(available));
+fs.writeFileSync(paths.absolute(`data/${region}/equips-by-id.json`), JSON.stringify(Object.fromEntries(available.map((entry) => [entry.id, entry]))));
 console.log(`完成：${jobs.length} 个图标，失败 ${failures.length} 个`);
 if (failures.length) console.log(failures.slice(0, 10).join('\n'));
 console.log(`礼装 ${available.length} 个，有效图标 ${available.filter((entry) => entry.icon).length} 个`);

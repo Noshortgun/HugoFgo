@@ -16,6 +16,8 @@ data/atlas-nice-cn.json
 data/atlas-basic-cn.json
 data/atlas-equip-cn.json
 data/atlas-mystic-cn.json
+data/*/assets/
+data/*/atlas-*.json
 
 # 截图素材：关键帧与被回放引用的故障截图入库，过程调试图不入库
 captures/**/*.png

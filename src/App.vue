@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { atlasMysticCodes, atlasServants, loadAtlas, lookupAtlas, lookupAtlasById } from './atlas';
 import { equipsById, equipsList, loadEquips } from './equips';
 import type { FallbackScope, FallbackStrategy, HugoFgoJob, MysticCode, PlanSnapshot, Servant } from './types';
 import { emptyServant, mysticCodes, standardSkills, team } from './data';
 import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, parseJobFile } from './job';
 import { convertChaldeaTeam, fetchChaldeaTeam, loadChaldeaCatalog, loadSecondaryCatalog, parseChaldeaRef } from './chaldea';
-import { jobNameForMembers, listSavedJobs, saveJobToLibrary, type SavedJobEntry } from './jobLibrary';
+import { deleteJobFromLibrary, jobLibraryReadOnly, jobNameForMembers, listSavedJobs, readJobFromLibrary, saveJobToLibrary, type SavedJobEntry } from './jobLibrary';
+import { resourceRegion } from './resources';
 import { browserRunDisabledReason, fakeRunRequested, runApi } from './run';
 import { applyRunEvent, emptyRunState } from './runState';
 import { loadRunSettings } from './runSettings';
@@ -126,6 +127,11 @@ onMounted(async () => {
 });
 onUnmounted(() => unsubscribeRun?.());
 
+watch(resourceRegion, async () => {
+  await Promise.all([loadAtlas(), loadEquips()]);
+  members.value = members.value.map((member) => resolveMemberAssets(member, member.limitCount ?? 4));
+});
+
 function selectServant(index: number, servant: Servant) {
   const current = members.value[index];
   const limitCount = current.svtId === servant.svtId ? current.limitCount ?? servant.limitCount ?? 4 : servant.limitCount ?? 4;
@@ -217,7 +223,9 @@ function currentJob(snapshot: PlanSnapshot) {
 }
 async function refreshJobLibrary() {
   jobLibraryLoading.value = true;
-  jobLibraryError.value = '';
+  jobLibraryError.value = jobLibraryReadOnly
+    ? '浏览器预览为只读，作业列表与保存仅在桌面版可用。'
+    : '';
   try {
     jobLibrary.value = await listSavedJobs();
   } catch (error) {
@@ -268,10 +276,25 @@ function openUtility(type: 'jobs' | 'history' | 'settings') {
   utility.value = type;
   if (type === 'jobs') void refreshJobLibrary();
 }
-function openSavedJob(entry: SavedJobEntry) {
-  utility.value = null;
-  currentJobPath.value = `jobs/${entry.file}`;
-  loadJob(entry.job);
+async function openSavedJob(entry: SavedJobEntry) {
+  try {
+    const job = await readJobFromLibrary(entry.file);
+    utility.value = null;
+    currentJobPath.value = `jobs/${entry.file}`;
+    loadJob(job);
+  } catch (error) {
+    jobLibraryError.value = `打开作业失败：${error instanceof Error ? error.message : '未知错误'}`;
+  }
+}
+
+async function removeSavedJob(entry: SavedJobEntry) {
+  if (!window.confirm(`删除作业「${entry.file.replace(/\.json$/, '')}」？`)) return;
+  try {
+    await deleteJobFromLibrary(entry.file);
+    await refreshJobLibrary();
+  } catch (error) {
+    jobLibraryError.value = `删除作业失败：${error instanceof Error ? error.message : '未知错误'}`;
+  }
 }
 function savedJobLineup(entry: SavedJobEntry) {
   const names = entry.job.formation
@@ -493,7 +516,7 @@ async function stopRun() {
   <div v-if="utility" class="utility-backdrop">
     <section class="utility-dialog">
       <header><div><span class="picker-kicker">HUGOFGO</span><h2>{{ { jobs: '作业库', history: '运行记录', settings: '设置与资源' }[utility] }}</h2></div><button title="关闭" @click="utility = null"><AppIcon name="close" /></button></header>
-      <div v-if="utility === 'jobs'" class="utility-content"><p>作业自动保存在项目根目录的 jobs/ 文件夹，并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><button @click="openSavedJob(entry)">打开</button></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 选卡策略 + 可选固定卡序；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><ul v-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
+      <div v-if="utility === 'jobs'" class="utility-content"><p v-if="jobLibraryReadOnly" class="job-file-message">浏览器预览为只读：作业可以导入、导出与查看，保存、打开、删除和资源任务请使用桌面版。</p><p v-else>作业保存在桌面应用数据目录的 jobs/ 文件夹（开发期为项目 jobs/），并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading || jobLibraryReadOnly" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><div class="job-library-actions"><button @click="openSavedJob(entry)">打开</button><button @click="removeSavedJob(entry)">删除</button></div></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 选卡策略 + 可选固定卡序；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><ul v-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
       <div v-else-if="utility === 'history'" class="utility-content"><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>深蓝的航路 · 完成 10 次</strong><small>今天 14:32 · 用时 18 分 42 秒</small></div><span>成功</span></div><div class="history-row"><span class="history-success"><AppIcon name="check" :size="15" /></span><div><strong>每日宝库速巡 · 完成 3 次</strong><small>昨天 20:16 · 用时 4 分 08 秒</small></div><span>成功</span></div><p class="utility-note">运行记录只在需要时从这里查看，不占主界面导航。</p></div>
       <div v-else class="utility-content"><RunSettingsPanel /><DevicePanel v-model="selectedSerial" /><div class="resource-row"><div><strong>图像识别运行时</strong><small>Python CV · RapidOCR · 本地运行</small></div><span class="ready-text">未接入</span></div><div class="resource-row"><div><strong>编队检查方式</strong><small>开始前检测一次 · 不自动配队 · 自有礼装不校验</small></div><span class="ready-text">手动编队</span></div><ResourceCenter /></div>
     </section>

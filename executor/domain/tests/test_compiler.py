@@ -57,6 +57,9 @@ class CompileJobTest(unittest.TestCase):
         plan = result.plan
         self.assertIsNotNone(plan)
         self.assertEqual([2, 1], [len(wave.turns) for wave in plan.waves])
+        self.assertEqual((True, ('卫宫', '玛修·基列莱特', '吉尔伽美什'), None, 'buster'),
+                         (plan.strategy.allow_np, plan.strategy.servant_order,
+                          plan.strategy.servant_order_slots, plan.strategy.cards))
 
         first = plan.waves[0].turns[0]
         self.assertEqual(['orderChange', 'skill', 'master', 'attack'], [action.kind for action in first.actions])
@@ -176,6 +179,24 @@ class CompileJobTest(unittest.TestCase):
 
         self.assertIsNone(result.plan)
         self.assertEqual(['$.formation[0].name'], [diagnostic.path for diagnostic in result.diagnostics])
+
+    def test_wave_strategy_override_and_servant_slots_compile(self):
+        job = self.valid_job()
+        job['strategy']['servantOrderSlots'] = [3, 1, 2]
+        override = {**job['strategy'], 'allowNp': False, 'cards': 'quick',
+                    'servantOrderSlots': [1, 3, 2],
+                    'servantOrder': ['玛修·基列莱特', '卫宫', '吉尔伽美什']}
+        job['strategyByWave'] = {'1': override, '2': None}
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        self.assertEqual((3, 1, 2), result.plan.strategy.servant_order_slots)
+        self.assertEqual((False, 'quick', (1, 3, 2)),
+                         (result.plan.strategy_by_wave[1].allow_np,
+                          result.plan.strategy_by_wave[1].cards,
+                          result.plan.strategy_by_wave[1].servant_order_slots))
+        self.assertIsNone(result.plan.strategy_by_wave[2])
 
     def test_fallback_strategy_rejects_empty_slots(self):
         job = self.valid_job()

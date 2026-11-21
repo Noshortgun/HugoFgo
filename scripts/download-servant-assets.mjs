@@ -8,20 +8,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
+import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable } from './resource-utils.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const projectRoot = root;
-const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/atlas-nice-cn.json'), 'utf8'));
-const basic = JSON.parse(fs.readFileSync(path.join(root, 'data/atlas-basic-cn.json'), 'utf8'));
-const legacyLabels = new Map(JSON.parse(fs.readFileSync(path.join(root, 'data/servants.json'), 'utf8')).map((info) => [info.id, info.classLabel]));
+const paths = resourcePaths(root);
+const { region } = paths;
+const raw = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-nice-cn.json`), 'utf8'));
+const basic = JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/atlas-basic-cn.json`), 'utf8'));
+const legacyLabels = new Map(JSON.parse(fs.readFileSync(paths.absolute(`data/${region}/servants.json`), 'utf8')).map((info) => [info.id, info.classLabel]));
 const standardLabels = { saber: 'Saber', archer: 'Archer', lancer: 'Lancer', rider: 'Rider', caster: 'Caster', assassin: 'Assassin', berserker: 'Berserker', ruler: 'Ruler', avenger: 'Avenger', moonCancer: 'Moon Cancer', alterEgo: 'Alter Ego', foreigner: 'Foreigner', pretender: 'Pretender', shielder: 'Shielder' };
 const slim = Object.fromEntries(basic.map((info) => [info.id, { ...info, classLabel: /beast/i.test(info.className) ? 'Beast' : legacyLabels.get(info.id) ?? standardLabels[info.className] ?? info.className }]));
-fs.writeFileSync(path.join(root, 'data/servants-by-id.json'), JSON.stringify(slim));
-const overrides = fs.existsSync(path.join(root, 'data/name-overrides.json'))
-  ? JSON.parse(fs.readFileSync(path.join(root, 'data/name-overrides.json'), 'utf8'))
+fs.writeFileSync(paths.absolute(`data/${region}/servants-by-id.json`), JSON.stringify(slim));
+const overridesPath = paths.absolute(`data/${region}/name-overrides.json`);
+const overrides = fs.existsSync(overridesPath)
+  ? JSON.parse(fs.readFileSync(overridesPath, 'utf8'))
   : {};
-const outRoot = path.join(root, 'data/assets/atlas');
+const outRoot = paths.regionFile('assets/atlas');
 for (const dir of ['faces', 'cards', 'skills']) fs.mkdirSync(path.join(outRoot, dir), { recursive: true });
 
 const concurrency = 8;
@@ -31,11 +34,11 @@ for (const servant of raw) {
   const info = slim[servant.id];
   if (!info) continue;
   for (const job of servantAssetJobs(servant)) {
-    jobs.push({ ...job, file: path.join(root, job.file) });
+    jobs.push({ ...job, file: paths.absolute(job.file) });
   }
 }
 
-const remoteUnavailable = loadRemoteUnavailable(root);
+const remoteUnavailable = loadRemoteUnavailable(root, region);
 async function download(job, attempt = 1) {
   const relative = path.relative(root, job.file).split(path.sep).join('/');
   if (remoteUnavailable.has(relative)) return 'remote-unavailable';
@@ -100,20 +103,20 @@ const index = raw.map((servant) => {
   if (!info) return null;
   const faceUrl = servant.extraAssets?.faces?.ascension?.['1'] ?? servant.extraAssets?.faces?.ascension?.['0'];
   const cardUrl = servant.extraAssets?.charaGraph?.ascension?.['1'] ?? servant.extraAssets?.charaGraph?.ascension?.['0'];
-  const faceFile = `/data/assets/atlas/faces/${servant.id}.png`;
-  const cardFile = `/data/assets/atlas/cards/${servant.id}.png`;
+  const faceFile = paths.webPath(`assets/atlas/faces/${servant.id}.png`);
+  const cardFile = paths.webPath(`assets/atlas/cards/${servant.id}.png`);
   const ascensionAssets = ASCENSION_CARD_IDS.has(servant.id) ? Object.fromEntries([1, 2, 3, 4].map((stage) => [stage, {
-    face: fs.existsSync(path.join(outRoot, 'faces', `${servant.id}-${stage}.png`)) ? `/data/assets/atlas/faces/${servant.id}-${stage}.png` : null,
-    card: fs.existsSync(path.join(outRoot, 'cards', `${servant.id}-${stage}.png`)) ? `/data/assets/atlas/cards/${servant.id}-${stage}.png` : null,
+    face: fs.existsSync(path.join(outRoot, 'faces', `${servant.id}-${stage}.png`)) ? paths.webPath(`assets/atlas/faces/${servant.id}-${stage}.png`) : null,
+    card: fs.existsSync(path.join(outRoot, 'cards', `${servant.id}-${stage}.png`)) ? paths.webPath(`assets/atlas/cards/${servant.id}-${stage}.png`) : null,
   }])) : undefined;
   if (servant.id === 800100) {
     ascensionAssets[4] = {
-      face: fs.existsSync(path.join(outRoot, 'faces', '800100-paladin.png')) ? '/data/assets/atlas/faces/800100-paladin.png' : ascensionAssets[4].face,
-      card: fs.existsSync(path.join(outRoot, 'cards', '800100-paladin.png')) ? '/data/assets/atlas/cards/800100-paladin.png' : ascensionAssets[4].card,
+      face: fs.existsSync(path.join(outRoot, 'faces', '800100-paladin.png')) ? paths.webPath('assets/atlas/faces/800100-paladin.png') : ascensionAssets[4].face,
+      card: fs.existsSync(path.join(outRoot, 'cards', '800100-paladin.png')) ? paths.webPath('assets/atlas/cards/800100-paladin.png') : ascensionAssets[4].card,
     };
     ascensionAssets[3] = {
-      face: fs.existsSync(path.join(outRoot, 'faces', '800100-ortenaus.png')) ? '/data/assets/atlas/faces/800100-ortenaus.png' : ascensionAssets[3].face,
-      card: fs.existsSync(path.join(outRoot, 'cards', '800100-ortenaus.png')) ? '/data/assets/atlas/cards/800100-ortenaus.png' : ascensionAssets[3].card,
+      face: fs.existsSync(path.join(outRoot, 'faces', '800100-ortenaus.png')) ? paths.webPath('assets/atlas/faces/800100-ortenaus.png') : ascensionAssets[3].face,
+      card: fs.existsSync(path.join(outRoot, 'cards', '800100-ortenaus.png')) ? paths.webPath('assets/atlas/cards/800100-ortenaus.png') : ascensionAssets[3].card,
     };
   }
   return {
@@ -123,13 +126,13 @@ const index = raw.map((servant) => {
     type: servant.type,
     collectionNo: servant.collectionNo,
     ...(ascensionAssets ? { ascensionAssets } : {}),
-    face: faceUrl && fs.existsSync(path.join(root, faceFile)) ? faceFile : null,
-    card: cardUrl && fs.existsSync(path.join(root, cardFile)) ? cardFile : null,
+    face: faceUrl && fs.existsSync(path.join(outRoot, 'faces', `${servant.id}.png`)) ? faceFile : null,
+    card: cardUrl && fs.existsSync(path.join(outRoot, 'cards', `${servant.id}.png`)) ? cardFile : null,
     noblePhantasms: (servant.noblePhantasms ?? []).map((np) => ({ id: np.id, name: np.name, card: np.card, priority: np.priority, condLimitCount: np.condLimitCount })),
     skills: (servant.skills ?? []).map((skill) => ({
       num: skill.num,
       name: skill.name,
-      icon: skill.icon ? `/data/assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}` : null,
+      icon: skill.icon ? paths.webPath(`assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`) : null,
       target: skillTarget(skill),
       secondarySelection: secondarySelection(skill),
       condLimitCount: skill.condLimitCount,

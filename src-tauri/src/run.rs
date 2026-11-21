@@ -280,8 +280,23 @@ impl RunManager {
             return Err(message);
         }
 
-        let job = fs::canonicalize(&job_path)
-            .map_err(|error| format!("无法读取作业文件 {job_path}：{error}"))?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
+        let requested = PathBuf::from(&job_path);
+        let candidate = if requested.is_absolute() {
+            requested
+        } else {
+            let development = project_root().join(&requested);
+            if development.is_file() {
+                development
+            } else {
+                app_data.join(&requested)
+            }
+        };
+        let job = fs::canonicalize(&candidate)
+            .map_err(|error| format!("无法读取作业文件 {}：{error}", candidate.display()))?;
         if !job.is_file() {
             return Err(format!("作业路径不是文件：{}", job.display()));
         }
@@ -299,10 +314,7 @@ impl RunManager {
         }
         let region = region.unwrap_or_else(|| "CN".to_string());
         let run_id = format!("run-{}-{}", now_ms(), std::process::id());
-        let run_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|error| format!("无法定位应用数据目录：{error}"))?
+        let run_dir = app_data
             .join("logs")
             .join("farm")
             .join(&run_id);
