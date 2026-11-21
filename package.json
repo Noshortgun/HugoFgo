@@ -15,6 +15,9 @@
     "preflight": "node scripts/preflight.mjs",
     "issues:check": "node scripts/issue-sync.mjs",
     "issues:selftest": "node scripts/issue-sync.selftest.mjs",
+    "fixtures:check": "node scripts/check-perception-fixtures.mjs",
+    "verify": "node scripts/verify.mjs",
+    "verify:selftest": "node scripts/verify.selftest.mjs",
     "replay": "node scripts/replay.mjs",
     "test": "node scripts/replay.mjs"
   },

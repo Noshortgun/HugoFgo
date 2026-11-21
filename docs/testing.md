@@ -13,19 +13,26 @@ npm run preflight -- --offline
 完整常用验证：
 
 ```bash
-npm run build
-python -m unittest discover -s executor/domain/tests -t . -v
-python -m unittest discover -s executor/perception/tests -t . -v
-python -m executor.device --self-test
-npm run replay
-npm run issues:selftest
+npm run verify
 ```
+
+该入口依次执行前端构建、全部执行器单测、设备自检、感知素材校验、统一回放和 issue-sync 自检；任一失败即返回非零。`npm run verify -- --list` 只打印执行计划。单独运行某项时仍可使用 `npm run build`、`python -m unittest discover -s executor -t . -v`、`python -m executor.device --self-test`、`npm run fixtures:check`、`npm run replay`、`npm run issues:selftest`。
 
 Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scripts/python.exe`；macOS / Linux 使用 `cv/.venv/bin/python`。
 
 `npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。
 
 `npm run issues:check` 还需要 GitHub CLI 登录和网络，用于检查本地票据源与 GitHub 是否漂移。
+
+### 有边界的冒烟与感知就绪检查
+
+```bash
+python -m executor.core <作业.json> --serial <设备> --expected-stop <原因> --max-frames 200
+python -m executor.core <作业.json> --serial <设备> --confirm-start 1:1 --expected-stop card_mismatch
+python -m executor.perception <截图> --ready --json
+```
+
+冒烟在帧数上限或预期停止原因处结束，不执行清理循环。`--expected-stop` 只核对停止原因；完成时退出码为 0，停止或失败按进程契约返回非零。`--confirm-start` 只用于人工已经确认起始面与回合的测试适配，生产感知不得把不确定字段当成确认值。就绪检查在缺少助战身份、指令卡身份、回合边界或结算控件时返回退出码 2，并列出缺口。
 
 ## 2. 行为变更规则
 
@@ -51,7 +58,7 @@ Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scr
 
 ## 4. CI
 
-`.github/workflows/ci.yml` 在 PR 和 main 推送时执行前端构建、领域单元测试、感知单元测试和离线回放。回放失败时上传 `logs/replay/latest.json`。票据漂移检查目前只提供信息，不阻断 CI。
+`.github/workflows/ci.yml` 在 PR 和 main 推送时通过 `npm run verify` 执行与本地一致的全部验证，覆盖 `executor/core` 与 `executor/session`。回放失败时上传 `logs/replay/latest.json`。未关闭施工票据的正文漂移会阻断 CI。
 
 本地使用相同命令复现 CI，不另维护一套测试入口。
 

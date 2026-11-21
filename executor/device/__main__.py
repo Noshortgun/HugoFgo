@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import zlib
 from pathlib import Path
 from typing import get_type_hints
@@ -852,6 +853,7 @@ def self_test() -> int:
         except Exception as error:  # 自检要跑完全部用例，一次报告所有失败
             failures += 1
             print(f'失败 {name}：{type(error).__name__}: {error}')
+            traceback.print_exc()
         else:
             print(f'通过 {name}')
     if failures:

@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import ctypes
-import os
 import sys
 import time
 from ctypes import wintypes
@@ -328,7 +327,7 @@ def _is_ldplayer_frame(api: Win32Api, hwnd: int) -> bool:
     if api.class_name(hwnd) == LDPLAYER_MAIN_CLASS:
         return True
     process = api.process_name(hwnd) or ''
-    return os.path.basename(process).lower() == LDPLAYER_PROCESS
+    return process.replace('\\', '/').rsplit('/', 1)[-1].lower() == LDPLAYER_PROCESS
 
 
 def _render_child(api: Win32Api, parent: int) -> int | None:

@@ -8,13 +8,14 @@ from unittest import mock
 from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run as core_run
-from executor.device.base import DeviceError, Frame
+from executor.device.base import DeviceError
 from executor.device.fake import FakeDevice
 from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                              TurnPlan, WavePlan)
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
                                  FieldStatus, Observation, Overlay, SupportCandidate, Variant)
 from executor.session import MemoryEventSink, RunControl
+from executor.testing import ScriptedPerception, scenario_frames
 
 
 def run(plan, device, perception, events, *, options=None, control=None):
@@ -49,23 +50,9 @@ def observe(page: BasePage, *controls: Control) -> Observation:
 
 def scripted(observations: list[Observation], times: list[float], *,
              preserve_hashes: bool = False) -> tuple[FakeDevice, object]:
-    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
-              for index, at in enumerate(times)]
+    frames = scenario_frames(times, len(observations))
 
-    class ScriptedPerception:
-        def observation(self, frame: Frame) -> Observation:
-            observation = observations[int(frame.image)]
-            if preserve_hashes:
-                return observation
-            return replace(observation, frame_hash=f'{observation.frame_hash}:{frame.image.decode()}')
-
-        def read(self, frame: Frame) -> Observation:
-            return self.observation(frame)
-
-        def read_fields(self, frame: Frame, names, *, timeout=None) -> Observation:
-            return self.observation(frame)
-
-    return FakeDevice(frames), ScriptedPerception()
+    return FakeDevice(frames), ScriptedPerception(observations, preserve_hashes=preserve_hashes)
 
 
 def single_wave_plan(actions=(), np_positions=None) -> ExecutionPlan:
