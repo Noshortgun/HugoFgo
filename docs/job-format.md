@@ -97,7 +97,7 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 | `servantOrderSlots` | 按槽位排列的优先级，可区分同名从者 |
 | `cards` | `buster / arts / quick / balanced` 选卡倾向 |
 | `colorPriority` | 卡色优先顺序 |
-| `strategyOrder` | `servant / cards / crit` 各策略的比较顺序 |
+| `strategyOrder` | `servant / cards / crit / affinity` 各策略的比较顺序；未列入的 `affinity` 保持末位兜底 |
 
 `strategyByWave` 的面编号键为 `"1"`、`"2"`、`"3"`；值为 `null` 表示该面没有独立覆盖。
 
