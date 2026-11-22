@@ -1644,7 +1644,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(RunStatus.COMPLETED, result.status)
         self.assertEqual(1, result.progress.completed_runs)
 
-    def test_mid_battle_resume_uses_fallback_until_next_wave(self) -> None:
+    def test_mid_battle_resume_without_turn_uses_fallback_until_next_wave(self) -> None:
         base = single_wave_plan()
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
         turn = TurnPlan(actions=(skill,), np_positions={0: 1}, attack=None)
@@ -1656,7 +1656,7 @@ class RunnerTest(unittest.TestCase):
         controls = (button('攻击'), button('从者1技能1'))
         resumed = observe(BasePage.BATTLE, *controls).with_fields({
             'wave': Field(FieldStatus.CONFIRMED, 2),
-            'turn': Field(FieldStatus.CONFIRMED, 3),
+            'turn': Field(FieldStatus.UNCERTAIN, None),
         })
         next_wave = observe(BasePage.BATTLE, *controls).with_fields({
             'wave': Field(FieldStatus.CONFIRMED, 3),
@@ -1715,6 +1715,20 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual([(1, 1)], [(item['wave'], item['turn']) for item in actions
                                     if item['control'] == '从者1技能1'])
         self.assertEqual(1, sum(item['control'] == '宝具卡1' for item in actions))
+
+    def test_battle_resume_with_unreadable_wave_still_stops(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'wave': Field(FieldStatus.UNCERTAIN, None),
+            'turn': Field(FieldStatus.UNCERTAIN, None),
+        })
+        device, perception = scripted([battle], [0.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('resume_uncertain', result.reason)
+        self.assertEqual([], device.actions)
 
     def test_card_start_without_saved_progress_stops_instead_of_guessing(self) -> None:
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))

@@ -783,17 +783,18 @@ class Runner:
             wave = observation.field('wave')
             turn = observation.field('turn')
             boundary = observation.field('turn_boundary')
-            valid = (wave is not None and turn is not None and boundary is not None
-                     and wave.usable and turn.usable and boundary.usable and boundary.value is True
-                     and isinstance(wave.value, int) and isinstance(turn.value, int)
-                     and 1 <= wave.value <= len(self.plan.waves) and turn.value >= 1)
+            valid = (wave is not None and boundary is not None
+                     and wave.usable and boundary.usable and boundary.value is True
+                     and isinstance(wave.value, int) and 1 <= wave.value <= len(self.plan.waves))
             if not valid:
                 self.emit('failed', now, reason='resume_uncertain', actual=page.value)
                 return observation, self.result(RunStatus.STOPPED, 'resume_uncertain')
-            first_turn = wave.value == 1 and turn.value == 1
+            observed_turn = (turn.value if turn is not None and turn.usable
+                             and isinstance(turn.value, int) and turn.value >= 1 else None)
+            first_turn = wave.value == 1 and observed_turn == 1
             self.progress.wave = wave.value
             self.progress.turn = 1 if first_turn else len(self.plan.waves[wave.value - 1].turns)
-            self.last_observed_turn = turn.value
+            self.last_observed_turn = observed_turn
             self.progress.action_index = 0
             self.fallback_mode = not first_turn
         elif page not in {BasePage.SUPPORT, BasePage.TEAM, BasePage.RESULT, BasePage.DROPS}:
@@ -996,34 +997,41 @@ class Runner:
                 if confirmed and self.awaiting_attack_end and page is BasePage.BATTLE:
                     wave_field = observation.field('wave')
                     turn_field = observation.field('turn')
-                    if wave_field is None or turn_field is None or not wave_field.usable or not turn_field.usable:
+                    if wave_field is None or not wave_field.usable:
                         confirmed = False
                     else:
                         wave = wave_field.value
-                        turn = turn_field.value
-                        current = (self.progress.wave, self.progress.turn)
-                        if (not isinstance(wave, int) or not isinstance(turn, int)
-                                or wave < current[0] or turn <= self.last_observed_turn):
+                        turn = (turn_field.value if turn_field is not None and turn_field.usable
+                                and isinstance(turn_field.value, int) and turn_field.value >= 1 else None)
+                        current_wave = self.progress.wave
+                        if not isinstance(wave, int) or wave < current_wave:
                             confirmed = False
-                        elif (wave > current[0] + 1 or wave > len(self.plan.waves)
-                              or turn != self.last_observed_turn + 1):
+                        elif wave > current_wave + 1 or wave > len(self.plan.waves):
                             self.emit('failed', now, reason='progress_uncertain',
                                       observed_wave=wave, observed_turn=turn)
                             return self.result(RunStatus.STOPPED, 'progress_uncertain')
-                        elif wave == current[0]:
-                            self.progress.turn += 1
-                            self.last_observed_turn = turn
-                            self.fallback_mode = self.progress.turn > len(self.plan.waves[wave - 1].turns)
-                            self.progress.action_index = 0
-                            self.emit('turn_started', now, wave=wave, turn=self.progress.turn)
-                        else:
-                            self.progress.wave = wave
-                            self.progress.turn = 1
-                            self.last_observed_turn = turn
-                            self.progress.action_index = 0
-                            self.fallback_mode = False
-                            self.emit('wave_started', now, wave=wave, turn=1)
-                            self.emit('turn_started', now, wave=wave, turn=1)
+                        elif self.last_observed_turn is not None:
+                            if turn is None or turn <= self.last_observed_turn:
+                                confirmed = False
+                            elif turn != self.last_observed_turn + 1:
+                                self.emit('failed', now, reason='progress_uncertain',
+                                          observed_wave=wave, observed_turn=turn)
+                                return self.result(RunStatus.STOPPED, 'progress_uncertain')
+                        if confirmed:
+                            if turn is not None:
+                                self.last_observed_turn = turn
+                            if wave == current_wave:
+                                self.progress.turn += 1
+                                self.fallback_mode = self.progress.turn > len(self.plan.waves[wave - 1].turns)
+                                self.progress.action_index = 0
+                                self.emit('turn_started', now, wave=wave, turn=self.progress.turn)
+                            else:
+                                self.progress.wave = wave
+                                self.progress.turn = 1
+                                self.progress.action_index = 0
+                                self.fallback_mode = False
+                                self.emit('wave_started', now, wave=wave, turn=1)
+                                self.emit('turn_started', now, wave=wave, turn=1)
                 if confirmed:
                     self.pending_pages = None
                     self.pending_since = None
