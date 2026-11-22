@@ -9,6 +9,7 @@ from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run as core_run
 from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
+from executor.core.strategy import select_cards
 from executor.device.base import DeviceError
 from executor.device.fake import FakeDevice
 from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy,
@@ -1123,14 +1124,14 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('resume_uncertain', result.reason)
         self.assertEqual([], device.actions)
 
-    def test_prefer_mode_falls_back_without_tapping_when_hand_is_uncertain(self) -> None:
+    def test_prefer_mode_falls_back_without_tapping_when_usable_cards_are_insufficient(self) -> None:
         base = single_wave_plan()
         wanted = (AttackCardPlan(slot=0, type='arts'), AttackCardPlan(slot=1, type='arts'),
                   AttackCardPlan(slot=2, type='arts'))
         turn = replace(base.waves[0].turns[0], attack=AttackPlan(mode='prefer', cards=wanted))
         plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
         battle = observe(BasePage.BATTLE, button('攻击'))
-        partial = observe(BasePage.CARD, command_card(1, 0), command_card(2, 2), command_card(3, 2),
+        partial = observe(BasePage.CARD, command_card(1, 0), command_card(2, 2), command_card(3, 3),
                           command_card(4, 3), command_card(5, 4))
         device, perception = scripted([battle, battle, partial, partial], [0.0, 0.5, 0.6, 1.1])
         events = MemoryEventSink()
@@ -1140,7 +1141,25 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('fallback_cards_unavailable', result.reason)
         self.assertEqual(['攻击'], [event.data['control'] for event in events.events
                                     if event.type == 'action'])
-        self.assertEqual('指令卡身份、暴击率或克制信息不确定', events.events[-1].data['message'])
+        self.assertEqual('可用指令卡不足三张', events.events[-1].data['message'])
+
+    def test_strategy_degrades_missing_rank_data_and_excludes_unknown_cards(self) -> None:
+        controls = (
+            replace(command_card(1, 2), card=CommandCardIdentity(2, 'buster', svt_id=2800100)),
+            replace(command_card(2, 0), card=CommandCardIdentity(0, 'arts', svt_id=705000, support=True)),
+            replace(command_card(3, 1), card=CommandCardIdentity(1, 'buster', svt_id=705000)),
+            replace(command_card(4, 0), card=None),
+            replace(command_card(5, 2), card=CommandCardIdentity(2, 'arts', svt_id=2800100)),
+        )
+        observation = observe(BasePage.CARD, *controls)
+        strategy = FallbackStrategy(strategy_order=('crit', 'cards'))
+
+        selection = select_cards(observation, strategy, single_wave_plan(), 1)
+
+        self.assertEqual(('卡1', '卡2', '卡3'), tuple(control.name for control in selection.controls))
+        self.assertEqual('按补刀策略顺序选择三张指令卡', selection.reason)
+        self.assertIsNone(selection.diagnostic)
+        self.assertEqual(('缺少暴击率，按 0 处理', '缺少克制信息，按中立处理'), selection.warnings)
 
     def test_strategy_mode_selects_three_cards(self) -> None:
         base = single_wave_plan()

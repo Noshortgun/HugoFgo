@@ -103,7 +103,7 @@ def check_perception():
 
 
 def check_perception_identities():
-    from executor.domain import FormationSlotPlan
+    from executor.domain import FormationSlotPlan, compile_job
 
     temporary = TemporaryDirectory()
     perception = Perception(identity_root=Path(temporary.name))
@@ -144,6 +144,20 @@ def check_perception_identities():
                   for index in range(1, 6)]
         add_report('perception:identity:command-cards', card_path, expected, actual, 'observe',
                    '编队槽位、从者、卡色与助战标记', actual == expected)
+
+        from executor.core.strategy import select_cards
+
+        live_path = ROOT / 'captures/2026-11-22/key/card-select-missing-rank-data.png'
+        live = perception.read(Frame(image=live_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        compiled = compile_job((ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8'))
+        if compiled.plan is None:
+            raise ValueError('实机选卡回放作业无法编译')
+        selection = select_cards(live, compiled.plan.strategy, compiled.plan, 1)
+        expected = (3, ('缺少暴击率，按 0 处理', '缺少克制信息，按中立处理'))
+        actual = (len(selection.controls), selection.warnings)
+        add_report('strategy:live-missing-rank-data', live_path, expected, actual, 'select',
+                   f'{selection.reason}; controls={[control.name for control in selection.controls]}',
+                   actual == expected and selection.diagnostic is None)
 
         old_path = ROOT / 'captures/2026-11-19-ember/key/06-card-select.png'
         perception.bind_formation((
@@ -336,7 +350,7 @@ def check_strategy_balanced_cards():
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
 
-def check_strategy_affinity_and_uncertainty():
+def check_strategy_affinity_and_degraded_data():
     from dataclasses import replace
     from executor.core.strategy import select_cards
     from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
@@ -363,11 +377,12 @@ def check_strategy_affinity_and_uncertainty():
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
     uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, crit_rate=None))
-    uncertain = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
-                             strategy, plan, 1)
-    add_report('strategy:uncertain-card-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
-               'diagnostic', uncertain.diagnostic or 'selected', 'stop', uncertain.reason,
-               not uncertain.controls and uncertain.diagnostic is not None, simulated_ocr=True)
+    degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
+                            strategy, plan, 1)
+    actual = [control.name for control in degraded.controls]
+    add_report('strategy:missing-crit-degrades', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
+               actual == expected and degraded.warnings == ('缺少暴击率，按 0 处理',), simulated_ocr=True)
 
 
 def check_strategy_np_and_short_hand():
@@ -1033,7 +1048,7 @@ def run(output: Path, name_filter: str | None = None):
     check_strategy_color_priority()
     check_strategy_crit_priority()
     check_strategy_balanced_cards()
-    check_strategy_affinity_and_uncertainty()
+    check_strategy_affinity_and_degraded_data()
     check_strategy_np_and_short_hand()
     check_strategy_scope_slots_and_region()
     check_strategy_executor()
