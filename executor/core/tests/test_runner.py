@@ -1644,6 +1644,78 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(RunStatus.COMPLETED, result.status)
         self.assertEqual(1, result.progress.completed_runs)
 
+    def test_mid_battle_resume_uses_fallback_until_next_wave(self) -> None:
+        base = single_wave_plan()
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        turn = TurnPlan(actions=(skill,), np_positions={0: 1}, attack=None)
+        plan = replace(
+            base,
+            waves=tuple(WavePlan(number=wave, target=1, turns=(turn,)) for wave in range(1, 4)),
+            strategy=FallbackStrategy(strategy_order=('cards', 'crit')),
+        )
+        controls = (button('攻击'), button('从者1技能1'))
+        resumed = observe(BasePage.BATTLE, *controls).with_fields({
+            'wave': Field(FieldStatus.CONFIRMED, 2),
+            'turn': Field(FieldStatus.CONFIRMED, 3),
+        })
+        next_wave = observe(BasePage.BATTLE, *controls).with_fields({
+            'wave': Field(FieldStatus.CONFIRMED, 3),
+            'turn': Field(FieldStatus.CONFIRMED, 4),
+        })
+        card = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))),
+            Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        observations = [resumed, resumed, *([card] * 6), animation]
+        append_planned_turn_frames(observations, next_wave, card, animation)
+        times = [index * 0.5 for index in range(len(observations))]
+        observations.extend([observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)])
+        times.extend([len(times) * 0.5, len(times) * 0.5 + 30.0])
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        actions = [event.data for event in events.events if event.type == 'action']
+        self.assertEqual([(3, 1)], [(item['wave'], item['turn']) for item in actions
+                                    if item['control'] == '从者1技能1'])
+        self.assertEqual(1, sum(item['control'] == '宝具卡1' for item in actions))
+        self.assertEqual(2, sum(item['control'] == '攻击' for item in actions))
+        self.assertEqual((3, 1), (result.progress.wave, result.progress.turn))
+
+    def test_first_turn_battle_resume_executes_planned_turn(self) -> None:
+        base = single_wave_plan()
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        turn = TurnPlan(actions=(skill,), np_positions={0: 1}, attack=None)
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),),
+                       strategy=FallbackStrategy(strategy_order=('cards', 'crit')))
+        battle = observe(BasePage.BATTLE, button('攻击'), button('从者1技能1'))
+        card = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))),
+            Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        observations: list[Observation] = []
+        append_planned_turn_frames(observations, battle, card, animation)
+        times = [index * 0.5 for index in range(len(observations))]
+        observations.extend([observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)])
+        times.extend([len(times) * 0.5, len(times) * 0.5 + 30.0])
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        actions = [event.data for event in events.events if event.type == 'action']
+        self.assertEqual([(1, 1)], [(item['wave'], item['turn']) for item in actions
+                                    if item['control'] == '从者1技能1'])
+        self.assertEqual(1, sum(item['control'] == '宝具卡1' for item in actions))
+
     def test_card_start_without_saved_progress_stops_instead_of_guessing(self) -> None:
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
         device, perception = scripted([card, card], [0.0, 0.5])

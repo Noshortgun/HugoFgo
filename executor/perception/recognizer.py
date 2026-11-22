@@ -230,6 +230,18 @@ def _fields(page: BasePage, cached: Mapping[str, Field] | None,
     return fields
 
 
+def _with_turn_boundary(observation: Observation) -> Observation:
+    if observation.base_page is not BasePage.BATTLE:
+        return observation
+    turn = observation.field('turn')
+    attack = observation.control('攻击')
+    valid = (turn is not None and turn.usable and isinstance(turn.value, int) and turn.value >= 1
+             and attack is not None and attack.actionable
+             and Variant.BATTLE_ANIMATION not in observation.variants)
+    field = Field(FieldStatus.CONFIRMED, True) if valid else Field(FieldStatus.UNCERTAIN, False)
+    return observation.with_fields({'turn_boundary': field})
+
+
 class Perception:
     """国服画面感知；只读取画面，不点击、不推进状态机、不访问设备。"""
 
@@ -312,7 +324,7 @@ class Perception:
         with self._lock:
             requested = self._requested.get(digest, frozenset())
         fields = _fields(observation.base_page, cached, pending, requested)
-        return observation.with_fields(fields)
+        return _with_turn_boundary(observation.with_fields(fields))
 
     def read_fields(self, frame: Frame, names: Iterable[str], *,
                     timeout: float | None = None) -> Observation:
