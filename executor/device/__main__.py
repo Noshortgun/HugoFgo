@@ -781,6 +781,13 @@ def check_scrcpy_resources() -> None:
         server = root / 'scrcpy-server.jar'
         server.write_bytes(b'abc')
         assert verify_scrcpy_server(root) == server
+        manifest.write_text(json.dumps({'version': '3.3.2', 'server_file': 'scrcpy-server.jar',
+                                        'sha256': 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}),
+                            encoding='utf-8')
+        expect_error(lambda: verify_scrcpy_server(root), '固定版本 3.3.3', '3.3.2', error_type=DeviceError)
+        manifest.write_text(json.dumps({'version': '3.3.3', 'server_file': 'scrcpy-server.jar',
+                                        'sha256': 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}),
+                            encoding='utf-8')
         server.write_bytes(b'tampered')
         expect_error(lambda: verify_scrcpy_server(root), 'SHA-256', '不匹配', error_type=DeviceError)
         manifest.write_text('{broken', encoding='utf-8')

@@ -6,6 +6,10 @@ import json
 import sys
 from pathlib import Path
 
+from executor.core.runner import card_requests
+from executor.domain import TurnPlan
+from executor.domain.compiler import compile_job
+
 
 def load_events(run_dir: Path) -> list[dict]:
     path = run_dir / 'events.jsonl'
@@ -14,46 +18,30 @@ def load_events(run_dir: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()]
 
 
-def planned_turn(turn: dict) -> tuple[list[str], list[tuple[int, int]]]:
+def planned_turn(turn: TurnPlan) -> tuple[list[str], list[tuple[int, int]],
+                                            list[tuple[int, str, int | None, int]]]:
     controls: list[str] = []
-    automatic: list[int] = []
-    for action in turn.get('actions', []):
-        kind = action.get('kind')
-        if kind == 'target':
-            target = action.get('enemyTarget', action.get('toTarget'))
+    for action in turn.actions:
+        if action.kind == 'target':
+            target = action.enemy_target if action.enemy_target is not None else action.to_target
             controls.append(f'敌方{target}')
-        elif kind == 'skill':
-            member = action.get('memberSlot')
-            controls.append(f'从者{member + 1}技能{action.get("skill") + 1}')
-            target = action.get('playerTargetSlot')
-            if target is not None and target != member:
+        elif action.kind == 'skill':
+            controls.append(f'从者{action.member_slot + 1}技能{action.skill + 1}')
+            target = action.player_target_slot
+            if target is not None and target != action.member_slot:
                 controls.append(f'目标从者{target + 1}')
-        elif kind == 'master':
-            controls.extend(['御主技能', f'御主技能{action.get("skill") + 1}'])
-            target = action.get('playerTargetSlot')
-            if target is not None:
-                controls.append(f'目标从者{target + 1}')
-        elif kind == 'attack':
+        elif action.kind == 'master':
+            controls.extend(['御主技能', f'御主技能{action.skill + 1}'])
+            if action.player_target_slot is not None:
+                controls.append(f'目标从者{action.player_target_slot + 1}')
+        elif action.kind == 'attack':
             controls.append('攻击')
-            member = action.get('memberSlot')
-            if member is not None and member not in automatic:
-                automatic.append(member)
-    requests: list[tuple[int, int] | None] = [None, None, None]
-    for slot_text, position in turn.get('npPositions', {}).items():
-        slot = int(slot_text)
-        if position == 'auto':
-            if slot not in automatic:
-                automatic.append(slot)
-        elif isinstance(position, int) and 1 <= position <= 3:
-            requests[position - 1] = (slot, position)
-            if slot in automatic:
-                automatic.remove(slot)
-    for slot in automatic:
-        for index, request in enumerate(requests):
-            if request is None:
-                requests[index] = (slot, index + 1)
-                break
-    return controls, [request for request in requests if request is not None]
+    requests = card_requests(turn)
+    np_cards = [(request.servant_slot, position)
+                for position, request in enumerate(requests, start=1) if request.noble_phantasm]
+    normal_cards = [(request.servant_slot, request.card_type, request.deck_index, position)
+                    for position, request in enumerate(requests, start=1) if not request.noble_phantasm]
+    return controls, np_cards, normal_cards
 
 
 def _ordered_missing(expected: list[str], actual: list[str]) -> list[str]:
@@ -68,7 +56,11 @@ def _ordered_missing(expected: list[str], actual: list[str]) -> list[str]:
 
 
 def audit(run_dir: Path, job_path: Path) -> dict:
-    job = json.loads(job_path.read_text(encoding='utf-8'))
+    compiled = compile_job(job_path.read_text(encoding='utf-8'))
+    if compiled.plan is None:
+        detail = '；'.join(f'{item.path}: {item.message}' for item in compiled.diagnostics)
+        raise SystemExit(f'作业无法编译，不能审计：{job_path}：{detail}')
+    job = compiled.plan
     result_path = run_dir / 'result.json'
     result = json.loads(result_path.read_text(encoding='utf-8')) if result_path.exists() else {}
     actual: dict[tuple[int, int, int], list[str]] = {}
@@ -112,30 +104,37 @@ def audit(run_dir: Path, job_path: Path) -> dict:
     for battle_number in range(1, battle_count + 1):
         wave_reports = []
         battle_ok = True
-        for wave_index, wave in enumerate(job.get('waves', []), start=1):
-            for turn_index, turn in enumerate(wave.get('turns', []), start=1):
+        for wave_index, wave in enumerate(job.waves, start=1):
+            for turn_index, turn in enumerate(wave.turns, start=1):
                 key = (battle_number, wave_index, turn_index)
-                expected, expected_np = planned_turn(turn)
+                expected, expected_np, expected_normal = planned_turn(turn)
                 got = actual.get(key, [])
                 submitted = batches.get(key, [])
                 card_actions = cards.get(key, [])
                 actual_np = []
+                actual_normal = []
                 for card in card_actions:
-                    if not card.get('control', '').startswith('宝具卡'):
-                        continue
-                    centers = (420, 635, 855)
-                    slot = min(range(3), key=lambda index: abs(card.get('x', -10000) - centers[index]))
-                    actual_np.append((slot, card.get('card_position')))
+                    if card.get('control', '').startswith('宝具卡'):
+                        centers = (420, 635, 855)
+                        slot = min(range(3), key=lambda index: abs(card.get('x', -10000) - centers[index]))
+                        actual_np.append((slot, card.get('card_position')))
+                    else:
+                        actual_normal.append((card.get('servant_slot'), card.get('card_type'),
+                                              card.get('deck_index'), card.get('card_position')))
                 missing = _ordered_missing(expected, got)
                 np_ok = actual_np == expected_np
+                fixed_normal = (turn.attack is not None and turn.attack.mode in {'verify', 'prefer'}
+                                and bool(turn.attack.cards))
+                normal_ok = not fixed_normal or actual_normal == expected_normal
                 batch_ok = (len(submitted) == 1 and len(submitted[0].get('controls', [])) == 3
                             and len(card_actions) == 3)
-                ok = not missing and np_ok and batch_ok
+                ok = not missing and np_ok and normal_ok and batch_ok
                 battle_ok = battle_ok and ok
                 wave_reports.append({
                     'wave': wave_index, 'turn': turn_index, 'ok': ok,
                     'expected_controls': expected, 'actual_controls': got, 'missing_controls': missing,
-                    'expected_np': expected_np, 'actual_np': actual_np,
+                    'expected_np': expected_np, 'actual_np': actual_np, 'np_ok': np_ok,
+                    'expected_normal': expected_normal, 'actual_normal': actual_normal, 'normal_ok': normal_ok,
                     'batch_count': len(submitted), 'card_action_count': len(card_actions),
                 })
         battle_reports.append({'battle': battle_number, 'ok': battle_ok, 'turns': wave_reports})
@@ -161,6 +160,8 @@ def main() -> int:
             print(f'    计划控件：{turn["expected_controls"]}')
             print(f'    实际控件：{turn["actual_controls"]}')
             print(f'    宝具（槽位/卡位）：计划 {turn["expected_np"]}；实际 {turn["actual_np"]}')
+            print(f'    普通卡（槽位/卡色/牌库索引/卡位）：计划 {turn["expected_normal"]}；'
+                  f'实际 {turn["actual_normal"]}')
             if turn['missing_controls']:
                 print(f'    缺少：{turn["missing_controls"]}')
     return 0 if report['ok'] else 1

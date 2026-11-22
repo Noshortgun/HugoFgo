@@ -389,7 +389,7 @@ impl RunManager {
             .current_dir(&root)
             .env("HUGOFGO_DATA_ROOT", data_root)
             .env("HUGOFGO_REGION", &region)
-            .env("HUGOFGO_SCRCPY_SERVER", root.join("resources").join("scrcpy").join("scrcpy-server.jar"))
+            .env("HUGOFGO_SCRCPY_RESOURCE_DIR", root.join("resources").join("scrcpy"))
             .env("PYTHONUTF8", "1")
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONDONTWRITEBYTECODE", "1")

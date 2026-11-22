@@ -350,6 +350,33 @@ def check_command_card_batch():
                [item['control'] for item in actions], 'tap',
                f'recoveries={len(recoveries)}; reason={result.reason}', ok, simulated_ocr=True)
 
+    remaining = replace(initial, controls=initial.controls[1:])
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, remaining, animation, unknown, unknown],
+        [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    recovered = [item for item in actions if item.get('batch_attempt') == 1]
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and [item['card_position'] for item in recovered] == [2, 3]
+          and [item['control'] for item in recovered] == ['卡2', '卡3'])
+    add_report('executor:card-batch-partial-drop-recovers-remaining', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'tap',
+               f'recovered={recovered}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, remaining, remaining, remaining],
+        [0.0, 0.1, 2.2, 2.6, 3.0, 5.1], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3']
+    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
+          and [item['control'] for item in actions] == expected and len(device.actions) == 6
+          and events.events[-1].data.get('recovery_attempts') == 1)
+    add_report('executor:card-batch-partial-recovery-failure-stops', LOADING_IMAGE,
+               'action_confirmation_timeout; remaining cards submitted once',
+               f'{result.reason}; {[item["control"] for item in actions]}', 'stop',
+               f'taps={device.actions}', ok, simulated_ocr=True)
+
     result, device, events = run_core_scenario(
         [battle, initial, initial, initial, initial], [0.0, 0.1, 2.2, 2.6, 5.1], plan)
     actions = [event.data for event in events.events if event.type == 'action']
@@ -1304,6 +1331,22 @@ def check_executor_safety():
     add_report('executor:scrcpy-interruption-no-fallback', LOADING_IMAGE, 'device_error/no-channel-change',
                f'{result.reason}/{[event.type for event in events.events]}', 'stop',
                '控制中断在动作边界停止，不跨通道续跑', ok, simulated_ocr=True)
+
+    class UnresponsiveScrcpyDevice(FakeDevice):
+        def __init__(self, frames):
+            super().__init__(frames, config=DeviceConfig(serial='replay-scrcpy', region='CN', channel='scrcpy'))
+
+    with mock.patch.object(legacy, 'FakeDevice', UnresponsiveScrcpyDevice):
+        result, device, events = run_core_scenario(
+            [battle(), battle(), battle()], [0.0, 0.5, 30.5], make_plan())
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.reason == 'action_confirmation_timeout' and controls == ['攻击']
+          and len(device.actions) == 1
+          and not any(event.type == 'channel_changed' for event in events.events))
+    add_report('executor:scrcpy-input-success-without-screen-response', LOADING_IMAGE,
+               'action_confirmation_timeout; one input/no-channel-change',
+               f'{result.reason}; {controls}', 'stop',
+               '输入调用成功不代表动作生效；无新画面证据时停止', ok, simulated_ocr=True)
 
 
 # 旧原型的纯流程仅作为回归参照保留；所有设备输入都由用例 mock。

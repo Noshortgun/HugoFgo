@@ -250,6 +250,7 @@ class Runner:
         self.stable_since: float | None = None
         self.stable_box: tuple[int, int, int, int] | None = None
         self.card_batch_sequence = 0
+        self.card_batch_controls: tuple[Control, ...] = ()
         self.card_recovery_used = False
         self.card_recovery_reading = False
         self.attack_submitted_at: float | None = None
@@ -657,7 +658,9 @@ class Runner:
         return None
 
     def submit_card_batch(self, observation: Observation, controls: tuple[Control, ...],
-                          now: float, *, recovery: bool = False) -> None:
+                          now: float, *, recovery: bool = False, start_position: int = 1) -> None:
+        if not recovery:
+            self.card_batch_controls = controls
         self.card_batch_sequence += 1
         batch_id = self.card_batch_sequence
         attempt = 1 if recovery else 0
@@ -668,11 +671,14 @@ class Runner:
             x, y = control.center
             started_at = time.time()
             data: dict[str, object] = {
-                'card_position': index + 1,
+                'card_position': index + start_position,
                 'batch_id': batch_id,
                 'batch_attempt': attempt,
             }
-            if index == 0 and self.attack_submitted_at is not None:
+            if control.card is not None:
+                data.update(servant_slot=control.card.servant_slot, card_type=control.card.card_type,
+                            deck_index=control.card.deck_index, noble_phantasm=control.card.noble_phantasm)
+            if index == 0 and start_position == 1 and self.attack_submitted_at is not None:
                 data['attack_to_first_card_ms'] = (started_at - self.attack_submitted_at) * 1000
             if previous_finished_at is not None:
                 data['interval_ms'] = (started_at - previous_finished_at) * 1000
@@ -693,12 +699,42 @@ class Runner:
         self.wait_for_pages(submitted_at, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
         self.pending_stage = 'attack_end'
 
+    def remaining_card_controls(self, observation: Observation) -> tuple[tuple[Control, ...], int] | None:
+        initial = self.card_batch_controls
+        if len(initial) != 3 or any(control.card is None for control in initial):
+            return None
+        selected_count = 0
+        for control in initial:
+            current = observation.control(control.name)
+            if current is not None and current.actionable:
+                break
+            selected_count += 1
+        if not 1 <= selected_count < len(initial):
+            return None
+        if any((current := observation.control(control.name)) is None or not current.actionable
+               for control in initial[selected_count:]):
+            return None
+        requests = tuple(CardRequest(control.card.servant_slot, control.card.card_type,
+                                     control.card.deck_index, control.card.noble_phantasm)
+                         for control in initial[selected_count:] if control.card is not None)
+        controls = requested_card_controls(observation, requests)
+        if controls is None:
+            return None
+        return controls, selected_count + 1
+
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
         observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
                 self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
         if not complete_normal_hand(observation):
+            if self.card_recovery_used:
+                remaining = self.remaining_card_controls(observation)
+                if remaining is not None:
+                    controls, start_position = remaining
+                    self.submit_card_batch(observation, controls, now, recovery=True,
+                                           start_position=start_position)
+                    return None
             if self.card_confirmation_since is None:
                 self.card_confirmation_since = now
                 self.emit('warning', now, reason='card_batch_waiting',

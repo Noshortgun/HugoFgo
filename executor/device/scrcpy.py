@@ -5,6 +5,7 @@ import struct
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from typing import Callable
 
 import cv2
@@ -12,6 +13,15 @@ import numpy as np
 
 from executor.device.base import DeviceError, Frame, FrameFormat, to_device_point, validate_resolution
 from executor.device.config import DeviceConfig, DeviceMetrics
+
+
+@dataclass(frozen=True)
+class _LatestFrame:
+    sequence: int
+    pixels: bytes
+    captured_at: float
+    received_at: float
+    capture_ms: float
 
 
 class ScrcpyDevice:
@@ -23,7 +33,7 @@ class ScrcpyDevice:
         self.frame_timeout = frame_timeout
         self.max_frame_age = max_frame_age
         self._condition = threading.Condition()
-        self._latest: tuple[int, bytes, float, float, float] | None = None
+        self._latest: _LatestFrame | None = None
         self._delivered = 0
         self._failure: DeviceError | None = None
         self._closed = False
@@ -86,8 +96,8 @@ class ScrcpyDevice:
             capture_ms = (time.perf_counter() - started) * 1000.0
             pixels = np.ascontiguousarray(image).tobytes()
             with self._condition:
-                sequence = 1 if self._latest is None else self._latest[0] + 1
-                self._latest = (sequence, pixels, captured_at, received, capture_ms)
+                sequence = 1 if self._latest is None else self._latest.sequence + 1
+                self._latest = _LatestFrame(sequence, pixels, captured_at, received, capture_ms)
                 self._condition.notify_all()
 
     def _fail(self, message: str) -> None:
@@ -116,15 +126,15 @@ class ScrcpyDevice:
                 if self._closed:
                     raise DeviceError(f'scrcpy 会话已关闭：设备 {self.config.serial}')
                 latest = self._latest
-                if latest is not None and latest[0] > self._delivered:
-                    age = time.monotonic() - latest[3]
+                if latest is not None and latest.sequence > self._delivered:
+                    age = time.monotonic() - latest.received_at
                     if age > self.max_frame_age:
-                        raise DeviceError(f'scrcpy 帧已过期：设备 {self.config.serial}，帧 {latest[0]} '
+                        raise DeviceError(f'scrcpy 帧已过期：设备 {self.config.serial}，帧 {latest.sequence} '
                                           f'距今 {age * 1000:.0f} ms；不会用于新动作确认')
-                    self._delivered = latest[0]
-                    return Frame(image=latest[1], width=self._metrics.width, height=self._metrics.height,
-                                 captured_at=latest[2], format=FrameFormat.BGR24, capture_ms=latest[4],
-                                 frame_id=latest[0], session_id=self.session_id)
+                    self._delivered = latest.sequence
+                    return Frame(image=latest.pixels, width=self._metrics.width, height=self._metrics.height,
+                                 captured_at=latest.captured_at, format=FrameFormat.BGR24,
+                                 capture_ms=latest.capture_ms, frame_id=latest.sequence, session_id=self.session_id)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise DeviceError(f'scrcpy 等待新帧超时（{self.frame_timeout:g} 秒）：设备 {self.config.serial}，'

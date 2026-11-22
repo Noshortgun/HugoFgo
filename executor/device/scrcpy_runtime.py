@@ -14,10 +14,7 @@ from typing import Callable
 from executor.device.adb import ADB_TIMEOUT, AdbDevice, resolve_adb_path
 from executor.device.base import DeviceError
 from executor.device.config import DeviceConfig, DeviceMetrics
-from executor.device.scrcpy_resources import verify_scrcpy_server
-
-REMOTE_SERVER = '/data/local/tmp/hugofgo-scrcpy-server-3.3.3.jar'
-SCRCPY_VERSION = '3.3.3'
+from executor.device.scrcpy_resources import SCRCPY_VERSION, verify_scrcpy_server
 
 
 def _text(data: bytes | str | None) -> str:
@@ -98,14 +95,17 @@ class ScrcpySession:
 
     def _start(self) -> None:
         configured = getattr(self.config, 'scrcpy_server_path', None) or os.environ.get('HUGOFGO_SCRCPY_SERVER')
-        resource_dir = Path(configured).expanduser().resolve().parent if configured else None
+        configured_dir = os.environ.get('HUGOFGO_SCRCPY_RESOURCE_DIR')
+        resource_dir = (Path(configured).expanduser().resolve().parent if configured
+                        else Path(configured_dir).expanduser().resolve() if configured_dir else None)
         server = verify_scrcpy_server(resource_dir)
         if configured and server.resolve() != Path(configured).expanduser().resolve():
             raise DeviceError(f'配置的 scrcpy 服务端 {configured} 与固定清单文件名不一致；应使用 {server}')
+        self.remote_server = f'/data/local/tmp/hugofgo-{server.stem}-{SCRCPY_VERSION}{server.suffix}'
         adb = AdbDevice(self.config, runner=self._runner)
         self.metrics = adb.metrics()
-        self._run('push', str(server), REMOTE_SERVER)
-        argv = [self.adb_path, '-s', self.config.serial, 'shell', f'CLASSPATH={REMOTE_SERVER}',
+        self._run('push', str(server), self.remote_server)
+        argv = [self.adb_path, '-s', self.config.serial, 'shell', f'CLASSPATH={self.remote_server}',
                 'app_process', '/', 'com.genymobile.scrcpy.Server', SCRCPY_VERSION, f'scid={self.scid}',
                 'log_level=debug', 'video=true', 'audio=false', 'control=true', 'tunnel_forward=true',
                 'send_device_meta=false', 'send_codec_meta=false', 'send_frame_meta=false',
@@ -192,7 +192,7 @@ class ScrcpySession:
     def _exit_message(self) -> str:
         detail = '\n'.join(self._logs) or '服务端无日志'
         return (f'scrcpy 服务端已退出：设备 {self.config.serial}，退出码 {self.process.poll()}，'
-                f'会话资源 {REMOTE_SERVER}；{detail}')
+                f'会话资源 {self.remote_server}；{detail}')
 
     def ensure_alive(self) -> None:
         if self.closed:

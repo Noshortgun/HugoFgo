@@ -8,6 +8,7 @@ from pathlib import Path
 from executor.device.base import DeviceError
 
 DEFAULT_RESOURCE_DIR = Path(__file__).resolve().parents[2] / 'resources' / 'scrcpy'
+SCRCPY_VERSION = '3.3.3'
 
 
 def verify_scrcpy_server(resource_dir: str | Path | None = None) -> Path:
@@ -20,6 +21,9 @@ def verify_scrcpy_server(resource_dir: str | Path | None = None) -> Path:
         expected = manifest['sha256'].lower()
     except Exception as error:
         raise DeviceError(f'scrcpy 资源清单缺失或无效：{manifest_path}：{error}；请重新安装或恢复固定资源') from error
+    if version != SCRCPY_VERSION:
+        raise DeviceError(f'scrcpy 资源清单版本不匹配：{manifest_path}；固定版本 {SCRCPY_VERSION}，'
+                          f'清单为 {version!r}；请重新安装或恢复官方固定资源')
     if Path(filename).name != filename:
         raise DeviceError(f'scrcpy 资源清单中的服务端文件名无效：{filename!r}（{manifest_path}）')
     server = root / filename
