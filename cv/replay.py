@@ -528,6 +528,19 @@ def check_strategy_executor():
                expected, controls, 'tap', f'reason={result.reason}',
                result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
 
+    isolated_middle = Observation(base_page=BasePage.CARD, controls=(
+        Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:A'),
+        *(command(index, (index - 1) % 3) for index in range(1, 6))))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), isolated_middle, isolated_middle, isolated_middle, isolated_middle,
+         isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    add_report('strategy:executor-np-fixed-middle', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
+
     next_battle = battle(turn=2)
     animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
     normal_cards = Observation(base_page=BasePage.CARD, controls=tuple(
@@ -546,6 +559,26 @@ def check_strategy_executor():
     add_report('strategy:executor-unplanned-turn', LOADING_IMAGE, expected, controls,
                'tap', f'reason={result.reason}; turn={result.progress.turn}',
                result.reason == 'unknown_timeout' and result.progress.turn == 2 and controls == expected,
+               simulated_ocr=True)
+
+    forward_plan = make_plan(planned)
+    first_wave = forward_plan.waves[0]
+    forward_plan = replace(forward_plan, waves=(
+        first_wave, WavePlan(number=2, target=1, turns=first_wave.turns)))
+    forward_battle = battle(wave=2, turn=2)
+    result, _, events = run_core_scenario(
+        [battle(), battle(), normal_cards, normal_cards, normal_cards, normal_cards,
+         normal_cards, normal_cards, animation, forward_battle, forward_battle,
+         normal_cards, normal_cards, normal_cards, normal_cards, normal_cards, normal_cards,
+         unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0,
+         3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9], forward_plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
+    progress = (result.progress.wave, result.progress.turn)
+    add_report('strategy:executor-forward-wave-fallback', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}; progress={progress}',
+               result.reason == 'unknown_timeout' and progress == (2, 2) and controls == expected,
                simulated_ocr=True)
 
     short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))

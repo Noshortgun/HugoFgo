@@ -18,6 +18,8 @@ from executor.session.evidence import RunEvidence
 
 
 SUPPORT_REFRESH_COOLDOWN_SECONDS = 5.0
+NP_CARD_CENTERS = (420, 635, 855)
+NP_CARD_CENTER_TOLERANCE = 100
 
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
@@ -115,9 +117,9 @@ def matching_card_control(observation: Observation, wanted: CardRequest,
                  and item.card.noble_phantasm == wanted.noble_phantasm), None)
 
 
-def formation_ordered_np_cards(observation: Observation, active_slots: list[int],
-                               formation: tuple[FormationSlotPlan, ...]) -> tuple[Observation, str | None]:
-    """固定宝具区域 A/B/C 从左到右对应当前先发三位，不依赖卡面识别。"""
+def positioned_np_cards(observation: Observation, active_slots: list[int],
+                        formation: tuple[FormationSlotPlan, ...]) -> tuple[Observation, str | None]:
+    """宝具区域中心 x=420/635/855 固定对应左/中/右三位，与可见宝具数量无关。"""
     members = {member.slot: member for member in formation}
     controls = []
     seen: dict[int, str] = {}
@@ -127,17 +129,21 @@ def formation_ordered_np_cards(observation: Observation, active_slots: list[int]
         if not is_np_region:
             controls.append(control)
             continue
-        position = control.reason.removeprefix('np_slot:')
-        index = 'ABC'.find(position) if position else -1
-        if not 0 <= index < len(active_slots):
-            return observation, f'宝具卡区域 {control.name} 超出编队位置，无法按编队顺序唯一确认从者'
+        x, y = control.center
+        positions = [index for index, expected_x in enumerate(NP_CARD_CENTERS)
+                     if abs(x - expected_x) <= NP_CARD_CENTER_TOLERANCE and 40 <= y <= 400]
+        if len(positions) != 1:
+            return observation, f'宝具卡区域 {control.name} 不在已知三个固定位置，无法唯一确认从者'
+        index = positions[0]
+        if index >= len(active_slots):
+            return observation, f'宝具卡区域 {control.name} 超出编队位置，无法按固定位置确认从者'
         if index in seen:
             return observation, (f'宝具卡区域重复（{seen[index]}、{control.name}），'
-                                 '无法按编队顺序唯一确认从者')
+                                 '无法按固定位置唯一确认从者')
         seen[index] = control.name
         member = members.get(active_slots[index])
         if member is None:
-            return observation, f'宝具卡区域 {control.name} 没有对应编队从者，无法按编队顺序确认身份'
+            return observation, f'宝具卡区域 {control.name} 没有对应编队从者，无法按固定位置确认身份'
         controls.append(replace(control, card=CommandCardIdentity(
             servant_slot=member.slot, card_type='unknown', noble_phantasm=True,
             svt_id=member.svt_id, support=member.support)))
@@ -574,7 +580,7 @@ class Runner:
         return None
 
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
-        observation, np_mapping_diagnostic = formation_ordered_np_cards(
+        observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
                 self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
@@ -595,7 +601,7 @@ class Runner:
                                                    if item.card is not None and item.card.noble_phantasm})
                             message = (np_mapping_diagnostic or
                                        '作业宝具卡未在当前手牌中确认：'
-                                       f'按编队顺序只能确认槽位 {mapped_slots}，'
+                                       f'按固定位置只能确认槽位 {mapped_slots}，'
                                        f'无法唯一确认作业要求的槽位 {wanted.servant_slot}')
                             self.emit('failed', now, reason='fallback_cards_unavailable',
                                       card_position=position, servant_slot=wanted.servant_slot,
@@ -953,14 +959,14 @@ class Runner:
                             self.progress.turn = turn
                             self.progress.action_index = 0
                             self.emit('turn_started', now, wave=wave, turn=turn)
-                        elif wave == current[0] + 1 and turn == 1 and wave <= len(self.plan.waves):
+                        elif wave == current[0] + 1 and 1 <= turn and wave <= len(self.plan.waves):
                             self.progress.wave = wave
-                            self.progress.turn = 1
+                            self.progress.turn = turn
                             self.progress.action_index = 0
-                            self.fallback_mode = False
+                            self.fallback_mode = turn > len(self.plan.waves[wave - 1].turns)
                             self.initial_target_pending = self.plan.waves[wave - 1].target != 1
-                            self.emit('wave_started', now, wave=wave, turn=1)
-                            self.emit('turn_started', now, wave=wave, turn=1)
+                            self.emit('wave_started', now, wave=wave, turn=turn)
+                            self.emit('turn_started', now, wave=wave, turn=turn)
                         else:
                             self.emit('failed', now, reason='progress_uncertain',
                                       observed_wave=wave, observed_turn=turn)

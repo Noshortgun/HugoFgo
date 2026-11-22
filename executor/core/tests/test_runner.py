@@ -648,7 +648,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['攻击', '卡1', '宝具卡A', '卡2'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
-    def test_unidentified_np_regions_use_formation_order_for_reservation(self) -> None:
+    def test_unidentified_np_regions_use_fixed_screen_positions_for_reservation(self) -> None:
         base = single_wave_plan()
         formation = (
             FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
@@ -685,7 +685,7 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(any(event.type == 'failed' and event.data.get('reason') == 'fallback_cards_unavailable'
                              for event in events.events[:-2]))
 
-    def test_ambiguous_np_regions_stop_with_formation_order_diagnostic(self) -> None:
+    def test_ambiguous_np_regions_stop_with_fixed_position_diagnostic(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
         plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
@@ -693,7 +693,7 @@ class RunnerTest(unittest.TestCase):
         normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
         duplicate_regions = (
             Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'),
-            Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:A'),
+            Control('宝具卡2', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:B'),
         )
         card = observe(BasePage.CARD, *normal, *duplicate_regions)
         device, perception = scripted([battle, battle, card, card], [0.0, 0.5, 0.6, 1.1])
@@ -707,7 +707,34 @@ class RunnerTest(unittest.TestCase):
                                     if event.type == 'action'])
         diagnostic = events.events[-1].data.get('message', '')
         self.assertIn('宝具卡区域重复', diagnostic)
-        self.assertIn('编队顺序', diagnostic)
+        self.assertIn('固定位置', diagnostic)
+
+    def test_isolated_np_regions_map_by_geometry_not_visible_card_order(self) -> None:
+        for servant_slot, box, expected_x in (
+            (1, (545, 85, 725, 315), 635),
+            (2, (765, 100, 945, 330), 855),
+        ):
+            with self.subTest(servant_slot=servant_slot):
+                base = single_wave_plan()
+                turn = replace(base.waves[0].turns[0], attack=None, np_positions={servant_slot: 1})
+                plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+                battle = observe(BasePage.BATTLE, button('攻击'))
+                normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+                np_region = Control('宝具卡1', ControlKind.CARD, box, True, 'np_slot:A')
+                card = observe(BasePage.CARD, *normal, np_region)
+                observations = [battle, battle, card, card, card, card, card, card,
+                                observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+                device, perception = scripted(
+                    observations, [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4])
+                events = MemoryEventSink()
+
+                result = run(plan, device, perception, events)
+
+                actions = [event.data for event in events.events if event.type == 'action']
+                self.assertEqual('unknown_timeout', result.reason,
+                                 [(event.type, event.data) for event in events.events])
+                self.assertEqual('宝具卡1', actions[1]['control'])
+                self.assertEqual(expected_x, actions[1]['x'])
 
     def test_third_command_card_stops_input_and_waits_for_attack(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -840,6 +867,42 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(2, result.progress.turn)
         self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_forward_wave_jump_to_unplanned_turn_uses_fallback(self) -> None:
+        base = single_wave_plan()
+        first_wave = base.waves[0]
+        second_wave = WavePlan(number=2, target=1, turns=first_wave.turns)
+        plan = replace(base, waves=(first_wave, second_wave),
+                       strategy=FallbackStrategy(strategy_order=('cards', 'crit')))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        next_battle = battle.with_fields({
+            'wave': Field(FieldStatus.CONFIRMED, 2),
+            'turn': Field(FieldStatus.CONFIRMED, 2),
+        })
+        card = observe(BasePage.CARD, *(
+            replace(control, card=replace(control.card, crit_rate=10, affinity='neutral'))
+            for control in (command_card(index, (index - 1) % 3) for index in range(1, 6))))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        observations = [battle, battle, card, card, card, card, card, card, animation,
+                        next_battle, next_battle, card, card, card, card, card, card,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5,
+                 3.0, 3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        self.assertEqual((2, 2), (result.progress.wave, result.progress.turn))
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertTrue(any(event.type == 'wave_started' and event.data['wave'] == 2
+                            and event.data['turn'] == 2 for event in events.events))
+        self.assertTrue(any(event.type == 'turn_started' and event.data['wave'] == 2
+                            and event.data['turn'] == 2 for event in events.events))
 
     def test_repeat_can_continue_through_support_selection(self) -> None:
         plan = single_wave_plan()
