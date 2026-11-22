@@ -2,7 +2,7 @@
 """实机动作审计：把一次运行的 action 事件按面/回合展开，和作业计划逐项对照。
 
 用法：
-    cv/.venv/Scripts/python.exe .scratch/live_action_audit.py <run_dir> [job.json]
+    cv/.venv/Scripts/python.exe scripts/live_action_audit.py <run_dir> [job.json]
 
 输出每个面/回合的实际动作清单，以及作业计划中该回合应执行的动作。
 """

@@ -12,7 +12,7 @@ cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Li
 npm run resources:update
 ```
 
-`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。资源更新会下载各再临阶段的从者头像和 Atlas `commands` 指令卡立绘原图，分别供助战与普通指令卡身份识别使用；新增从者的原图随图库更新生效，不需要手工登记模板；实际识别泛化仍需真实截图留出集验证，感知运行时不访问网络。素材字段、查询命令和资源合约见 [Atlas 资源](resources.md)。
+`HUGOFGO_PYTHON` 可指定 Python 解释器，`HUGOFGO_ADB` 可指定 adb。回放依赖版本固定在 `cv/requirements.txt`。资源更新会下载各再临阶段的从者头像和 Atlas `commands` 指令卡立绘原图，分别供助战与普通指令卡身份识别使用；新增从者的原图随图库更新生效，不需要手工登记模板；实际识别泛化仍需真实截图留出集验证，感知运行时不访问网络。素材字段、查询命令和资源合约见 [资源、素材与引用](resources.md)。
 
 ### Windows 构建环境（src-tauri）
 
@@ -34,7 +34,7 @@ cargo check --tests --manifest-path src-tauri/Cargo.toml   # 需先 npm run desk
 cargo test --lib --manifest-path src-tauri/Cargo.toml
 ```
 
-`npm run package:windows` 先跑全量回放再 `tauri build`，产出 NSIS 安装包；CI 的 `Windows 安装包` 任务在 windows-latest 上做同样的构建并上传产物。
+发布者在具备 Rust 工具链的 Windows 机器上执行 `npm ci`、安装 `cv/requirements.txt`，再运行 `npm run package:windows`。该命令先准备固定版本 Node.js 运行时，再执行前端构建、全量回放和 `tauri build`。NSIS 安装包输出到 `src-tauri/target/release/bundle/nsis/`；CI 的 `Windows 安装包` 任务在 windows-latest 上使用同一命令并上传产物。发布时需核对空库首启、国服下载、作业保存/打开，以及假运行或实机运行与历史记录；未做完整实机验收前不得标记稳定。
 
 ## 2. 每次施工前预检
 

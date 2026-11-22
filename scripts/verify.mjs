@@ -16,6 +16,8 @@ export function createVerificationSteps(pythonCommand) {
     { name: 'executor-unit', command: pythonCommand,
       args: ['-m', 'unittest', 'discover', '-s', 'executor', '-t', '.', '-v'] },
     { name: 'device-selftest', command: pythonCommand, args: ['-m', 'executor.device', '--self-test'] },
+    { name: 'references', command: process.execPath, args: [path.join(root, 'scripts/check-references.mjs')] },
+    { name: 'references-selftest', command: process.execPath, args: [path.join(root, 'scripts/check-references.selftest.mjs')] },
     { name: 'fixtures', command: process.execPath, args: [path.join(root, 'scripts/check-perception-fixtures.mjs')] },
     { name: 'resources-selftest', command: process.execPath, args: [path.join(root, 'scripts/resources.mjs'), 'self-test'] },
     { name: 'desktop-selftest', command: process.execPath, args: [path.join(root, 'scripts/desktop-package.selftest.mjs')] },

@@ -18,6 +18,7 @@
     "issues:check": "node scripts/issue-sync.mjs",
     "issues:selftest": "node scripts/issue-sync.selftest.mjs",
     "fixtures:check": "node scripts/check-perception-fixtures.mjs",
+    "references:check": "node scripts/check-references.mjs",
     "verify": "node scripts/verify.mjs",
     "verify:selftest": "node scripts/verify.selftest.mjs",
     "replay": "node scripts/replay.mjs",
