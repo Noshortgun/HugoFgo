@@ -628,7 +628,8 @@ def check_executor_self_target():
     from executor.core import RunOptions, run
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
-    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Field, FieldStatus, Observation, Variant
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field, FieldStatus,
+                                     Observation, Overlay, Variant)
     from executor.session import MemoryEventSink
 
     fields = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
@@ -669,6 +670,37 @@ def check_executor_self_target():
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
     add_report('executor:self-target-direct-animation', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; progress={result.progress}', ok, simulated_ocr=True)
+
+    master = ActionPlan(kind='master', title='御主二技能', detail='', icon='',
+                        skill=1, player_target_slot=1)
+    turn = replace(turn, actions=(master,))
+    plan = replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
+    master_battle = replace(battle, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+        Control('御主技能', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+    ))
+    menu = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
+        Control(f'御主技能{index}', ControlKind.BUTTON, (850 + index * 90, 275, 920 + index * 90, 352), True)
+        for index in range(1, 4)))
+    target = Observation(
+        base_page=BasePage.BATTLE, variants=frozenset({Variant.SKILL_TARGET}),
+        overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
+            Control(f'目标从者{index}', ControlKind.TARGET, (index * 300, 269, index * 300 + 200, 499), True)
+            for index in range(1, 4)))
+    observations = [master_battle, master_battle, menu, menu, target, target,
+                    animation, master_battle, master_battle, wrong]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.0, 2.5, 2.6]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['御主技能', '御主技能2', '目标从者2', '攻击']
+    ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
+    add_report('executor:master-target-with-overlay', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
 
 def check_executor_repeat_support():

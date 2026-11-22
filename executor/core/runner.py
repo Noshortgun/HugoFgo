@@ -208,6 +208,7 @@ class Runner:
         self.pending_variant: Variant | None = None
         self.pending_overlay: Overlay | None = None
         self.job_target_slot: int | None = None
+        self.target_selection_since: float | None = None
         self.optional_target = False
         self.master_action: ActionPlan | None = None
         self.order_action: ActionPlan | None = None
@@ -574,6 +575,7 @@ class Runner:
             if self.tap_stable(observation, name, now):
                 if action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
+                    self.target_selection_since = now
                     self.optional_target = action.member_slot == action.player_target_slot
                     self.confirming_job_action = self.optional_target
                     self.pending_pages = frozenset({BasePage.BATTLE})
@@ -896,7 +898,8 @@ class Runner:
             if (Overlay.REPEAT_DIALOG in observation.overlays
                     and (not self.result_seen or page not in {BasePage.BATTLE, BasePage.DROPS, BasePage.UNKNOWN})):
                 unexpected = unexpected | {Overlay.REPEAT_DIALOG}
-            if Overlay.MASTER_SKILLS in unexpected and (self.master_action or self.order_action):
+            if (Overlay.MASTER_SKILLS in unexpected
+                    and (self.master_action or self.order_action or self.job_target_slot is not None)):
                 unexpected = unexpected - {Overlay.MASTER_SKILLS}
             if Overlay.ORDER_CHANGE in observation.overlays and self.order_action is None:
                 unexpected = unexpected | {Overlay.ORDER_CHANGE}
@@ -949,6 +952,12 @@ class Runner:
                         return result
                 time.sleep(self.options.poll_interval)
                 continue
+
+            if (self.job_target_slot is not None and self.target_selection_since is not None
+                    and now - self.target_selection_since >= self.options.action_timeout):
+                self.emit('failed', now, reason='target_selection_timeout', slot=self.job_target_slot,
+                          message='技能目标未在限定时间内变为可选择')
+                return self.result(RunStatus.STOPPED, 'target_selection_timeout')
 
             if self.pending_pages is not None:
                 if (self.awaiting_attack_end and page is BasePage.BATTLE
@@ -1029,6 +1038,7 @@ class Runner:
                             self.confirming_job_action = False
                         else:
                             self.job_target_slot = None
+                            self.target_selection_since = None
                         self.optional_target = False
                     if self.pending_swap is not None:
                         swap_out, swap_in = self.pending_swap
@@ -1065,6 +1075,7 @@ class Runner:
                     self.master_action = None
                     if action.player_target_slot is not None:
                         self.job_target_slot = action.player_target_slot
+                        self.target_selection_since = now
                         self.pending_pages = frozenset({BasePage.BATTLE})
                         self.pending_since = now
                         self.pending_variant = Variant.SKILL_TARGET
@@ -1078,6 +1089,7 @@ class Runner:
                 position = self.active_slots.index(self.job_target_slot) + 1
                 if self.tap_stable(observation, f'目标从者{position}', now):
                     self.job_target_slot = None
+                    self.target_selection_since = None
                     self.wait_for_job_action(now)
             elif page is BasePage.BATTLE:
                 result = self.handle_battle(observation, now)
