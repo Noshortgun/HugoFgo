@@ -138,6 +138,40 @@ class RunnerTest(unittest.TestCase):
                          controls)
         self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions[:2]])
 
+    def test_second_support_refresh_waits_for_candidates_before_not_found(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker', ce_id=9403520)
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        confirm = Observation(base_page=BasePage.SUPPORT,
+                              overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
+                              controls=(button('是', (708, 534, 969, 592)),))
+        blank = observe(BasePage.SUPPORT)
+        candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker', ce_id=9403520)
+        match = observe(BasePage.SUPPORT,
+                        Control('助战卡片第2行', ControlKind.ROW, (40, 360, 1000, 560), True,
+                                support=candidate))
+        team = observe(BasePage.TEAM, button('开始任务'))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        observations = [wrong] * 6 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
+        observations += [blank, blank, match, match, team, team, battle, battle, wrong_cards]
+        times = [index * 0.5 for index in range(len(observations))]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertIn('助战卡片第2行', [event.data['control'] for event in events.events
+                                      if event.type == 'action'])
+
     def test_support_refresh_cooldown_closes_and_resumes_after_wait(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
@@ -206,6 +240,29 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('card_mismatch', result.reason)
         self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第1行', '开始任务', '攻击'],
                          controls)
+
+    def test_support_refresh_without_confirmation_stops_without_repeating_tap(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        observations = [wrong, wrong, wrong, wrong, wrong, wrong, wrong]
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 33.5]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual('page', events.events[-1].data['stage'])
 
     def test_friend_request_is_closed_before_support_selection(self) -> None:
         plan = single_wave_plan()
@@ -752,6 +809,29 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual('unknown', observation['base_page'])
             self.assertEqual('unknown_timeout', rows[-1]['data']['reason'])
             self.assertTrue((root / 'failure.png').is_file())
+
+    def test_completed_run_saves_the_final_frame(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        result_page = observe(BasePage.RESULT, button('结算推进', (0, 0, 1280, 720)))
+        drops = observe(BasePage.DROPS, button('下一步', (948, 606, 1272, 676)))
+        repeat = Observation(base_page=BasePage.BATTLE,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击', (800, 540, 940, 610)),))
+        observations = [battle, battle, card, card, card, card, card, card, animation,
+                        result_page, result_page, drops, drops, repeat]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 3.1, 3.6, 3.7]
+        device, perception = scripted(observations, times)
+        with tempfile.TemporaryDirectory() as directory:
+            result = run(single_wave_plan(), device, perception, MemoryEventSink(),
+                         options=RunOptions(run_dir=directory))
+
+            payload = json.loads((Path(directory) / 'result.json').read_text(encoding='utf-8'))
+            self.assertEqual(RunStatus.COMPLETED, result.status)
+            self.assertTrue((Path(directory) / 'final.png').is_file())
+            self.assertEqual(str(Path(directory) / 'final.png'), payload['final_frame'])
 
     def test_tap_device_error_becomes_a_failed_run_result(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))

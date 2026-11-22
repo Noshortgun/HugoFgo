@@ -1697,6 +1697,92 @@ def check_ocr_action(name, path, expected):
     add_report(name, path, expected, action, "observe", f"ocr={rows}", action == expected)
 
 
+def check_final_frame_evidence():
+    from executor.core import RunOptions
+    from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, Variant)
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    battle = Observation(base_page=BasePage.BATTLE, fields={
+        'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+        'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+    }, controls=(Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    card = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (46, 415, 211, 655), True,
+                card=CommandCardIdentity(index - 1, 'arts')) for index in range(1, 6)))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    result_page = Observation(base_page=BasePage.RESULT, controls=(
+        Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
+    drops = Observation(base_page=BasePage.DROPS, controls=(
+        Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
+    repeat = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                         controls=(Control('连续出击', ControlKind.BUTTON, (800, 540, 940, 610), True),))
+    observations = [battle, battle, card, card, card, card, card, card, animation,
+                    result_page, result_page, drops, drops, repeat]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 3.1, 3.6, 3.7]
+    with TemporaryDirectory() as directory:
+        result, _, _ = run_core_scenario(
+            observations, times, plan, options=RunOptions(run_dir=directory))
+        final = Path(directory) / 'final.png'
+        payload = json.loads((Path(directory) / 'result.json').read_text(encoding='utf-8'))
+        final_exists = final.is_file()
+        ok = result.status.value == 'completed' and final_exists and payload.get('final_frame') == str(final)
+    add_report('executor:completed-final-frame', DROPS_IMAGE, 'completed; final.png saved',
+               f'{result.reason}; final={final_exists}', 'observe', 'completed runs retain final visual evidence',
+               ok, simulated_ocr=True)
+
+
+def check_support_refresh_confirmation_timeout():
+    from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    formation = (
+        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, role='Berserker',
+                          support=True, support_required=True),
+        FormationSlotPlan(slot=1, name='1'), FormationSlotPlan(slot=2, name='2'),
+    )
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
+    wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+    wrong = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
+    ))
+    result, device, events = run_core_scenario(
+        [wrong] * 7, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 33.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['助战列表回顶', '助战列表向下', '列表更新']
+    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
+          and controls == expected and events.events[-1].data.get('stage') == 'page')
+    add_report('executor:support-refresh-confirmation-timeout', SUPPORT_IMAGE,
+               'action_confirmation_timeout; no repeated refresh', f'{result.reason}; {controls}',
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    confirm = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
+                          controls=(Control('是', ControlKind.BUTTON, (708, 534, 969, 592), True),))
+    blank = Observation(base_page=BasePage.SUPPORT)
+    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+    match = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第2行', ControlKind.ROW, (40, 360, 1000, 560), True, support=candidate),))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    observations = [wrong] * 6 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
+    observations += [blank, blank, match, match, unknown, unknown]
+    times = [index * 0.5 for index in range(len(observations) - 2)]
+    times += [len(times) * 0.5, len(times) * 0.5 + 30.0]
+    result, device, events = run_core_scenario(observations, times, plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = result.reason == 'unknown_timeout' and '助战卡片第2行' in controls
+    add_report('executor:support-refresh-waits-for-candidates', SUPPORT_IMAGE,
+               'transient empty rows wait; matching Louhi selected', f'{result.reason}; {controls}',
+               'tap', 'second refresh returned candidates after a transient frame', ok, simulated_ocr=True)
+
+
 def run(output: Path, name_filter: str | None = None):
     REPORTS.clear()
     check_classifications()
@@ -1704,6 +1790,8 @@ def run(output: Path, name_filter: str | None = None):
     check_perception_identities()
     check_executor_core()
     check_command_card_batch()
+    check_support_refresh_confirmation_timeout()
+    check_final_frame_evidence()
     check_strategy_servant_priority()
     check_strategy_color_priority()
     check_strategy_crit_priority()
