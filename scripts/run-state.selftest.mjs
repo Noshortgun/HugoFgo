@@ -47,4 +47,16 @@ const failed = runState.applyRunEvent(state, {
 assert.equal(failed.phase, 'failed');
 assert.equal(failed.error, '设备离线');
 assert.equal(failed.logDir, 'logs/farm/run-1');
+
+const fallbackNotice = runState.applyRunEvent(state, {
+  run_id: 'run-1', type: 'channel_changed', timestamp: 6,
+  data: { from: 'scrcpy', to: 'adb', message: 'scrcpy 启动失败，按用户已确认的回退策略改用 ADB' },
+});
+assert.equal(fallbackNotice.notice, 'scrcpy 启动失败，按用户已确认的回退策略改用 ADB');
+assert.equal(fallbackNotice.channel, 'adb');
+const warning = runState.applyRunEvent(fallbackNotice, {
+  run_id: 'run-1', type: 'warning', timestamp: 7,
+  data: { reason: 'scrcpy_start_failed', message: '资源校验失败' },
+});
+assert.equal(warning.notice, '资源校验失败');
 console.log('运行状态事件归约自检通过');

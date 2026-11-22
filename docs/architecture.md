@@ -41,8 +41,9 @@
 
 - **接口**：`devices()` 与 `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`。
 - **坐标**：动作使用 1280×720 基准，由适配器换算到真实分辨率；serial 与区服属于 `DeviceConfig`。
-- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）。
+- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）、scrcpy（显式启用的持续帧与输入）。
 - **LDPlayer 边界**：原始帧适配器只截图，`tap`/`swipe` 会明确报错；当前完整实机闭环仍走 adb，不把该通道算作独立刷本通道。
+- **scrcpy 边界**：持续解码线程只保留最新帧，每次感知读取要求新帧并校验新鲜度、尺寸与会话身份；输入使用同一设备的控制 socket。启动失败仅在用户预先确认后可见回退 adb，运行中断直接安全停止。固定服务端由 `resources/scrcpy/` 分发并校验，通道不进入作业 Schema。
 - **分辨率**：仅支持精确 16:9 横屏且不低于 1280×720；其他分辨率拒绝执行（ADR-0005）。
 - **区服**：设备配置必填并决定识别配置与图库；当前执行器只接受 CN（ADR-0003）。
 
@@ -96,7 +97,8 @@ python -m executor <job.json> \
   [--recovery [saint_quartz|gold|silver|bronze|copper ...]] \
   [--drain-after-turns] \
   [--adb <adb路径>] \
-  [--channel adb|ldplayer-window] \
+  [--channel adb|ldplayer-window|scrcpy] \
+  [--allow-adb-fallback] [--scrcpy-server <固定服务端路径>] \
   [--fake]
 ```
 
@@ -250,7 +252,7 @@ src/            前端
 src-tauri/      壳
 executor/       Python 执行器
   domain/       作业模型与编译
-  device/       设备网关（adb + fake + 可选 ldplayer-window）
+  device/       设备网关（adb + fake + 可选 ldplayer-window / scrcpy）
   perception/   画面感知
   core/         执行器状态机
   session/      运行会话与历史

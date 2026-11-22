@@ -8,15 +8,24 @@ export interface RecoveryPolicy {
   drain_after_turns: boolean;
 }
 
+export type DeviceChannel = 'adb' | 'scrcpy';
+
 export interface RunSettings {
   battles: number;
   recovery: RecoveryPolicy;
+  device_channel: DeviceChannel;
+  allow_adb_fallback: boolean;
 }
 
 const storageKey = 'hugofgo.runSettings';
 
 export function defaultRunSettings(): RunSettings {
-  return { battles: 1, recovery: { allowed: ['bronze'], drain_after_turns: false } };
+  return {
+    battles: 1,
+    recovery: { allowed: ['bronze'], drain_after_turns: false },
+    device_channel: 'adb',
+    allow_adb_fallback: false,
+  };
 }
 
 export function normalizeRunSettings(value: unknown): RunSettings {
@@ -32,6 +41,8 @@ export function normalizeRunSettings(value: unknown): RunSettings {
       allowed,
       drain_after_turns: typeof recovery?.drain_after_turns === 'boolean' ? recovery.drain_after_turns : false,
     },
+    device_channel: data.device_channel === 'scrcpy' ? 'scrcpy' : 'adb',
+    allow_adb_fallback: data.device_channel === 'scrcpy' && data.allow_adb_fallback === true,
   };
 }
 

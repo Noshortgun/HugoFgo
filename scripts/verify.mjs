@@ -21,6 +21,7 @@ export function createVerificationSteps(pythonCommand) {
     { name: 'fixtures', command: process.execPath, args: [path.join(root, 'scripts/check-perception-fixtures.mjs')] },
     { name: 'resources-selftest', command: process.execPath, args: [path.join(root, 'scripts/resources.mjs'), 'self-test'] },
     { name: 'desktop-selftest', command: process.execPath, args: [path.join(root, 'scripts/desktop-package.selftest.mjs')] },
+    { name: 'scrcpy-resources', command: process.execPath, args: [path.join(root, 'scripts/scrcpy-resources.mjs')] },
     { name: 'replay', command: npm, args: ['run', 'replay'] },
     { name: 'issues-selftest', command: npm, args: ['run', 'issues:selftest'] },
   ];

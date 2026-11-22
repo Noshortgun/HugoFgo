@@ -96,6 +96,13 @@ class RunEvidence:
                 device = metrics
             except DeviceError as error:
                 device = {'metrics_error': str(error)}
+        config = getattr(self.device, 'config', None)
+        if config is not None:
+            device['channel'] = config.channel.value
+        if self.latest is not None:
+            frame, _ = self.latest
+            device['last_frame_id'] = frame.frame_id
+            device['last_session_id'] = frame.session_id
         write_json(self.directory / 'result.json', {
             'status': result.status.value,
             'reason': result.reason,

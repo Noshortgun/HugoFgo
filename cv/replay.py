@@ -1288,6 +1288,23 @@ def check_executor_safety():
                'tap', f'reason={result.reason}; times={[event.timestamp for event in actions]}',
                ok, simulated_ocr=True)
 
+    from executor.device import DeviceConfig, DeviceError
+
+    class InterruptedScrcpyDevice(FakeDevice):
+        def __init__(self, frames):
+            super().__init__(frames, config=DeviceConfig(serial='replay-scrcpy', region='CN', channel='scrcpy'))
+
+        def tap(self, x, y):
+            raise DeviceError('scrcpy 控制通道中断：回放故障注入')
+
+    with mock.patch.object(legacy, 'FakeDevice', InterruptedScrcpyDevice):
+        result, _, events = run_core_scenario([battle(), battle()], [0.0, 0.5], make_plan())
+    ok = (result.reason == 'device_error' and events.events[-1].data.get('reason') == 'device_error'
+          and not any(event.type == 'channel_changed' for event in events.events))
+    add_report('executor:scrcpy-interruption-no-fallback', LOADING_IMAGE, 'device_error/no-channel-change',
+               f'{result.reason}/{[event.type for event in events.events]}', 'stop',
+               '控制中断在动作边界停止，不跨通道续跑', ok, simulated_ocr=True)
+
 
 # 旧原型的纯流程仅作为回归参照保留；所有设备输入都由用例 mock。
 legacy = sys.modules[__name__]

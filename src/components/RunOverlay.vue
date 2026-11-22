@@ -42,6 +42,8 @@ const active = computed(() => props.state.phase === 'running' || props.state.pha
     <div class="run-recovery-count"><span>AP 恢复道具</span><strong>已用 {{ recoveryTotal }} 个</strong></div>
     <div class="run-current"><span class="action-icon servant"><AppIcon name="bolt" /></span><div><strong>{{ state.action || '等待执行器事件' }}</strong><small>{{ actionDetail }}</small></div></div>
     <p v-if="state.completedRuns" class="run-log-path">已完成 {{ state.completedRuns }} 场</p>
+    <p class="run-log-path">设备通道：{{ state.channel === 'scrcpy' ? 'scrcpy 持续帧与输入' : 'ADB' }}</p>
+    <p v-if="state.notice" class="device-error" role="alert">{{ state.notice }}</p>
     <p v-if="state.error" class="device-error">{{ state.error }}<span v-if="state.exitCode !== null">（退出码 {{ state.exitCode }}）</span></p>
     <p v-if="state.logDir" class="run-log-path">日志：{{ state.logDir }}</p>
     <div class="run-overlay-actions"><button v-if="active" class="stop" :disabled="state.phase === 'stopping'" @click="emit('stop')"><AppIcon name="stop" :size="13" />{{ state.phase === 'stopping' ? '停止中…' : '停止' }}</button><button v-else @click="emit('close')">关闭</button></div>
