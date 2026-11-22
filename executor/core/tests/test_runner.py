@@ -25,7 +25,8 @@ def run(plan, device, perception, events, *, options=None, control=None):
         options = RunOptions(write_evidence=False)
     elif options.run_dir is None:
         options = replace(options, write_evidence=False)
-    return core_run(plan, device, perception, events, options=options, control=control)
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        return core_run(plan, device, perception, events, options=options, control=control)
 
 
 def button(name: str, box=(1069, 564, 1196, 637)) -> Control:
@@ -72,7 +73,7 @@ def single_wave_plan(actions=(), np_positions=None) -> ExecutionPlan:
 def append_planned_turn_frames(observations: list[Observation], battle: Observation,
                                card: Observation, animation: Observation) -> None:
     observations.extend([battle, battle, animation, battle, battle])
-    observations.extend([card] * 6)
+    observations.append(card)
     observations.append(animation)
 
 
@@ -784,6 +785,29 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, len(device.actions))
         self.assertTrue(any(event.type == 'stopped' for event in events.events))
 
+    def test_manual_stop_interrupts_card_batch_before_next_tap(self) -> None:
+        control = RunControl()
+
+        class StopAfterFirstCard(MemoryEventSink):
+            def emit(self, event):
+                super().emit(event)
+                if event.type == 'action' and event.data.get('control') == '卡1':
+                    control.stop()
+
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        device, perception = scripted([battle, card], [0.0, 0.1])
+        events = StopAfterFirstCard()
+
+        with mock.patch('executor.core.runner.time.sleep'):
+            result = run(single_wave_plan(), device, perception, events, control=control)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('manual_stop', result.reason)
+        self.assertEqual(['攻击', '卡1'], [event.data['control'] for event in events.events
+                                          if event.type == 'action'])
+        self.assertEqual(2, len(device.actions))
+
     def test_small_control_box_jitter_does_not_restart_stability(self) -> None:
         first = observe(BasePage.BATTLE, button('攻击'))
         moved = observe(BasePage.BATTLE, button('攻击', (1073, 568, 1200, 641)))
@@ -819,6 +843,32 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('unknown_timeout', result.reason)
         self.assertEqual(['攻击'], [event.data['control'] for event in events.events
                                     if event.type == 'action'])
+
+    def test_verify_mode_waits_for_required_np_evidence_before_batch(self) -> None:
+        np_action = ActionPlan(kind='attack', title='宝具', detail='', icon='', member_slot=0)
+        plan = single_wave_plan((np_action,), {0: 2})
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, index - 1) for index in range(1, 6)]
+        waiting = observe(BasePage.CARD, *normal)
+        np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
+                          card=CommandCardIdentity(servant_slot=0, card_type='buster', noble_phantasm=True))
+        settled = observe(BasePage.CARD, np_card, *normal)
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, waiting, settled, animation, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 30.4],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '宝具卡A', '卡2', '战斗跳过'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, len([event for event in events.events
+                                 if event.type == 'warning'
+                                 and event.data.get('reason') == 'np_reservation_waiting']))
 
     def test_np_action_and_position_form_one_card_in_the_requested_slot(self) -> None:
         np_action = ActionPlan(kind='attack', title='宝具', detail='', icon='', member_slot=0)
@@ -925,7 +975,7 @@ class RunnerTest(unittest.TestCase):
                    if event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting']
         self.assertEqual(1, len(waiting))
 
-    def test_card_confirmation_waits_for_transient_overlay(self) -> None:
+    def test_card_batch_waits_for_complete_five_card_hand(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
         plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
@@ -934,10 +984,11 @@ class RunnerTest(unittest.TestCase):
         np_region = Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
         settled = observe(BasePage.CARD, *normal, np_region)
         transient = observe(BasePage.CARD, *(replace(item, card=None) for item in normal), np_region)
-        observations = [battle, battle, settled, settled, transient,
-                        settled, settled, settled, settled,
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        observations = [battle, battle, transient, settled, animation,
                         observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5]
+        times = [0.0, 0.5, 0.6, 0.7, 0.8, 0.9, 30.9]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -946,24 +997,22 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('unknown_timeout', result.reason,
                          [(event.type, event.data) for event in events.events])
         actions = [event.data for event in events.events if event.type == 'action']
-        self.assertEqual(1, sum(item['control'] == '宝具卡1' for item in actions))
-        self.assertEqual(4, len(actions))
+        self.assertEqual(['攻击', '宝具卡1', '卡1', '卡4', '战斗跳过'],
+                         [item['control'] for item in actions])
         waiting = [event for event in events.events
-                   if event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting']
+                   if event.type == 'warning' and event.data.get('reason') == 'card_batch_waiting']
         self.assertEqual(1, len(waiting))
-        self.assertEqual(2, waiting[0].data['card_position'])
 
-    def test_unconfirmable_card_selection_stops_after_wait_without_double_tap(self) -> None:
+    def test_unconfirmable_five_card_hand_stops_without_batch_taps(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
         plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
         battle = observe(BasePage.BATTLE, button('攻击'))
         normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
         np_region = Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
-        settled = observe(BasePage.CARD, *normal, np_region)
         transient = observe(BasePage.CARD, *(replace(item, card=None) for item in normal), np_region)
-        observations = [battle, battle, settled, settled, transient, transient, transient]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 31.2]
+        observations = [battle, battle, transient, transient]
+        times = [0.0, 0.5, 0.6, 30.6]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -971,13 +1020,12 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('fallback_cards_unavailable', result.reason)
-        self.assertEqual('已选指令卡在当前画面不可确认', events.events[-1].data['message'])
-        self.assertEqual(2, events.events[-1].data['card_position'])
-        self.assertGreaterEqual(events.events[-1].timestamp, 31.2)
-        actions = [event.data for event in events.events if event.type == 'action']
-        self.assertEqual(['攻击', '宝具卡1'], [item['control'] for item in actions])
+        self.assertEqual('五张普通指令卡尚未完整确认', events.events[-1].data['message'])
+        self.assertGreaterEqual(events.events[-1].timestamp, 30.6)
+        self.assertEqual(['攻击'], [event.data['control'] for event in events.events
+                                    if event.type == 'action'])
         waiting = [event for event in events.events
-                   if event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting']
+                   if event.type == 'warning' and event.data.get('reason') == 'card_batch_waiting']
         self.assertEqual(1, len(waiting))
 
     def test_ambiguous_np_regions_stop_with_fixed_position_diagnostic(self) -> None:
@@ -1031,6 +1079,134 @@ class RunnerTest(unittest.TestCase):
                 self.assertEqual('宝具卡1', actions[1]['control'])
                 self.assertEqual(expected_x, actions[1]['x'])
 
+    def test_command_card_batch_uses_one_hand_and_200ms_between_taps(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, card, animation, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 0.7, 0.8, 30.8],
+        )
+        events = MemoryEventSink()
+
+        with mock.patch('executor.core.runner.time.sleep') as sleep:
+            result = core_run(single_wave_plan(), device, perception, events,
+                              options=RunOptions(write_evidence=False))
+
+        self.assertEqual('unknown_timeout', result.reason)
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过'],
+                         [event.data['control'] for event in actions])
+        self.assertEqual(2, sum(call.args == (0.2,) for call in sleep.call_args_list))
+        card_actions = [event.data for event in actions if event.data['control'].startswith('卡')]
+        self.assertEqual([1, 2, 3], [item['card_position'] for item in card_actions])
+        self.assertEqual(1, len({item['batch_id'] for item in card_actions}))
+        self.assertEqual([0], list({item['batch_attempt'] for item in card_actions}))
+        self.assertGreaterEqual(card_actions[0]['attack_to_first_card_ms'], 0)
+        self.assertTrue(all(item['interval_ms'] >= 0 for item in card_actions[1:]))
+        submitted = next(event for event in events.events if event.type == 'card_batch_submitted')
+        self.assertEqual(200.0, submitted.data['configured_interval_ms'])
+
+    def test_card_batch_recovers_once_from_a_fresh_recomputed_hand(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        initial = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        changed = observe(BasePage.CARD, *(command_card(index, slot)
+                                           for index, slot in enumerate((2, 0, 1, 0, 1), start=1)))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, initial, initial, changed, animation,
+             observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0],
+        )
+        events = MemoryEventSink()
+
+        with mock.patch('executor.core.runner.time.sleep'):
+            result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '卡1', '战斗跳过'],
+                         [event.data['control'] for event in actions])
+        recovered = [event.data for event in actions if event.data.get('batch_attempt') == 1]
+        self.assertEqual(['卡2', '卡3', '卡1'], [item['control'] for item in recovered])
+        self.assertEqual(1, len({item['batch_id'] for item in recovered}))
+        recoveries = [event for event in events.events
+                      if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+        self.assertEqual(1, len(recoveries))
+        self.assertEqual('command_card_batch', recoveries[0].data['control'])
+
+    def test_card_batch_recovery_requires_a_new_frame(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        changed = observe(BasePage.CARD, *(command_card(index, slot)
+                                           for index, slot in enumerate((2, 0, 1, 0, 1), start=1)))
+        changed = replace(changed, frame_hash='fresh-card')
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, card, card, changed, animation,
+             observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 2.6, 2.7, 3.2, 3.3, 33.5], preserve_hashes=True,
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '卡1', '战斗跳过'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        recovery = next(event for event in events.events
+                        if event.type == 'warning' and event.data.get('reason') == 'action_recovery')
+        self.assertEqual(2.7, recovery.timestamp)
+
+    def test_card_batch_stops_after_one_unconfirmed_recovery(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, card, card, card, card],
+            [0.0, 0.1, 2.2, 2.6, 5.1],
+        )
+        events = MemoryEventSink()
+
+        with mock.patch('executor.core.runner.time.sleep'):
+            result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, events.events[-1].data['recovery_attempts'])
+        self.assertEqual(1, len([event for event in events.events
+                                 if event.type == 'warning'
+                                 and event.data.get('reason') == 'action_recovery']))
+
+    def test_card_recovery_wait_still_confirms_attack_end_before_next_turn(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        obscured = observe(BasePage.CARD, *(replace(item, card=None) for item in card.controls))
+        next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
+        wrong = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, card, obscured, next_battle, wrong],
+            [0.0, 0.1, 2.6, 2.7, 2.8],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual('fallback_cards_unavailable', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(2, result.progress.turn)
+        confirmed_index = next(index for index, event in enumerate(events.events)
+                               if event.type == 'action_confirmed' and event.data.get('stage') == 'attack_end')
+        second_attack_index = next(index for index, event in enumerate(events.events)
+                                   if index > confirmed_index and event.type == 'action'
+                                   and event.data.get('control') == '攻击')
+        self.assertGreater(second_attack_index, confirmed_index)
+
     def test_third_command_card_skips_attack_animation_at_most_once_per_second(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
@@ -1065,9 +1241,10 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('action_confirmation_timeout', result.reason)
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3'],
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '卡1', '卡2', '卡3'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
-        self.assertEqual(4, len(device.actions))
+        self.assertEqual(7, len(device.actions))
+        self.assertEqual(1, events.events[-1].data['recovery_attempts'])
 
     def test_unexpected_popup_after_third_card_stops_without_skip(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -1253,7 +1430,7 @@ class RunnerTest(unittest.TestCase):
         observations: list[Observation] = []
         append_planned_turn_frames(observations, battles[1, 1], card, animation)
         append_planned_turn_frames(observations, battles[2, 2], card, animation)
-        observations.extend([battles[2, 3], battles[2, 3], *([card] * 6), animation])
+        observations.extend([battles[2, 3], battles[2, 3], card, animation])
         append_planned_turn_frames(observations, battles[3, 4], card, animation)
         times = [index * 0.5 for index in range(len(observations))]
         observations.extend([observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)])

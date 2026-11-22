@@ -8,7 +8,7 @@ from typing import Protocol
 
 from executor.core.ap_policy import CONTROL_NAMES, RecoveryItem, select_recovery
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
-from executor.core.strategy import CardSelection, select_cards
+from executor.core.strategy import select_cards
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Observation, Overlay,
@@ -22,6 +22,7 @@ NP_CARD_CENTERS = (420, 635, 855)
 NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1200, 360)
 ACTION_RECOVERY_SECONDS = 2.0
+COMMAND_CARD_INTERVAL_SECONDS = 0.2
 
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
@@ -153,14 +154,32 @@ def positioned_np_cards(observation: Observation, active_slots: list[int],
     return replace(observation, controls=tuple(controls)), None
 
 
-def complete_card_controls(observation: Observation, requests: tuple[CardRequest, ...]) -> bool:
+def requested_card_controls(observation: Observation,
+                            requests: tuple[CardRequest, ...]) -> tuple[Control, ...] | None:
     used: set[str] = set()
+    controls = []
     for wanted in requests:
         control = matching_card_control(observation, wanted, used)
         if control is None:
-            return False
+            return None
         used.add(control.name)
-    return True
+        controls.append(control)
+    return tuple(controls)
+
+
+def complete_card_controls(observation: Observation, requests: tuple[CardRequest, ...]) -> bool:
+    return requested_card_controls(observation, requests) is not None
+
+
+def complete_normal_hand(observation: Observation) -> bool:
+    expected = {f'卡{index}' for index in range(1, 6)}
+    controls = [control for control in observation.controls
+                if control.kind is ControlKind.CARD and control.name in expected]
+    return ({control.name for control in controls} == expected and len(controls) == 5
+            and all(control.actionable and control.card is not None
+                    and not control.card.noble_phantasm
+                    and control.card.card_type in {'buster', 'arts', 'quick'}
+                    for control in controls))
 
 
 def support_matches(requirement: FormationSlotPlan, candidate: SupportCandidate) -> bool:
@@ -230,11 +249,13 @@ class Runner:
         self.stable_signature: tuple | None = None
         self.stable_since: float | None = None
         self.stable_box: tuple[int, int, int, int] | None = None
-        self.card_index = 0
-        self.card_selection: CardSelection | None = None
+        self.card_batch_sequence = 0
+        self.card_recovery_used = False
+        self.card_recovery_reading = False
+        self.attack_submitted_at: float | None = None
+        self.last_input_finished_at: float | None = None
         self.np_reservation_since: float | None = None
         self.card_confirmation_since: float | None = None
-        self.confirming_card = False
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
         self.run_settled = False
@@ -281,13 +302,6 @@ class Runner:
         self.stable_since = None
         self.stable_box = None
 
-    def wait_for_card_confirmation(self, now: float) -> bool:
-        if self.card_confirmation_since is None:
-            self.card_confirmation_since = now
-            self.emit('warning', now, reason='card_confirmation_waiting',
-                      card_position=self.card_index + 1)
-        return now - self.card_confirmation_since < self.options.action_timeout
-
     def tap_stable(self, observation: Observation, name: str, now: float) -> bool:
         control = observation.control(name)
         if control is None or not control.actionable:
@@ -332,17 +346,19 @@ class Runner:
         return True
 
     def tap_point(self, observation: Observation, now: float, control: str,
-                  x: int, y: int, reason: str) -> None:
+                  x: int, y: int, reason: str, **data: object) -> float:
         self.check_stop()
         started = time.perf_counter()
         self.device.tap(x, y)
         input_finished_at = time.time()
         channel_ms = (time.perf_counter() - started) * 1000
         self.pending_frame_hash = observation.frame_hash
+        self.last_input_finished_at = input_finished_at
         self.emit('action', now, control=control, x=x, y=y, reason=reason,
                   wave=self.progress.wave, turn=self.progress.turn,
                   action_index=self.progress.action_index, wait_ms=0.0, channel_ms=channel_ms,
-                  input_finished_at=input_finished_at)
+                  input_finished_at=input_finished_at, **data)
+        return input_finished_at
 
     def battle_ready(self, observation: Observation) -> bool:
         attack = observation.control('攻击')
@@ -568,6 +584,7 @@ class Runner:
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
             if self.tap_action(observation, '攻击', now):
+                self.attack_submitted_at = self.last_input_finished_at
                 self.wait_for_page(BasePage.CARD, now)
             return None
         wave = self.plan.waves[self.progress.wave - 1]
@@ -632,96 +649,129 @@ class Runner:
                     self.wait_for_job_action(now)
             return None
         if self.tap_action(observation, '攻击', now):
+            self.attack_submitted_at = self.last_input_finished_at
             self.wait_for_page(BasePage.CARD, now)
         return None
+
+    def submit_card_batch(self, observation: Observation, controls: tuple[Control, ...],
+                          now: float, *, recovery: bool = False) -> None:
+        self.card_batch_sequence += 1
+        batch_id = self.card_batch_sequence
+        attempt = 1 if recovery else 0
+        previous_finished_at = None
+        for index, control in enumerate(controls):
+            if index:
+                time.sleep(COMMAND_CARD_INTERVAL_SECONDS)
+            x, y = control.center
+            started_at = time.time()
+            data: dict[str, object] = {
+                'card_position': index + 1,
+                'batch_id': batch_id,
+                'batch_attempt': attempt,
+            }
+            if index == 0 and self.attack_submitted_at is not None:
+                data['attack_to_first_card_ms'] = (started_at - self.attack_submitted_at) * 1000
+            if previous_finished_at is not None:
+                data['interval_ms'] = (started_at - previous_finished_at) * 1000
+            previous_finished_at = self.tap_point(
+                observation, now, control.name, x, y, 'command_card_batch', **data)
+        submitted_at = now + COMMAND_CARD_INTERVAL_SECONDS * (len(controls) - 1)
+        self.emit('card_batch_submitted', submitted_at, batch_id=batch_id, batch_attempt=attempt,
+                  controls=[control.name for control in controls],
+                  configured_interval_ms=COMMAND_CARD_INTERVAL_SECONDS * 1000,
+                  wave=self.progress.wave, turn=self.progress.turn,
+                  action_index=self.progress.action_index)
+        self.card_confirmation_since = None
+        self.np_reservation_since = None
+        self.card_recovery_used = recovery
+        self.card_recovery_reading = False
+        self.awaiting_attack_end = True
+        self.last_attack_skip_at = None
+        self.wait_for_pages(submitted_at, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
+        self.pending_stage = 'attack_end'
 
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
         observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
                 self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
-        use_strategy = self.fallback_mode or self.card_selection is not None or turn.attack is None or (
-            turn.attack is not None and turn.attack.mode == 'strategy')
-        if (turn is not None and turn.attack is not None and turn.attack.mode == 'prefer'
-                and self.card_index == 0):
+        if not complete_normal_hand(observation):
+            if self.card_confirmation_since is None:
+                self.card_confirmation_since = now
+                self.emit('warning', now, reason='card_batch_waiting',
+                          message='五张普通指令卡尚未完整确认')
+            if now - self.card_confirmation_since < self.options.action_timeout:
+                return None
+            reason = ('card_mismatch' if turn is not None and turn.attack is not None
+                      and turn.attack.mode in {'verify', 'prefer'} else 'fallback_cards_unavailable')
+            self.emit('failed', now, reason=reason, message='五张普通指令卡尚未完整确认')
+            return self.result(RunStatus.STOPPED, reason)
+        self.card_confirmation_since = None
+        use_strategy = self.fallback_mode or turn is None or turn.attack is None or turn.attack.mode == 'strategy'
+        if turn is not None and turn.attack is not None and turn.attack.mode == 'prefer':
             preferred = card_requests(turn)
             use_strategy = len(preferred) != 3 or not complete_card_controls(observation, preferred)
         if use_strategy:
-            if self.card_selection is None:
-                reserved: list[tuple[int | None, Control]] = []
-                if turn is not None:
-                    for position, wanted in scheduled_np_requests(turn):
-                        reserved_control = matching_card_control(observation, wanted, set())
-                        if reserved_control is None:
-                            if self.np_reservation_since is None:
-                                self.np_reservation_since = now
-                                self.emit('warning', now, reason='np_reservation_waiting',
-                                          card_position=position, servant_slot=wanted.servant_slot)
-                            if now - self.np_reservation_since < self.options.action_timeout:
-                                return None
-                            mapped_slots = sorted({item.card.servant_slot for item in observation.controls
-                                                   if item.card is not None and item.card.noble_phantasm})
-                            message = (np_mapping_diagnostic or
-                                       '作业宝具卡未在当前手牌中确认：'
-                                       f'按固定位置只能确认槽位 {mapped_slots}，'
-                                       f'无法唯一确认作业要求的槽位 {wanted.servant_slot}')
-                            self.emit('failed', now, reason='fallback_cards_unavailable',
-                                      card_position=position, servant_slot=wanted.servant_slot,
-                                      message=message)
-                            return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
-                        reserved.append((position, reserved_control))
-                self.np_reservation_since = None
-                self.card_selection = select_cards(observation, self.plan.strategy,
-                                                   self.plan, self.progress.wave, tuple(reserved))
-                for warning in self.card_selection.warnings:
-                    self.emit('warning', now, reason='strategy_servant_slots', message=warning)
-            selection = self.card_selection
+            reserved: list[tuple[int | None, Control]] = []
+            if turn is not None:
+                for position, wanted in scheduled_np_requests(turn):
+                    reserved_control = matching_card_control(observation, wanted, set())
+                    if reserved_control is None:
+                        if self.np_reservation_since is None:
+                            self.np_reservation_since = now
+                            self.emit('warning', now, reason='np_reservation_waiting',
+                                      card_position=position, servant_slot=wanted.servant_slot)
+                        if now - self.np_reservation_since < self.options.action_timeout:
+                            return None
+                        mapped_slots = sorted({item.card.servant_slot for item in observation.controls
+                                               if item.card is not None and item.card.noble_phantasm})
+                        message = (np_mapping_diagnostic or
+                                   '作业宝具卡未在当前手牌中确认：'
+                                   f'按固定位置只能确认槽位 {mapped_slots}，'
+                                   f'无法唯一确认作业要求的槽位 {wanted.servant_slot}')
+                        self.emit('failed', now, reason='fallback_cards_unavailable',
+                                  card_position=position, servant_slot=wanted.servant_slot,
+                                  message=message)
+                        return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
+                    reserved.append((position, reserved_control))
+            self.np_reservation_since = None
+            selection = select_cards(observation, self.plan.strategy,
+                                     self.plan, self.progress.wave, tuple(reserved))
+            for warning in selection.warnings:
+                self.emit('warning', now, reason='strategy_servant_slots', message=warning)
             if selection.diagnostic is not None or len(selection.controls) != 3:
                 self.emit('failed', now, reason='fallback_cards_unavailable',
                           message=selection.diagnostic or '补刀策略未选出三张卡',
                           strategy_source=selection.source)
                 return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
-            wanted_control = selection.controls[self.card_index]
-            control = observation.control(wanted_control.name)
-            reason = 'fallback_cards_unavailable'
-            if control is None or not control.actionable or control.card != wanted_control.card:
-                if self.wait_for_card_confirmation(now):
-                    return None
-                self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
-                          message='已选指令卡在当前画面不可确认')
-                return self.result(RunStatus.STOPPED, reason)
+            controls = selection.controls
         else:
             requests = card_requests(turn)
             if len(requests) != 3:
                 self.emit('failed', now, reason='card_mismatch', message='作业没有提供可执行的三张指令卡')
                 return self.result(RunStatus.STOPPED, 'card_mismatch')
-            reason = ('fallback_required' if turn.attack is not None and turn.attack.mode == 'prefer'
-                      else 'card_mismatch')
-            if self.card_index == 0 and not complete_card_controls(observation, requests):
+            selected = requested_card_controls(observation, requests)
+            missing_np = next((wanted for wanted in requests if wanted.noble_phantasm
+                               and matching_card_control(observation, wanted, set()) is None), None)
+            if selected is None and missing_np is not None:
+                position = requests.index(missing_np) + 1
+                if self.np_reservation_since is None:
+                    self.np_reservation_since = now
+                    self.emit('warning', now, reason='np_reservation_waiting',
+                              card_position=position, servant_slot=missing_np.servant_slot)
+                if now - self.np_reservation_since < self.options.action_timeout:
+                    return None
+                self.emit('failed', now, reason='card_mismatch', card_position=position,
+                          servant_slot=missing_np.servant_slot,
+                          message=np_mapping_diagnostic or '作业宝具卡未在当前手牌中确认')
+                return self.result(RunStatus.STOPPED, 'card_mismatch')
+            if selected is None:
+                reason = 'fallback_required' if turn.attack.mode == 'prefer' else 'card_mismatch'
                 self.emit('failed', now, reason=reason, card_position=1)
                 return self.result(RunStatus.STOPPED, reason)
-            wanted = requests[self.card_index]
-            control = matching_card_control(observation, wanted, set())
-            if control is None:
-                if self.wait_for_card_confirmation(now):
-                    return None
-                self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
-                          servant_slot=wanted.servant_slot, card_type=wanted.card_type,
-                          deck_index=wanted.deck_index, noble_phantasm=wanted.noble_phantasm)
-                return self.result(RunStatus.STOPPED, reason)
-        self.card_confirmation_since = None
-        if not self.tap_stable(observation, control.name, now):
-            return None
-        if self.card_index == 2:
-            self.card_index = 0
-            self.card_selection = None
-            self.awaiting_attack_end = True
-            self.last_attack_skip_at = None
-            self.wait_for_pages(now, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
-            self.pending_stage = 'attack_end'
-        else:
-            self.confirming_card = True
-            self.wait_for_page(BasePage.CARD, now)
+            self.np_reservation_since = None
+            controls = selected
+        self.submit_card_batch(observation, controls, now, recovery=self.card_recovery_used)
         return None
 
     def handle_result(self, observation: Observation, now: float) -> None:
@@ -1033,6 +1083,15 @@ class Runner:
                           message='技能目标未在限定时间内变为可选择')
                 return self.result(RunStatus.STOPPED, 'target_selection_timeout')
 
+            if self.card_recovery_reading and page is not BasePage.CARD:
+                if page not in {BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS}:
+                    self.emit('failed', now, reason='action_confirmation_timeout',
+                              stage='attack_recovery', recovery_attempts=1, actual=page.value)
+                    return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
+                self.card_recovery_reading = False
+                self.wait_for_pages(now, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
+                self.pending_stage = 'attack_end'
+
             if self.pending_pages is not None:
                 if (self.awaiting_attack_end and page is BasePage.BATTLE
                         and Variant.BATTLE_ANIMATION in observation.variants and not observation.overlays
@@ -1042,6 +1101,29 @@ class Runner:
                     x, y = BATTLE_SKIP_POINT
                     self.tap_point(observation, now, '战斗跳过', x, y, 'attack_animation_skip')
                     self.last_attack_skip_at = now
+                    time.sleep(self.options.poll_interval)
+                    continue
+                if (self.awaiting_attack_end and page is BasePage.CARD
+                        and self.pending_since is not None
+                        and now - self.pending_since >= ACTION_RECOVERY_SECONDS
+                        and observation.frame_hash != self.pending_frame_hash):
+                    if self.card_recovery_used:
+                        self.emit('failed', now, reason='action_confirmation_timeout',
+                                  stage=self.pending_stage, recovery_attempts=1,
+                                  wait_ms=(now - self.pending_since) * 1000,
+                                  actual=page.value)
+                        return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
+                    self.card_recovery_used = True
+                    self.card_recovery_reading = True
+                    self.emit('warning', now, reason='action_recovery', control='command_card_batch',
+                              attempt=1, wave=self.progress.wave, turn=self.progress.turn,
+                              action_index=self.progress.action_index)
+                    self.pending_pages = None
+                    self.pending_since = None
+                    self.pending_frame_hash = None
+                    result = self.handle_card(observation, now)
+                    if result is not None:
+                        return result
                     time.sleep(self.options.poll_interval)
                     continue
                 if (self.pending_recovery_control is not None and not self.pending_recovery_used
@@ -1136,6 +1218,8 @@ class Runner:
                     self.pending_overlay = None
                     self.awaiting_attack_end = False
                     self.last_attack_skip_at = None
+                    self.card_recovery_used = False
+                    self.card_recovery_reading = False
                     if self.starting_next_run:
                         self.progress.wave = 1
                         self.progress.turn = 1
@@ -1146,9 +1230,6 @@ class Runner:
                         self.run_settled = False
                         self.starting_next_run = False
                         self.result_seen = False
-                    if self.confirming_card:
-                        self.card_index += 1
-                        self.confirming_card = False
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False

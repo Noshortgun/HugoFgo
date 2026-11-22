@@ -195,8 +195,17 @@ def check_report(report: ReplayReport) -> None:
     action_positions = [index for index, item in enumerate(report.trace)
                         if item['kind'] == 'event' and item['type'] == 'action']
     for position in action_positions:
+        action = report.trace[position]
+        data = action['data']
+        if data.get('reason') == 'command_card_batch' and data.get('card_position') in {1, 2}:
+            following = report.trace[position + 1] if position + 1 < len(report.trace) else None
+            if (following is None or following.get('type') != 'action'
+                    or following['data'].get('batch_id') != data.get('batch_id')
+                    or following['data'].get('card_position') != data['card_position'] + 1):
+                raise ReplayFailure(f'{case.name}: 连击内部出现取帧或动作中断：{action}')
+            continue
         if not any(item['kind'] == 'observation' for item in report.trace[position + 1:]):
-            raise ReplayFailure(f'{case.name}: 动作后没有重新识别：{report.trace[position]}')
+            raise ReplayFailure(f'{case.name}: 动作后没有重新识别：{action}')
 
     if case.evidence:
         if report.result.evidence_dir is None:
@@ -236,9 +245,7 @@ CASES = (
             FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
             FULL_LOOP + '12-battle-start.png',
             FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
-            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-select.png',
             'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
@@ -275,9 +282,7 @@ CASES = (
             FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
             'captures/2026-11-19-ember/key/05-skill.png',
             FULL_LOOP + 'battle-after-cards.png', FULL_LOOP + 'battle-after-cards.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
-            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-select.png',
             'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
@@ -349,9 +354,7 @@ CASES = (
             'captures/2026-11-22/key/battle-status-change-detail.png',
             'captures/2026-11-22/key/battle-status-change-detail.png',
             FULL_LOOP + 'battle-target-enemy2.png', FULL_LOOP + 'battle-target-enemy2.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
-            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-select.png',
             'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
@@ -374,9 +377,7 @@ CASES = (
             FULL_LOOP + 'repeat-dialog.png', FULL_LOOP + 'repeat-dialog.png',
             FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
             FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
-            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-select.png',
             'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
@@ -573,9 +574,7 @@ CASES = (
         name='resume-battle',
         frames=(
             FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
-            FULL_LOOP + 'card-np-selected.png', FULL_LOOP + 'card-np-selected.png',
-            FULL_LOOP + 'card-select.png', FULL_LOOP + 'card-select.png',
+            FULL_LOOP + 'card-select.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
             FULL_LOOP + 'result-exp.png', FULL_LOOP + 'result-exp.png',
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
