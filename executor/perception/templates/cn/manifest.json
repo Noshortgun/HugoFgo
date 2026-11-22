@@ -148,6 +148,28 @@
       ],
       "threshold": 0.6
     },
+    "ap_recovery_confirm": {
+      "file": "ap_recovery_confirm.png",
+      "source": "captures/2026-11-22/key/ap-recovery-confirm-bronze.png",
+      "roi": [
+        470,
+        18,
+        810,
+        114
+      ],
+      "threshold": 0.6
+    },
+    "ap_recovery_confirm_bronze": {
+      "file": "ap_recovery_confirm_bronze.png",
+      "source": "captures/2026-11-22/key/ap-recovery-confirm-bronze.png",
+      "roi": [
+        425,
+        91,
+        625,
+        179
+      ],
+      "threshold": 0.6
+    },
     "loading": {
       "file": "loading.png",
       "source": "captures/2026-11-20/key/12-battle-start.png",

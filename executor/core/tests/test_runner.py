@@ -1480,6 +1480,76 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, len(used))
         self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
 
+    def test_whitelisted_recovery_confirmation_restores_ap_and_counts_once(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True))
+        confirm = Observation(
+            base_page=BasePage.AP_RECOVERY,
+            overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}),
+            controls=(
+                Control('青铜果实', ControlKind.ITEM, (315, 100, 981, 240), True),
+                button('决定', (708, 550, 972, 614)),
+                button('取消', (307, 550, 572, 614)),
+            ),
+        )
+        team = observe(BasePage.TEAM, button('开始任务'))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [recovery, recovery, confirm, confirm, team, team, battle, battle, wrong_cards],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.BRONZE}))))
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        self.assertEqual(['青铜果实', '决定', '开始任务', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        used = [event for event in events.events if event.type == 'recovery_used']
+        self.assertEqual(1, len(used))
+        self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
+
+    def test_empty_whitelist_recovery_confirmation_does_not_tap_decision(self) -> None:
+        confirm = Observation(
+            base_page=BasePage.AP_RECOVERY,
+            overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}),
+            controls=(Control('青铜果实', ControlKind.ITEM, (315, 100, 981, 240), True),
+                      button('决定', (708, 550, 972, 614))),
+        )
+        device, perception = scripted([confirm], [0.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset())))
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual([], device.actions)
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
+
+    def test_recovery_confirmation_item_mismatch_stops_without_decision(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('青铜果实', ControlKind.ITEM, (315, 290, 981, 415), True))
+        confirm = Observation(
+            base_page=BasePage.AP_RECOVERY,
+            overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}),
+            controls=(Control('圣晶石', ControlKind.ITEM, (315, 100, 981, 240), True),
+                      button('决定', (708, 550, 972, 614))),
+        )
+        device, perception = scripted([recovery, recovery, confirm], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(allowed=frozenset({RecoveryItem.BRONZE}))))
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('ap_recovery_confirm_mismatch', result.reason)
+        self.assertEqual(['青铜果实'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'recovery_used' for event in events.events))
+
     def test_default_policy_scrolls_once_to_find_bronze(self) -> None:
         top = observe(BasePage.AP_RECOVERY,
                       Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
