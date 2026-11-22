@@ -79,13 +79,16 @@ class RunEvidence:
 
     def finish(self, result: RunResult) -> RunResult:
         observation_path = None
+        final_path = None
         failure_path = None
         if self.latest is not None:
             frame, observation = self.latest
             observation_path = self.directory / 'observation.json'
             write_json(observation_path, observation_data(observation))
+            suffix = 'png' if frame.format is FrameFormat.PNG else 'bgr24'
+            final_path = self.directory / f'final.{suffix}'
+            final_path.write_bytes(frame.image)
             if result.status.value != 'completed':
-                suffix = 'png' if frame.format is FrameFormat.PNG else 'bgr24'
                 failure_path = self.directory / f'failure.{suffix}'
                 failure_path.write_bytes(frame.image)
         device = {}
@@ -119,6 +122,7 @@ class RunEvidence:
             'started_at': self.started_at,
             'finished_at': time.time(),
             'observation': str(observation_path) if observation_path is not None else None,
+            'final_frame': str(final_path) if final_path is not None else None,
             'failure_frame': str(failure_path) if failure_path is not None else None,
             'recent_events': self.recent_events,
         })

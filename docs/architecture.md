@@ -149,7 +149,8 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | `run_started` | 进程与作业启动信息 |
 | `state_changed` | 感知基页变化 |
 | `wave_started` / `turn_started` | 面或面内回合推进 |
-| `action` | 实际设备动作及坐标、原因、面/回合；战斗动作另含 `wait_ms`、`channel_ms` 与输入完成时间 |
+| `action` | 实际设备动作及坐标、原因、面/回合；战斗动作另含 `wait_ms`、`channel_ms` 与输入完成时间；批量选卡另含批次、卡位、实测间隔与攻击到首卡耗时 |
+| `card_batch_submitted` | 一次三卡提交的批次、恢复次数、卡序和配置间隔；须结合后续确认或恢复事件判断成败 |
 | `action_confirmed` | 动作后画面确认；`stage` 标识等待阶段，`wait_ms` 记录该阶段耗时 |
 | `warning` | 可恢复等待、字段降级等非终端警告；有限动作恢复记录控件与次数 |
 | `recovery_used` | 后续画面确认后的恢复消耗 |
@@ -219,6 +220,7 @@ const state = await invoke('start_run', {
 | `events.jsonl` | 完整事件流 |
 | `result.json` | 状态、原因、进度、作业、设备、起止时间、最后观察与失败帧路径 |
 | `observation.json` | 最后一帧感知结果 |
+| `final.png` / `final.bgr24` | 完成或停止时的最后一帧（可用时） |
 | `failure.png` / `failure.bgr24` | 非完成状态下的最后一帧（可用时） |
 | `fake-actions.json` | 仅假运行的模拟动作记录 |
 

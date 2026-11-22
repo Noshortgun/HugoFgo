@@ -482,10 +482,13 @@ class Runner:
                       item.support.ce_id if item.support else None)
                      for item in observation.controls if item.support is not None)
         if self.support_stage == 'idle':
-            if self.support_refreshes >= 2:
-                self.emit('failed', now, reason='support_not_found', refreshes=self.support_refreshes)
-                return self.result(RunStatus.STOPPED, 'support_not_found')
             if self.support_search_stable(observation, rows, now):
+                if self.support_refreshes >= 2:
+                    if not rows and self.support_search_since is not None \
+                            and now - self.support_search_since < self.options.action_timeout:
+                        return None
+                    self.emit('failed', now, reason='support_not_found', refreshes=self.support_refreshes)
+                    return self.result(RunStatus.STOPPED, 'support_not_found')
                 self.support_swipe(observation, now, down=False)
         elif self.support_stage == 'top':
             if self.support_search_stable(observation, rows, now):
