@@ -18,10 +18,6 @@ const AUTOMATION_PATTERNS = [
     label: 'AutoFGO',
     match: ({ name, base }) => /auto[-_ ]?fgo/i.test(base) || /auto[-_ ]?fgo/i.test(name),
   },
-  {
-    label: '本项目实机脚本 farm_ember.py',
-    match: ({ base, commandLine }) => /^(python|py)/i.test(base) && /farm_ember\b/i.test(commandLine),
-  },
 ];
 
 /** 返回 { ok: true, partial?, matches } 或 { ok: false, error }。 */

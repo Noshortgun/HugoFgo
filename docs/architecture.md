@@ -114,7 +114,7 @@ schemas/        作业 JSON Schema
 captures/       验证素材
 ```
 
-现有 `scripts/farm_ember.py` 与 `cv/` 保留作行为参考，实机验收通过后移除。
+`cv/` 只保留离线分类、模板构建与统一回放等验证工具；实机执行统一由 `executor/` 承担。
 
 ## 6. 测试策略
 
