@@ -685,6 +685,33 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(any(event.type == 'failed' and event.data.get('reason') == 'fallback_cards_unavailable'
                              for event in events.events[:-2]))
 
+    def test_np_reservation_waits_for_transient_effect_to_settle(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+        effect = observe(BasePage.CARD, *normal)
+        settled = observe(
+            BasePage.CARD, *normal,
+            Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B'))
+        observations = [battle, battle, effect, settled, settled, settled, settled, settled, settled,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        times = [0.0, 0.5, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        actions = [event.data for event in events.events if event.type == 'action']
+        self.assertEqual('宝具卡1', actions[1]['control'])
+        self.assertEqual(635, actions[1]['x'])
+        waiting = [event for event in events.events
+                   if event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting']
+        self.assertEqual(1, len(waiting))
+
     def test_ambiguous_np_regions_stop_with_fixed_position_diagnostic(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
@@ -696,7 +723,7 @@ class RunnerTest(unittest.TestCase):
             Control('宝具卡2', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:B'),
         )
         card = observe(BasePage.CARD, *normal, *duplicate_regions)
-        device, perception = scripted([battle, battle, card, card], [0.0, 0.5, 0.6, 1.1])
+        device, perception = scripted([battle, battle, card, card, card], [0.0, 0.5, 0.6, 1.1, 31.1])
         events = MemoryEventSink()
 
         result = run(plan, device, perception, events)
