@@ -986,6 +986,17 @@ def check_executor_safety():
                support_states[0].data['wave'] if support_states else None,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
+    observations = [battle(2, 3), battle(2, 3), *([card] * 6), animation,
+                    battle(3, 4), battle(3, 4), wrong]
+    result, _, events = run_core_scenario(
+        observations, [index * 0.5 for index in range(len(observations))], make_plan(wave_count=3))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击']
+    progress = (result.progress.wave, result.progress.turn)
+    ok = result.reason == 'card_mismatch' and controls == expected and progress == (3, 1)
+    add_report('executor:resume-midbattle-fallback', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; progress={progress}', ok, simulated_ocr=True)
+
     result, _, events = run_core_scenario(
         [drops, repeat, repeat, repeat, support, support], [0.0, 0.1, 0.6, 1.1, 1.2, 1.7],
         make_plan(support_required=True), options=RunOptions(run_count=2, write_evidence=False))

@@ -786,15 +786,16 @@ class Runner:
             valid = (wave is not None and turn is not None and boundary is not None
                      and wave.usable and turn.usable and boundary.usable and boundary.value is True
                      and isinstance(wave.value, int) and isinstance(turn.value, int)
-                     and 1 <= wave.value <= len(self.plan.waves)
-                     and 1 <= turn.value <= len(self.plan.waves[wave.value - 1].turns))
+                     and 1 <= wave.value <= len(self.plan.waves) and turn.value >= 1)
             if not valid:
                 self.emit('failed', now, reason='resume_uncertain', actual=page.value)
                 return observation, self.result(RunStatus.STOPPED, 'resume_uncertain')
+            first_turn = wave.value == 1 and turn.value == 1
             self.progress.wave = wave.value
-            self.progress.turn = turn.value
+            self.progress.turn = 1 if first_turn else len(self.plan.waves[wave.value - 1].turns)
             self.last_observed_turn = turn.value
             self.progress.action_index = 0
+            self.fallback_mode = not first_turn
         elif page not in {BasePage.SUPPORT, BasePage.TEAM, BasePage.RESULT, BasePage.DROPS}:
             self.emit('failed', now, reason='unsupported_start', actual=page.value)
             return observation, self.result(RunStatus.STOPPED, 'unsupported_start')
