@@ -98,16 +98,19 @@ BLOCKING_OVERLAYS: frozenset[Overlay] = frozenset(overlay for overlay in Overlay
 
 OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.SUPPORT_CONFIRM, ('support_confirm',)),
+    OverlayRule(Overlay.SUPPORT_REFRESH_COOLDOWN, ('support_refresh_cooldown',), absent=('support_confirm',)),
     OverlayRule(Overlay.SUPPORT_PARTY_CONFIRM, ('support_party_confirm',)),
     OverlayRule(Overlay.MASTER_EQUIPMENT, ('master_equipment',)),
     OverlayRule(Overlay.FRIEND_REQUEST, ('friend_request',)),
     OverlayRule(Overlay.STORY_SKIP_CONFIRM, ('story_skip_confirm',)),
     OverlayRule(Overlay.RETREAT_CONFIRM, ('retreat_confirm',)),
     OverlayRule(Overlay.REPEAT_DIALOG, ('repeat_dialog',)),
+    OverlayRule(Overlay.AP_RECOVERY_CONFIRM, ('ap_recovery_confirm',)),
     OverlayRule(Overlay.COMMAND_SPELL_CONFIRM, ('command_spell_confirm',)),
     OverlayRule(Overlay.COMMAND_SPELL_TARGET, ('command_spell_target', 'command_spell_use')),
     OverlayRule(Overlay.COMMAND_SPELL_MENU, ('command_spell_repair',)),
     OverlayRule(Overlay.CLASS_INFO, ('class_info',)),
+    OverlayRule(Overlay.BATTLE_STATUS_CHANGE_DETAIL, ('battle_status_change_detail',)),
     OverlayRule(Overlay.BATTLE_MENU, ('battle_menu',), absent=('retreat_confirm',)),
     OverlayRule(Overlay.ORDER_CHANGE, ('order_change',)),
     # 御主技能面板只可能叠在战斗上，同时要求战斗 HUD 在场，避免助战卡片被误判成技能卡。
@@ -119,10 +122,12 @@ OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
     Overlay.SUPPORT_PARTY_CONFIRM: BasePage.SUPPORT,
     Overlay.MASTER_EQUIPMENT: BasePage.TEAM,
     Overlay.FRIEND_REQUEST: BasePage.SUPPORT,
+    Overlay.AP_RECOVERY_CONFIRM: BasePage.AP_RECOVERY,
 }
 
 # 模态覆盖层按优先级从高到低：只输出最高优先级那一层的控件。
 MODAL_OVERLAYS: tuple[Overlay, ...] = (
+    Overlay.AP_RECOVERY_CONFIRM,
     Overlay.REPEAT_DIALOG,
     Overlay.SUPPORT_CONFIRM,
     Overlay.RETREAT_CONFIRM,
@@ -198,7 +203,7 @@ NP_EMBLEM_BOUNDS: tuple[dict, ...] = (
     dict(min_area=2500, min_width=120, max_area=7000, max_width=210,
          min_aspect=1.15, max_aspect=3.0, min_fill=0.0, max_bottom=370, max_center_ratio=1.10),  # Quick 绿环
     dict(min_area=1200, min_width=80, max_area=9000, max_width=260,
-         min_aspect=1.15, max_aspect=2.8, min_fill=0.0, max_bottom=430, max_center_ratio=1.30),  # Arts 蓝星
+         min_aspect=1.15, max_aspect=2.8, min_fill=0.20, max_bottom=430, max_center_ratio=1.30),  # Arts 蓝星
     dict(min_area=1400, min_width=60, max_area=9000, max_width=260,
          min_aspect=1.0, max_aspect=1.5, min_fill=0.22, max_bottom=430, max_center_ratio=1.20,
          high_fill_min=0.40, high_fill_max_ratio=1.30),  # Buster 红
@@ -340,6 +345,9 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('是', ControlKind.BUTTON, (708, 534, 969, 592)),
         ControlSpec('否', ControlKind.BUTTON, (313, 534, 572, 592)),
     ),
+    Overlay.SUPPORT_REFRESH_COOLDOWN: (
+        ControlSpec('关闭', ControlKind.BUTTON, (508, 531, 772, 599)),
+    ),
     # 这两个界面正常流程不会出现，只需要能关掉。
     Overlay.SUPPORT_PARTY_CONFIRM: (
         ControlSpec('关闭', ControlKind.BUTTON, (6, 9, 172, 78)),
@@ -371,6 +379,12 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
                     anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True,
                     follow_anchor=True),
     ),
+    Overlay.AP_RECOVERY_CONFIRM: (
+        ControlSpec('决定', ControlKind.BUTTON, (708, 550, 972, 614)),
+        ControlSpec('取消', ControlKind.BUTTON, (307, 550, 572, 614)),
+        ControlSpec('青铜果实', ControlKind.ITEM, (315, 100, 981, 240),
+                    anchor='ap_recovery_confirm_bronze', hide_when_missing=True),
+    ),
     Overlay.ORDER_CHANGE: (
         ControlSpec('关闭', ControlKind.BUTTON, (1185, 94, 1260, 174)),
         ControlSpec('先发第1位', ControlKind.TARGET, (36, 250, 229, 565)),
@@ -399,6 +413,9 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
     Overlay.CLASS_INFO: (
         ControlSpec('关闭', ControlKind.BUTTON, (348, 532, 607, 590)),
         ControlSpec('职阶星图分值效果', ControlKind.BUTTON, (673, 531, 932, 589)),
+    ),
+    Overlay.BATTLE_STATUS_CHANGE_DETAIL: (
+        ControlSpec('关闭', ControlKind.BUTTON, (990, 640, 1010, 660)),
     ),
     Overlay.BATTLE_MENU: (
         ControlSpec('关闭', ControlKind.BUTTON, (1136, 65, 1219, 153)),

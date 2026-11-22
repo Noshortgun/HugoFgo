@@ -12,6 +12,7 @@ export function createVerificationSteps(pythonCommand) {
   return [
     { name: 'frontend-build', command: npm, args: ['run', 'build'] },
     { name: 'run-state', command: process.execPath, args: [path.join(root, 'scripts/run-state.selftest.mjs')] },
+    { name: 'job-roundtrip', command: process.execPath, args: [path.join(root, 'scripts/job-roundtrip.selftest.mjs')] },
     { name: 'executor-unit', command: pythonCommand,
       args: ['-m', 'unittest', 'discover', '-s', 'executor', '-t', '.', '-v'] },
     { name: 'device-selftest', command: pythonCommand, args: ['-m', 'executor.device', '--self-test'] },

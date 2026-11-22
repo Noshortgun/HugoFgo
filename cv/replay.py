@@ -6,19 +6,20 @@ import json
 import subprocess
 from dataclasses import replace
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from rapidocr_onnxruntime import RapidOCR
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "cv"))
 
-import farm_ember as farm
 from image_io import read_image, write_image
-from state_classifier import load_templates, result_for_image
+from state_classifier import classify, load_templates, result_for_image
 from executor.device.base import Frame
 from executor.device.fake import FakeDevice
 from executor.perception import Perception
@@ -103,7 +104,7 @@ def check_perception():
 
 
 def check_perception_identities():
-    from executor.domain import FormationSlotPlan
+    from executor.domain import FormationSlotPlan, compile_job
 
     temporary = TemporaryDirectory()
     perception = Perception(identity_root=Path(temporary.name))
@@ -144,6 +145,20 @@ def check_perception_identities():
                   for index in range(1, 6)]
         add_report('perception:identity:command-cards', card_path, expected, actual, 'observe',
                    '编队槽位、从者、卡色与助战标记', actual == expected)
+
+        from executor.core.strategy import select_cards
+
+        live_path = ROOT / 'captures/2026-11-22/key/card-select-missing-rank-data.png'
+        live = perception.read(Frame(image=live_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        compiled = compile_job((ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8'))
+        if compiled.plan is None:
+            raise ValueError('实机选卡回放作业无法编译')
+        selection = select_cards(live, compiled.plan.strategy, compiled.plan, 1)
+        expected = (3, ('缺少暴击率，按 0 处理', '缺少克制信息，按中立处理'))
+        actual = (len(selection.controls), selection.warnings)
+        add_report('strategy:live-missing-rank-data', live_path, expected, actual, 'select',
+                   f'{selection.reason}; controls={[control.name for control in selection.controls]}',
+                   actual == expected and selection.diagnostic is None)
 
         old_path = ROOT / 'captures/2026-11-19-ember/key/06-card-select.png'
         perception.bind_formation((
@@ -336,7 +351,7 @@ def check_strategy_balanced_cards():
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
 
-def check_strategy_affinity_and_uncertainty():
+def check_strategy_affinity_and_degraded_data():
     from dataclasses import replace
     from executor.core.strategy import select_cards
     from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
@@ -363,11 +378,12 @@ def check_strategy_affinity_and_uncertainty():
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
     uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, crit_rate=None))
-    uncertain = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
-                             strategy, plan, 1)
-    add_report('strategy:uncertain-card-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
-               'diagnostic', uncertain.diagnostic or 'selected', 'stop', uncertain.reason,
-               not uncertain.controls and uncertain.diagnostic is not None, simulated_ocr=True)
+    degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
+                            strategy, plan, 1)
+    actual = [control.name for control in degraded.controls]
+    add_report('strategy:missing-crit-degrades', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
+               actual == expected and degraded.warnings == ('缺少暴击率，按 0 处理',), simulated_ocr=True)
 
 
 def check_strategy_np_and_short_hand():
@@ -496,21 +512,66 @@ def check_strategy_executor():
         return Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
                        card=CommandCardIdentity(slot, card_type, crit_rate=10, affinity='neutral'))
 
-    np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
-                      card=CommandCardIdentity(0, 'buster', noble_phantasm=True,
-                                               crit_rate=0, affinity='neutral'))
+    np_cards = (
+        Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'),
+        Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B'),
+    )
     cards = Observation(base_page=BasePage.CARD, controls=(
-        np_card, *(command(index, (index - 1) % 3) for index in range(1, 6))))
+        *np_cards, *(command(index, (index - 1) % 3) for index in range(1, 6))))
     unknown = Observation(base_page=BasePage.UNKNOWN)
-    plan = make_plan(TurnPlan(np_positions={0: 'auto'}))
+    plan = make_plan(TurnPlan(np_positions={1: 'auto'}))
     result, device, events = run_core_scenario(
         [battle(), battle(), cards, cards, cards, cards, cards, cards, unknown, unknown],
         [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['攻击', '宝具卡A', '卡1', '卡2']
+    expected = ['攻击', '宝具卡2', '卡1', '卡2']
     add_report('strategy:executor-np-auto', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, controls, 'tap', f'reason={result.reason}',
                result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
+
+    isolated_middle = Observation(base_page=BasePage.CARD, controls=(
+        Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:A'),
+        *(command(index, (index - 1) % 3) for index in range(1, 6))))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), isolated_middle, isolated_middle, isolated_middle, isolated_middle,
+         isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    add_report('strategy:executor-np-fixed-middle', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
+
+    effect_only = Observation(base_page=BasePage.CARD, controls=tuple(
+        command(index, (index - 1) % 3) for index in range(1, 6)))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), effect_only, isolated_middle, isolated_middle, isolated_middle,
+         isolated_middle, isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    waited = any(event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting'
+                 for event in events.events)
+    add_report('strategy:executor-np-waits-for-settled-frame',
+               ROOT / 'captures/2026-11-22/key/card-np-charge-light-effect.png',
+               expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
+               result.reason == 'unknown_timeout' and waited and controls == expected, simulated_ocr=True)
+
+    obscured = Observation(base_page=BasePage.CARD, controls=(
+        *(replace(item, card=None) for item in effect_only.controls), isolated_middle.controls[0]))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), isolated_middle, isolated_middle, obscured,
+         isolated_middle, isolated_middle, isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    waited = any(event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting'
+                 for event in events.events)
+    add_report('strategy:executor-card-confirmation-waits',
+               ROOT / 'captures/2026-11-20/key/card-np-selected.png',
+               expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
+               result.reason == 'unknown_timeout' and waited and controls == expected
+               and controls.count('宝具卡1') == 1, simulated_ocr=True)
 
     next_battle = battle(turn=2)
     animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
@@ -532,6 +593,26 @@ def check_strategy_executor():
                result.reason == 'unknown_timeout' and result.progress.turn == 2 and controls == expected,
                simulated_ocr=True)
 
+    forward_plan = make_plan(planned)
+    first_wave = forward_plan.waves[0]
+    forward_plan = replace(forward_plan, waves=(
+        first_wave, WavePlan(number=2, target=1, turns=first_wave.turns)))
+    forward_battle = battle(wave=2, turn=2)
+    result, _, events = run_core_scenario(
+        [battle(), battle(), normal_cards, normal_cards, normal_cards, normal_cards,
+         normal_cards, normal_cards, animation, forward_battle, forward_battle,
+         normal_cards, normal_cards, normal_cards, normal_cards, normal_cards, normal_cards,
+         unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0,
+         3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9], forward_plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
+    progress = (result.progress.wave, result.progress.turn)
+    add_report('strategy:executor-forward-wave-planned-turn', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}; progress={progress}',
+               result.reason == 'unknown_timeout' and progress == (2, 1) and controls == expected,
+               simulated_ocr=True)
+
     short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))
     result, device, events = run_core_scenario(
         [battle(), battle(), short], [0.0, 0.5, 0.6],
@@ -548,7 +629,8 @@ def check_executor_self_target():
     from executor.core import RunOptions, run
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
-    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Field, FieldStatus, Observation, Variant
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field, FieldStatus,
+                                     Observation, Overlay, Variant)
     from executor.session import MemoryEventSink
 
     fields = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
@@ -589,6 +671,37 @@ def check_executor_self_target():
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
     add_report('executor:self-target-direct-animation', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; progress={result.progress}', ok, simulated_ocr=True)
+
+    master = ActionPlan(kind='master', title='御主二技能', detail='', icon='',
+                        skill=1, player_target_slot=1)
+    turn = replace(turn, actions=(master,))
+    plan = replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
+    master_battle = replace(battle, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+        Control('御主技能', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+    ))
+    menu = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
+        Control(f'御主技能{index}', ControlKind.BUTTON, (850 + index * 90, 275, 920 + index * 90, 352), True)
+        for index in range(1, 4)))
+    target = Observation(
+        base_page=BasePage.BATTLE, variants=frozenset({Variant.SKILL_TARGET}),
+        overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
+            Control(f'目标从者{index}', ControlKind.TARGET, (index * 300, 269, index * 300 + 200, 499), True)
+            for index in range(1, 4)))
+    observations = [master_battle, master_battle, menu, menu, target, target,
+                    animation, master_battle, master_battle, wrong]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.0, 2.5, 2.6]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['御主技能', '御主技能2', '目标从者2', '攻击']
+    ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
+    add_report('executor:master-target-with-overlay', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
 
 def check_executor_repeat_support():
@@ -641,6 +754,21 @@ def check_executor_repeat_support():
     add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
+    observations = [repeat, repeat, support, support, battle, battle, wrong, battle]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 31.2]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events,
+                     options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['连续出击', '助战卡片第1行', '攻击']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:repeat-support-skips-team', SUPPORT_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
 
 def check_executor_recovery():
     from executor.core import RunOptions
@@ -664,6 +792,22 @@ def check_executor_recovery():
     ok = len(device.actions) == 2 and used == expected and result.progress.recovery_used == {'bronze': 2}
     add_report('executor:recovery-whitelist-and-counts', AP_RECOVERY_IMAGE, expected, used,
                'tap', f'taps={device.actions}; reason={result.reason}', ok, simulated_ocr=True)
+
+    confirm = Observation(base_page=BasePage.AP_RECOVERY,
+                          overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}), controls=(
+        Control('青铜果实', ControlKind.ITEM, (315, 100, 981, 240), True),
+        Control('决定', ControlKind.BUTTON, (708, 550, 972, 614), True),
+        Control('取消', ControlKind.BUTTON, (307, 550, 572, 614), True),
+    ))
+    result, _, events = run_core_scenario(
+        [bronze, bronze, confirm, confirm, team], [0.0, 0.5, 0.6, 1.1, 1.2], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = ['青铜果实', '决定']
+    ok = controls == expected and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-confirmation-bronze',
+               ROOT / 'captures/2026-11-22/key/ap-recovery-confirm-bronze.png',
+               expected, controls, 'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
 
     top = Observation(base_page=BasePage.AP_RECOVERY, controls=(
         Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
@@ -831,7 +975,7 @@ def check_executor_safety():
     drops = Observation(base_page=BasePage.DROPS, controls=(
         Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
     observations = [battle(), battle(), card, card, card, card, card, card, animation,
-                    battle(2), battle(2), card, card, card, card, card, card, animation,
+                    battle(2, 2), battle(2, 2), card, card, card, card, card, card, animation,
                     result_page, result_page, drops, drops, repeat, repeat, support, support]
     result, _, events = run_core_scenario(
         observations, [index * 0.5 for index in range(len(observations))],
@@ -842,6 +986,18 @@ def check_executor_safety():
     add_report('executor:repeat-progress-resets-after-next-page', SUPPORT_IMAGE, 2,
                support_states[0].data['wave'] if support_states else None,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    resumed = battle(2, 3).with_fields({'turn': Field(FieldStatus.UNCERTAIN, None)})
+    observations = [resumed, resumed, *([card] * 6), animation,
+                    battle(3, 4), battle(3, 4), wrong]
+    result, _, events = run_core_scenario(
+        observations, [index * 0.5 for index in range(len(observations))], make_plan(wave_count=3))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击']
+    progress = (result.progress.wave, result.progress.turn)
+    ok = result.reason == 'card_mismatch' and controls == expected and progress == (3, 1)
+    add_report('executor:resume-midbattle-fallback', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; progress={progress}', ok, simulated_ocr=True)
 
     result, _, events = run_core_scenario(
         [drops, repeat, repeat, repeat, support, support], [0.0, 0.1, 0.6, 1.1, 1.2, 1.7],
@@ -859,17 +1015,328 @@ def check_executor_safety():
     add_report('executor:repeat-on-support-stops', SUPPORT_IMAGE, 'unexpected_overlay', result.reason,
                'stop', f'taps={device.actions}', ok, simulated_ocr=True)
 
+    wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+    wrong_support = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
+    ))
+    cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
+                           controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
+    result, device, events = run_core_scenario(
+        [wrong_support, wrong_support, wrong_support, wrong_support, wrong_support, wrong_support,
+         cooldown, cooldown, wrong_support, support, support, Observation(base_page=BasePage.UNKNOWN),
+         Observation(base_page=BasePage.UNKNOWN)],
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0],
+        make_plan(support_required=True))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
+    add_report('executor:support-refresh-cooldown', ROOT / 'captures/2026-11-22/key/support-refresh-cooldown.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               controls == expected and (device.actions[3]['x'], device.actions[3]['y']) == (640, 565),
+               simulated_ocr=True)
+
+    target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+    target_battle = replace(battle(), controls=(*battle().controls, *(
+        Control(f'敌方{index}', ControlKind.ENEMY, (index * 250, 20, index * 250 + 200, 100), True)
+        for index in range(1, 4))))
+    detail = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.BATTLE_STATUS_CHANGE_DETAIL}),
+                         controls=(Control('关闭', ControlKind.BUTTON, (990, 640, 1010, 660), True),))
+    result, device, events = run_core_scenario(
+        [target_battle, target_battle, detail, detail, target_battle, target_battle, wrong],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8], make_plan((target,)))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['敌方2', '关闭', '攻击']
+    add_report('executor:battle-status-change-detail', ROOT / 'captures/2026-11-22/key/battle-status-change-detail.png',
+               expected, controls, 'tap', f'reason={result.reason}',
+               controls == expected and (device.actions[1]['x'], device.actions[1]['y']) == (1000, 650),
+               simulated_ocr=True)
+
+    plan = make_plan((target,))
+    plan = replace(plan, waves=(replace(plan.waves[0], target=2),))
+    result, _, events = run_core_scenario(
+        [target_battle, target_battle, target_battle, target_battle, wrong],
+        [0.0, 0.5, 0.6, 1.1, 1.2], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['敌方2', '攻击']
+    add_report('executor:wave-target-explicit-only', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}', result.reason == 'card_mismatch' and controls == expected,
+               simulated_ocr=True)
+
+
+# 旧原型的纯流程仅作为回归参照保留；所有设备输入都由用例 mock。
+legacy = sys.modules[__name__]
+state_templates = load_templates()
+_ocr_engine = None
+
+
+class FarmError(RuntimeError):
+    pass
+
+
+def tap(x, y, reason=''):
+    raise AssertionError('旧原型回放的设备输入必须 mock')
+
+
+def swipe(x1, y1, x2, y2, ms=350):
+    raise AssertionError('旧原型回放的设备输入必须 mock')
+
+
+def shot(name='legacy.png'):
+    raise AssertionError('旧原型回放的设备截图必须 mock')
+
+
+def trace(message):
+    print(message, flush=True)
+
+
+def ocr(image):
+    global _ocr_engine
+    if _ocr_engine is None:
+        _ocr_engine = RapidOCR()
+    result, _ = _ocr_engine(image)
+    rows = []
+    for box, text, score in result or []:
+        if score < 0.5:
+            continue
+        xs = [point[0] for point in box]
+        ys = [point[1] for point in box]
+        rows.append((text.strip(), sum(xs) / 4, sum(ys) / 4))
+    return rows
+
+
+def has(rows, needle):
+    return any(needle in text for text, _, _ in rows)
+
+
+def find(rows, needle):
+    for row in rows:
+        if needle in row[0]:
+            return row
+    return None
+
+
+def click_row(rows, needle, reason='', fallback=None):
+    hit = find(rows, needle)
+    if hit:
+        _, x, y = hit
+        tap(x, y, reason or needle)
+        return True
+    if fallback:
+        tap(fallback[0], fallback[1], f'{reason or needle}（固定坐标回退）')
+        return True
+    return False
+
+
+def wait_state(pred, timeout=20):
+    end = time.time() + timeout
+    while time.time() < end:
+        rows = ocr(shot())
+        result = pred(rows)
+        if result:
+            return result
+        time.sleep(0.8)
+    return None
+
+
+SKILL_X = [[95, 180, 265], [435, 525, 615], [710, 795, 880]]
+ALLY_X = [400, 640, 880]
+ENEMY_X = [180, 480, 780]
+MASTER_SKILL_X = [910, 1000, 1090]
+JOB = json.loads((ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8'))
+
+
+def is_attack_button(rows):
+    return any('攻击' in text and x > 1000 and y > 500 for text, x, y in rows)
+
+
+def command_cards(rows):
+    cards = []
+    for label in ('力击', '迅击', '技击'):
+        for text, x, y in rows:
+            if label in text and 450 < y < 650:
+                cards.append((x, label))
+    return sorted(cards)
+
+
+def select_ally_target(action):
+    target = action.get('playerTargetSlot')
+    if target is None or action.get('detail') == '目标：自身':
+        return
+    rows = wait_state(lambda current: current if has(current, '请选择对象') else None, 6)
+    if not rows:
+        raise FarmError(f"{action['title']} 未出现对象选择框")
+    tap(ALLY_X[target], 350, f"{action['title']} 目标：从者{target + 1}")
+    time.sleep(1.5)
+
+
+def run_wave_actions(wave):
+    if not 1 <= wave <= len(JOB['waves']):
+        raise FarmError(f'作业没有第 {wave} 面配置')
+    actions = JOB['waves'][wave - 1]['turns'][0]['actions']
+    for action in actions:
+        if action['kind'] == 'target':
+            target = action['toTarget']
+            tap(ENEMY_X[target - 1], 120, f'切换目标：敌方{target}')
+            time.sleep(0.5)
+        elif action['kind'] == 'skill':
+            member = action['memberSlot']
+            skill = action['skill']
+            tap(SKILL_X[member][skill], 575, action['title'])
+            time.sleep(0.8)
+            select_ally_target(action)
+            time.sleep(1.2)
+        elif action['kind'] == 'master':
+            tap(1195, 310, '打开御主技能')
+            time.sleep(0.8)
+            tap(MASTER_SKILL_X[action['skill']], 300, action['title'])
+            time.sleep(0.8)
+            select_ally_target(action)
+            time.sleep(1.2)
+
+
+def support_state(rows):
+    if has(rows, '从者详情'):
+        return 'detail'
+    if has(rows, '好友申请') or has(rows, '发送好友申请'):
+        return 'friend'
+    if has(rows, '连续进行同一关卡'):
+        return 'repeat'
+    if has(rows, '助战编队确认') and has(rows, '冠位编队'):
+        return 'grand'
+    if has(rows, '队伍确认') or has(rows, '开始任务'):
+        return 'team'
+    if has(rows, '加载中') or has(rows, '小贴士'):
+        return 'loading'
+    return 'unknown'
+
+
+def wait_support_state(timeout=12):
+    outcome = wait_state(lambda rows: (support_state(rows), rows) if support_state(rows) != 'unknown' else None, timeout)
+    return outcome or ('unknown', [])
+
+
+def select_support(servant='娄希', search_only=False):
+    delay_scale = 0.45 if search_only else 1.0
+    initial_rows = ocr(shot('support-entry.png'))
+    if not has(initial_rows, '助战选择'):
+        raise FarmError('当前不在助战选择页，已停止')
+    tap(560, 125, '切换娄希的狂战士职阶页')
+    time.sleep(1.2 * delay_scale)
+    for refresh_index in range(3):
+        for _ in range(8):
+            swipe(640, 260, 640, 620, 200)
+            time.sleep(0.15 * delay_scale)
+        for _ in range(8):
+            time.sleep(0.7 * delay_scale)
+            rows = ocr(shot('support.png'))
+            if not has(rows, '助战选择'):
+                raise FarmError('搜索过程中离开了助战选择页，已停止')
+            hit = find(rows, servant)
+            if hit:
+                if search_only:
+                    trace(f'找到测试助战：{servant}；未点击条目')
+                    return True
+                tap(600, hit[2], f'选择{servant}助战条目（普通或冠位）')
+                handled = set()
+                started = time.time()
+                last_state = 'unknown'
+                while time.time() - started < 30:
+                    state, rows = wait_support_state()
+                    last_state = state
+                    if state in ('team', 'loading'):
+                        return True
+                    if state == 'unknown':
+                        return False
+                    if state == 'detail':
+                        raise FarmError('误入了从者详情，请重新选择助战')
+                    if state == 'grand':
+                        raise FarmError('普通助战流程误入冠位编队页，未选择任何冠位卡面')
+                    if state in handled:
+                        time.sleep(0.8)
+                        continue
+                    handled.add(state)
+                    if state == 'friend':
+                        if not click_row(rows, '结束', '结束好友申请', (330, 618)):
+                            raise FarmError('好友申请弹窗未找到结束按钮')
+                    elif state == 'repeat':
+                        if not click_row(rows, '连续出击', '连续出击', (870, 577)):
+                            raise FarmError('连续出击弹窗未找到按钮')
+                raise FarmError(f'助战流程未离开状态：{last_state}')
+            swipe(640, 550, 640, 260, 450)
+        if refresh_index < 2:
+            rows = ocr(shot('support-bottom.png'))
+            update_area = [row for row in rows if row[1] > 850 and row[2] < 170]
+            if not click_row(update_area, '列表更新', '列表已到底，更新助战列表', (930, 125)):
+                raise FarmError('助战列表到底，但没有找到列表更新按钮')
+            confirm_rows = wait_state(
+                lambda current: current if has(current, '列表更新') and has(current, '是否确认执行') else None,
+                5,
+            )
+            if not confirm_rows:
+                raise FarmError('列表更新后没有出现确认弹窗')
+            confirm_area = [row for row in confirm_rows if row[0] == '是' and row[1] > 640 and row[2] > 450]
+            if not click_row(confirm_area, '是', '确认更新助战列表', (840, 565)):
+                raise FarmError('列表更新确认弹窗未找到是按钮')
+            if not wait_state(lambda current: current if has(current, '助战选择') else None, 8):
+                raise FarmError('确认更新后没有返回助战选择页')
+            time.sleep(1.0 * delay_scale)
+    return False
+
+
+def result_action(rows):
+    if has(rows, '行动力回复') or has(rows, '消耗道具回复行动力'):
+        return 'recovery'
+    if has(rows, '连续进行同一关卡'):
+        return 'repeat'
+    if has(rows, '助战选择'):
+        return 'support'
+    if has(rows, '下一步') or has(rows, '战利品'):
+        return 'next'
+    if has(rows, '战斗结果') or has(rows, '与从者的牵绊'):
+        return 'result'
+    return 'wait'
+
+
+def finish_results(allow_repeat=True):
+    started = time.time()
+    while time.time() - started < 35:
+        rows = ocr(shot('result.png'))
+        action = result_action(rows)
+        if action == 'recovery':
+            raise FarmError('行动力不足；未使用苹果或圣晶石')
+        if action == 'repeat':
+            if not allow_repeat:
+                trace('最后一次战斗已完成；不点击连续出击')
+                return True
+            if not click_row(rows, '连续出击', '连续出击', (870, 577)):
+                raise FarmError('连续出击弹窗未找到按钮')
+            time.sleep(2.0)
+            continue
+        if action == 'support':
+            return True
+        if action == 'next':
+            if not click_row(rows, '下一步', '结算下一步', (1130, 660)):
+                raise FarmError('战利品页未找到下一步按钮')
+            time.sleep(1.4)
+            continue
+        if action == 'result':
+            tap(640, 360, '战斗结果')
+            time.sleep(1.2)
+            continue
+        time.sleep(0.8)
+    return has(ocr(shot()), '助战选择')
+
 
 def check_result_action(name, rows, expected_action, expected_tap=None):
     taps, tap = recorder()
-    with mock.patch.object(farm, "tap", tap):
-        actual_action = farm.result_action(rows)
+    with mock.patch.object(legacy, "tap", tap):
+        actual_action = legacy.result_action(rows)
         if actual_action == "next":
-            farm.click_row(rows, "下一步", "结算下一步", (1130, 660))
+            legacy.click_row(rows, "下一步", "结算下一步", (1130, 660))
         elif actual_action == "repeat":
-            farm.click_row(rows, "连续出击", "连续出击", (870, 577))
+            legacy.click_row(rows, "连续出击", "连续出击", (870, 577))
         elif actual_action == "result":
-            farm.tap(640, 360, "战斗结果")
+            legacy.tap(640, 360, "战斗结果")
     ok = actual_action == expected_action
     if expected_tap is not None:
         ok = ok and len(taps) == 1 and (taps[0]["x"], taps[0]["y"]) == expected_tap
@@ -886,15 +1353,15 @@ def check_support_sequence(name, following_rows, expected, expected_reasons, exp
     actual = None
     error = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", side_effect=sequences),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm, "swipe") as swipe,
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", side_effect=sequences),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy, "swipe") as swipe,
+        mock.patch.object(legacy.time, "sleep"),
     ):
         try:
-            actual = farm.select_support()
-        except farm.FarmError as exc:
+            actual = legacy.select_support()
+        except legacy.FarmError as exc:
             error = str(exc)
     reasons = [item["reason"] for item in taps]
     top_scrolls = [call.args for call in swipe.call_args_list]
@@ -914,13 +1381,13 @@ def check_support_refresh():
     sequences = [no_match] * 10 + [confirm, SUPPORT_ROWS, SUPPORT_ROWS, team]
     actual = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", side_effect=sequences),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm, "swipe"),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", side_effect=sequences),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy, "swipe"),
+        mock.patch.object(legacy.time, "sleep"),
     ):
-        actual = farm.select_support()
+        actual = legacy.select_support()
     reasons = [item["reason"] for item in taps]
     expected = ["切换娄希的狂战士职阶页", "列表已到底，更新助战列表（固定坐标回退）",
                 "确认更新助战列表", "选择娄希助战条目（普通或冠位）"]
@@ -936,14 +1403,14 @@ def check_finish_safety(name, image_path, rows, allow_repeat, expected, expected
     actual = None
     error = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", return_value=rows),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", return_value=rows),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy.time, "sleep"),
     ):
         try:
-            actual = farm.finish_results(allow_repeat=allow_repeat)
-        except farm.FarmError as exc:
+            actual = legacy.finish_results(allow_repeat=allow_repeat)
+        except legacy.FarmError as exc:
             error = str(exc)
     ok = not taps and ((error == expected_error) if expected_error else actual == expected)
     add_report(name, image_path, expected_error or expected, error or actual,
@@ -954,12 +1421,12 @@ def check_job_actions(wave, expected_points):
     taps, tap = recorder()
     image = read_image(ROOT / "captures/2026-11-19-ember/key/04-battle-wave1.png")
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", return_value=[("请选择对象", 640, 190)]),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", return_value=[("请选择对象", 640, 190)]),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy.time, "sleep"),
     ):
-        farm.run_wave_actions(wave)
+        legacy.run_wave_actions(wave)
     points = [(item["x"], item["y"]) for item in taps]
     add_report(f"action:job-wave-{wave}", ROOT / "jobs/娄希、娄希、奥伯龙.json", expected_points,
                points, "tap", f"taps={taps}", points == expected_points, simulated_ocr=True)
@@ -968,10 +1435,10 @@ def check_job_actions(wave, expected_points):
 def check_team_start():
     taps, tap = recorder()
     rows = [("队伍确认", 120, 45), ("开始任务", 1190, 655)]
-    with mock.patch.object(farm, "tap", tap):
-        allowed = farm.has(rows, "队伍确认") or farm.has(rows, "开始任务")
+    with mock.patch.object(legacy, "tap", tap):
+        allowed = legacy.has(rows, "队伍确认") or legacy.has(rows, "开始任务")
         if allowed:
-            farm.click_row(rows, "开始任务", "开始任务", (1190, 655))
+            legacy.click_row(rows, "开始任务", "开始任务", (1190, 655))
     ok = allowed and len(taps) == 1 and (taps[0]["x"], taps[0]["y"]) == (1190, 655)
     add_report("action:team-confirm", TEAM_IMAGE, "start", "start" if allowed else "wait",
                "tap" if taps else "wait", f"taps={taps}", ok, simulated_ocr=True)
@@ -979,10 +1446,10 @@ def check_team_start():
 
 def check_ocr_action(name, path, expected):
     image = read_image(path)
-    rows = farm.ocr(image)
-    state = farm.classify(image, farm.state_templates)["state"]
-    cards = farm.command_cards(rows) if state == "card" else []
-    attack = farm.is_attack_button(rows) if state == "battle" else False
+    rows = legacy.ocr(image)
+    state = legacy.classify(image, legacy.state_templates)["state"]
+    cards = legacy.command_cards(rows) if state == "card" else []
+    attack = legacy.is_attack_button(rows) if state == "battle" else False
     action = "cards" if cards else "attack" if attack else "wait"
     add_report(name, path, expected, action, "observe", f"ocr={rows}", action == expected)
 
@@ -997,7 +1464,7 @@ def run(output: Path, name_filter: str | None = None):
     check_strategy_color_priority()
     check_strategy_crit_priority()
     check_strategy_balanced_cards()
-    check_strategy_affinity_and_uncertainty()
+    check_strategy_affinity_and_degraded_data()
     check_strategy_np_and_short_hand()
     check_strategy_scope_slots_and_region()
     check_strategy_executor()

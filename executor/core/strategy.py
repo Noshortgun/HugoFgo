@@ -32,26 +32,31 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
         return _empty('当前画面不是指令卡选择页', source)
 
     reserved_names = {control.name for _, control in reserved}
+    known_slots = {member.slot for member in plan.formation}
+    affinity_ranks = {'resist': 0, 'disadvantage': 0, '抵抗': 0,
+                      'neutral': 1, 'advantage': 2, '克制': 2}
     candidates = [control for control in observation.controls
                   if control.name not in reserved_names
                   and control.kind is ControlKind.CARD and control.actionable
-                  and (((control.card is None or not control.card.noble_phantasm)
-                        and 450 < control.center[1] < 650)
-                       or (effective.allow_np and control.card is not None
-                           and control.card.noble_phantasm and control.center[1] < 450))]
+                  and control.card is not None and control.card.servant_slot in known_slots
+                  and control.card.card_type in {'buster', 'arts', 'quick'}
+                  and ((not control.card.noble_phantasm and 450 < control.center[1] < 650)
+                       or (effective.allow_np and control.card.noble_phantasm and control.center[1] < 450))]
     if not candidates and not reserved:
         return _empty('没有识别到可用指令卡', source)
     needed = 3 - len(reserved)
     if needed < 0 or len(candidates) < needed:
         return _empty('可用指令卡不足三张', source)
-    known_slots = {member.slot for member in plan.formation}
-    affinity_ranks = {'resist': 0, 'disadvantage': 0, '抵抗': 0,
-                      'neutral': 1, 'advantage': 2, '克制': 2}
     if any(control.card is None or control.card.servant_slot not in known_slots
-           or control.card.card_type not in {'buster', 'arts', 'quick'}
-           or control.card.crit_rate is None or control.card.affinity not in affinity_ranks
-           for control in (*candidates, *(control for _, control in reserved))):
-        return _empty('指令卡身份、暴击率或克制信息不确定', source, tuple(warnings))
+           or (not control.card.noble_phantasm and control.card.card_type not in {'buster', 'arts', 'quick'})
+           for _, control in reserved):
+        return _empty('指令卡身份不确定', source, tuple(warnings))
+
+    ranked = (*candidates, *(control for _, control in reserved))
+    if any(control.card.crit_rate is None for control in ranked):
+        warnings.append('缺少暴击率，按 0 处理')
+    if any(control.card.affinity not in affinity_ranks for control in ranked):
+        warnings.append('缺少克制信息，按中立处理')
 
     ranks: dict[int, int] = {}
     used: set[int] = set()
@@ -91,7 +96,8 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
                                             for card in cards))))
             elif criterion == 'crit':
                 values.append(tuple(sorted((-(card.crit_rate or 0) for card in cards))))
-        values.append(tuple(sorted((-affinity_ranks[card.affinity] for card in cards))))
+        values.append(tuple(sorted((-affinity_ranks.get(card.affinity, affinity_ranks['neutral'])
+                                    for card in cards))))
         return (*values, tuple(index for index, _ in indexed))
 
     chosen_indexed = min(combinations(enumerate(candidates), needed), key=key)
