@@ -246,6 +246,15 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual([], [item.name for item in observation.controls
                               if item.name.startswith('宝具卡')])
 
+    def test_ap_recovery_confirmation_exposes_item_and_decision(self) -> None:
+        observation = self.read('captures/2026-11-22/key/ap-recovery-confirm-bronze.png')
+
+        self.assertEqual('ap_recovery', observation.base_page.value)
+        self.assertIn('ap_recovery_confirm', {item.value for item in observation.overlays})
+        self.assertTrue(observation.control('决定').actionable)
+        self.assertTrue(observation.control('取消').actionable)
+        self.assertEqual('item', observation.control('青铜果实').kind.value)
+
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
         ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')

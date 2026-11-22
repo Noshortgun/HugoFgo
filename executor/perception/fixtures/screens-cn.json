@@ -1170,6 +1170,21 @@
         "宝具卡1"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-22/key/ap-recovery-confirm-bronze.png",
+      "base": "ap_recovery",
+      "variants": [],
+      "overlays": [
+        "ap_recovery_confirm"
+      ],
+      "actionable": true,
+      "actionableControls": [
+        "青铜果实",
+        "决定",
+        "取消"
+      ],
+      "basis": "annotated"
     }
   ]
 }

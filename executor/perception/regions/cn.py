@@ -105,6 +105,7 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.STORY_SKIP_CONFIRM, ('story_skip_confirm',)),
     OverlayRule(Overlay.RETREAT_CONFIRM, ('retreat_confirm',)),
     OverlayRule(Overlay.REPEAT_DIALOG, ('repeat_dialog',)),
+    OverlayRule(Overlay.AP_RECOVERY_CONFIRM, ('ap_recovery_confirm',)),
     OverlayRule(Overlay.COMMAND_SPELL_CONFIRM, ('command_spell_confirm',)),
     OverlayRule(Overlay.COMMAND_SPELL_TARGET, ('command_spell_target', 'command_spell_use')),
     OverlayRule(Overlay.COMMAND_SPELL_MENU, ('command_spell_repair',)),
@@ -121,10 +122,12 @@ OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
     Overlay.SUPPORT_PARTY_CONFIRM: BasePage.SUPPORT,
     Overlay.MASTER_EQUIPMENT: BasePage.TEAM,
     Overlay.FRIEND_REQUEST: BasePage.SUPPORT,
+    Overlay.AP_RECOVERY_CONFIRM: BasePage.AP_RECOVERY,
 }
 
 # 模态覆盖层按优先级从高到低：只输出最高优先级那一层的控件。
 MODAL_OVERLAYS: tuple[Overlay, ...] = (
+    Overlay.AP_RECOVERY_CONFIRM,
     Overlay.REPEAT_DIALOG,
     Overlay.SUPPORT_CONFIRM,
     Overlay.RETREAT_CONFIRM,
@@ -375,6 +378,12 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518),
                     anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True,
                     follow_anchor=True),
+    ),
+    Overlay.AP_RECOVERY_CONFIRM: (
+        ControlSpec('决定', ControlKind.BUTTON, (708, 550, 972, 614)),
+        ControlSpec('取消', ControlKind.BUTTON, (307, 550, 572, 614)),
+        ControlSpec('青铜果实', ControlKind.ITEM, (315, 100, 981, 240),
+                    anchor='ap_recovery_confirm_bronze', hide_when_missing=True),
     ),
     Overlay.ORDER_CHANGE: (
         ControlSpec('关闭', ControlKind.BUTTON, (1185, 94, 1260, 174)),

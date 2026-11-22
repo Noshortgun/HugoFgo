@@ -792,6 +792,22 @@ def check_executor_recovery():
     add_report('executor:recovery-whitelist-and-counts', AP_RECOVERY_IMAGE, expected, used,
                'tap', f'taps={device.actions}; reason={result.reason}', ok, simulated_ocr=True)
 
+    confirm = Observation(base_page=BasePage.AP_RECOVERY,
+                          overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}), controls=(
+        Control('青铜果实', ControlKind.ITEM, (315, 100, 981, 240), True),
+        Control('决定', ControlKind.BUTTON, (708, 550, 972, 614), True),
+        Control('取消', ControlKind.BUTTON, (307, 550, 572, 614), True),
+    ))
+    result, _, events = run_core_scenario(
+        [bronze, bronze, confirm, confirm, team], [0.0, 0.5, 0.6, 1.1, 1.2], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    used = [dict(event.data) for event in events.events if event.type == 'recovery_used']
+    expected = ['青铜果实', '决定']
+    ok = controls == expected and used == [{'item': 'bronze', 'count': 1}]
+    add_report('executor:recovery-confirmation-bronze',
+               ROOT / 'captures/2026-11-22/key/ap-recovery-confirm-bronze.png',
+               expected, controls, 'tap', f'recovery={used}; reason={result.reason}', ok, simulated_ocr=True)
+
     top = Observation(base_page=BasePage.AP_RECOVERY, controls=(
         Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True),
         Control('黄金果实', ControlKind.ITEM, (315, 267, 981, 412), True),

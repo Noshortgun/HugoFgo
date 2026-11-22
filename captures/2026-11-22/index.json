@@ -6,7 +6,7 @@
     "density": 280
   },
   "capturedAt": "2026-11-22",
-  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880、run-1795291320461-33880、run-1795293140147-4220 与 run-1795319937606-41448",
+  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880、run-1795291320461-33880、run-1795293140147-4220 与 run-1795319937606-41448 与 run-1795328277192-41448",
   "keyFrames": [
     {
       "file": "key/support-refresh-cooldown.png",
@@ -23,6 +23,10 @@
     {
       "file": "key/card-np-charge-light-effect.png",
       "state": "指令卡选择页瞬态宝具充能光效（右宝具区域无卡面，不应输出宝具卡控件）"
+    },
+    {
+      "file": "key/ap-recovery-confirm-bronze.png",
+      "state": "青铜果实 AP 恢复数量确认弹窗（取消/决定可点，道具为青铜果实）"
     }
   ]
 }

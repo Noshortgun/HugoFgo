@@ -30,6 +30,7 @@ FLOW_OVERLAYS = frozenset({
     Overlay.SUPPORT_CONFIRM,
     Overlay.SUPPORT_REFRESH_COOLDOWN,
     Overlay.REPEAT_DIALOG,
+    Overlay.AP_RECOVERY_CONFIRM,
     Overlay.ORDER_CHANGE,
     Overlay.COMMAND_SPELL_MENU,
     Overlay.COMMAND_SPELL_TARGET,
@@ -234,6 +235,7 @@ class Runner:
         self.recovery_scrolled = False
         self.recovery_scroll_since: float | None = None
         self.pending_recovery: RecoveryItem | None = None
+        self.recovery_confirmation_tapped = False
         self.starting_next_run = False
         self.result_seen = False
         self.awaiting_attack_end = False
@@ -693,6 +695,27 @@ class Runner:
         return True
 
     def handle_ap_recovery(self, observation: Observation, now: float) -> RunResult | None:
+        if Overlay.AP_RECOVERY_CONFIRM in observation.overlays:
+            item = self.pending_recovery
+            if (item is None or item not in self.options.recovery.allowed
+                    or item is RecoveryItem.SAINT_QUARTZ):
+                self.emit('failed', now, reason='ap_recovery_confirm_not_allowed')
+                return self.result(RunStatus.STOPPED, 'ap_recovery_confirm_not_allowed')
+            items = {control.name for control in observation.controls
+                     if control.kind is ControlKind.ITEM and control.actionable}
+            if items != {CONTROL_NAMES[item]}:
+                self.emit('failed', now, reason='ap_recovery_confirm_mismatch',
+                          expected=CONTROL_NAMES[item], actual=sorted(items))
+                return self.result(RunStatus.STOPPED, 'ap_recovery_confirm_mismatch')
+            if self.recovery_confirmation_tapped:
+                if self.pending_since is not None and now - self.pending_since >= self.options.action_timeout:
+                    self.emit('failed', now, reason='action_confirmation_timeout', actual=observation.base_page.value)
+                    return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
+                return None
+            if self.tap_stable(observation, '决定', now):
+                self.recovery_confirmation_tapped = True
+                self.wait_for_pages(now, BasePage.SUPPORT, BasePage.TEAM, BasePage.DROPS, BasePage.BATTLE)
+            return None
         if self.pending_recovery is not None:
             if self.pending_since is not None and now - self.pending_since >= self.options.action_timeout:
                 self.emit('failed', now, reason='action_confirmation_timeout', actual=observation.base_page.value)
@@ -711,6 +734,7 @@ class Runner:
             return self.result(RunStatus.STOPPED, 'ap_recovery')
         if self.tap_stable(observation, CONTROL_NAMES[item], now):
             self.pending_recovery = item
+            self.recovery_confirmation_tapped = False
             self.wait_for_pages(now, BasePage.SUPPORT, BasePage.TEAM, BasePage.DROPS, BasePage.BATTLE)
         return None
 
@@ -857,7 +881,7 @@ class Runner:
             self.loading_since = None
 
             if page is BasePage.AP_RECOVERY:
-                if self.draining:
+                if self.draining and Overlay.AP_RECOVERY_CONFIRM not in observation.overlays:
                     self.emit('finished', now, completed_runs=self.progress.completed_runs,
                               reason='ap_drained', recovery_used=dict(self.progress.recovery_used))
                     return self.result(RunStatus.COMPLETED, 'ap_drained')
@@ -871,6 +895,7 @@ class Runner:
                     and page in self.pending_pages and observation.frame_hash != self.pending_frame_hash):
                 item = self.pending_recovery
                 self.pending_recovery = None
+                self.recovery_confirmation_tapped = False
                 count = self.progress.recovery_used.get(item.value, 0) + 1
                 self.progress.recovery_used[item.value] = count
                 self.emit('recovery_used', now, item=item.value, count=count)
