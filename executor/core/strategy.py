@@ -48,7 +48,7 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
     if needed < 0 or len(candidates) < needed:
         return _empty('可用指令卡不足三张', source)
     if any(control.card is None or control.card.servant_slot not in known_slots
-           or control.card.card_type not in {'buster', 'arts', 'quick'}
+           or (not control.card.noble_phantasm and control.card.card_type not in {'buster', 'arts', 'quick'})
            for _, control in reserved):
         return _empty('指令卡身份不确定', source, tuple(warnings))
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol
@@ -11,7 +11,8 @@ from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
 from executor.core.strategy import CardSelection, select_cards
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
-from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate, Variant
+from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Observation, Overlay,
+                                 SupportCandidate, Variant)
 from executor.session import EventSink, RunControl, RunEvent
 from executor.session.evidence import RunEvidence
 
@@ -112,6 +113,35 @@ def matching_card_control(observation: Observation, wanted: CardRequest,
                  and (wanted.card_type is None or item.card.card_type == wanted.card_type)
                  and item.card.deck_index == wanted.deck_index
                  and item.card.noble_phantasm == wanted.noble_phantasm), None)
+
+
+def formation_ordered_np_cards(observation: Observation, active_slots: list[int],
+                               formation: tuple[FormationSlotPlan, ...]) -> tuple[Observation, str | None]:
+    """固定宝具区域 A/B/C 从左到右对应当前先发三位，不依赖卡面识别。"""
+    members = {member.slot: member for member in formation}
+    controls = []
+    seen: dict[int, str] = {}
+    for control in observation.controls:
+        is_np_region = (control.kind is ControlKind.CARD and control.card is None
+                        and control.name.startswith('宝具卡') and control.reason.startswith('np_slot:'))
+        if not is_np_region:
+            controls.append(control)
+            continue
+        position = control.reason.removeprefix('np_slot:')
+        index = 'ABC'.find(position) if position else -1
+        if not 0 <= index < len(active_slots):
+            return observation, f'宝具卡区域 {control.name} 超出编队位置，无法按编队顺序唯一确认从者'
+        if index in seen:
+            return observation, (f'宝具卡区域重复（{seen[index]}、{control.name}），'
+                                 '无法按编队顺序唯一确认从者')
+        seen[index] = control.name
+        member = members.get(active_slots[index])
+        if member is None:
+            return observation, f'宝具卡区域 {control.name} 没有对应编队从者，无法按编队顺序确认身份'
+        controls.append(replace(control, card=CommandCardIdentity(
+            servant_slot=member.slot, card_type='unknown', noble_phantasm=True,
+            svt_id=member.svt_id, support=member.support)))
+    return replace(observation, controls=tuple(controls)), None
 
 
 def complete_card_controls(observation: Observation, requests: tuple[CardRequest, ...]) -> bool:
@@ -544,6 +574,8 @@ class Runner:
         return None
 
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
+        observation, np_mapping_diagnostic = formation_ordered_np_cards(
+            observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
                 self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
         use_strategy = self.fallback_mode or self.card_selection is not None or turn.attack is None or (
@@ -559,9 +591,15 @@ class Runner:
                     for position, wanted in scheduled_np_requests(turn):
                         reserved_control = matching_card_control(observation, wanted, set())
                         if reserved_control is None:
+                            mapped_slots = sorted({item.card.servant_slot for item in observation.controls
+                                                   if item.card is not None and item.card.noble_phantasm})
+                            message = (np_mapping_diagnostic or
+                                       '作业宝具卡未在当前手牌中确认：'
+                                       f'按编队顺序只能确认槽位 {mapped_slots}，'
+                                       f'无法唯一确认作业要求的槽位 {wanted.servant_slot}')
                             self.emit('failed', now, reason='fallback_cards_unavailable',
                                       card_position=position, servant_slot=wanted.servant_slot,
-                                      message='作业宝具卡未在当前手牌中确认')
+                                      message=message)
                             return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
                         reserved.append((position, reserved_control))
                 self.card_selection = select_cards(observation, self.plan.strategy,
