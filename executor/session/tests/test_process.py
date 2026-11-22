@@ -105,6 +105,35 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual('manual_stop', record['reason'])
             self.assertIsNone(record['error'])
 
+    def test_scrcpy_start_failure_requires_explicit_visible_adb_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing_adb = str(root / 'missing-adb.exe')
+            base = command(root / 'logs' / 'farm' / 'run', '--fake-interval', '0')
+            base = [arg for arg in base if arg != '--fake']
+            base.extend(['--channel', 'scrcpy', '--adb', missing_adb])
+
+            refused = subprocess.run(base, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20)
+            self.assertEqual(1, refused.returncode)
+            refused_rows = [json.loads(line) for line in refused.stdout.splitlines()]
+            self.assertEqual('scrcpy', refused_rows[0]['data']['channel'])
+            self.assertFalse(any(row['type'] == 'channel_changed' for row in refused_rows))
+            self.assertIn('scrcpy', refused_rows[-1]['data']['message'])
+
+            fallback_dir = root / 'logs' / 'farm' / 'fallback'
+            fallback_args = [str(fallback_dir) if arg == str(root / 'logs' / 'farm' / 'run') else arg for arg in base]
+            fallback = subprocess.run([*fallback_args, '--allow-adb-fallback'], cwd=ROOT, capture_output=True,
+                                      text=True, encoding='utf-8', timeout=20)
+            self.assertEqual(1, fallback.returncode)
+            fallback_rows = [json.loads(line) for line in fallback.stdout.splitlines()]
+            warnings = [row for row in fallback_rows if row['type'] == 'warning']
+            self.assertTrue(any(row['data'].get('reason') == 'scrcpy_start_failed' for row in warnings))
+            changed = next(row for row in fallback_rows if row['type'] == 'channel_changed')
+            self.assertEqual(('scrcpy', 'adb'), (changed['data']['from'], changed['data']['to']))
+            self.assertIn('用户已确认', changed['data']['message'])
+            history = json.loads((root / 'logs' / 'run-history.jsonl').read_text(encoding='utf-8').splitlines()[-1])
+            self.assertEqual('adb', history['channel'])
+
     def test_failed_run_records_the_error_and_evidence_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

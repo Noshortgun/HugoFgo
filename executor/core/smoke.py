@@ -82,7 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument('--serial', help='实机 adb serial')
     source.add_argument('--frame-dir', help='离线 PNG 帧目录')
     parser.add_argument('--adb', help='adb 路径')
-    parser.add_argument('--channel', default='adb', help='设备通道，默认 adb')
+    parser.add_argument('--channel', default='adb', help='设备通道，默认 adb；scrcpy 必须显式选择')
+    parser.add_argument('--scrcpy-server', help='固定 scrcpy 服务端路径；由同目录清单校验')
     parser.add_argument('--region', default='CN', help='区服，默认 CN')
     parser.add_argument('--expected-stop', default='completed', help='预期停止原因，默认 completed')
     parser.add_argument('--max-frames', type=int, default=200, help='最大读取帧数，默认 200')
@@ -103,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     control = RunControl()
     device = (FakeDevice(frame_dir=args.frame_dir) if args.frame_dir
               else open_device(DeviceConfig(serial=args.serial, adb_path=args.adb,
-                                            channel=args.channel, region=args.region)))
+                                            channel=args.channel, region=args.region,
+                                            scrcpy_server_path=args.scrcpy_server)))
     budget = FrameBudget(device, max_frames=args.max_frames, control=control)
     perception = Perception()
     events = MemoryEventSink()
@@ -114,6 +116,9 @@ def main(argv: list[str] | None = None) -> int:
                      options=RunOptions(run_dir=args.run_dir), control=control)
     finally:
         perception.close()
+        close = getattr(device, 'close', None)
+        if close is not None:
+            close()
     print(json.dumps({'status': result.status.value, 'reason': result.reason,
                       'progress': result.progress.__dict__, 'evidence_dir': result.evidence_dir,
                       'frames_read': budget.reads}, ensure_ascii=False))

@@ -20,6 +20,8 @@ interface RunStatusPayload {
   recovery_used: Record<string, number>;
   log_dir: string;
   error: string;
+  notice: string;
+  channel: string;
   exit_code: number | null;
 }
 
@@ -50,6 +52,8 @@ function fromStatus(status: RunStatusPayload): RunState {
     recoveryUsed: status.recovery_used,
     logDir: status.log_dir,
     error: status.error,
+    notice: status.notice,
+    channel: status.channel,
     exitCode: status.exit_code,
   };
 }

@@ -34,6 +34,7 @@ npm run verify
 npm run build
 python -m unittest discover -s executor -t . -v
 python -m executor.device --self-test
+npm run scrcpy:verify
 node scripts/check-references.mjs
 npm run fixtures:check
 npm run replay

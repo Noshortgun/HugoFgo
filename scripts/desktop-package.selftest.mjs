@@ -21,6 +21,7 @@ for (const required of [
   'seed/CN/servants.json',
   'seed/CN/name-overrides.json',
   'runtime/node/',
+  'resources/scrcpy/',
 ]) {
   assert(destinations.includes(required), `安装包缺少 ${required}`);
 }
