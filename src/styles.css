@@ -629,7 +629,7 @@ svg { flex: 0 0 auto; }
 .fallback-dialog-option p { margin-top: 4px; color: #7c919b; font-size: 10px; }
 .fallback-dialog-option .fallback-segment button { height: 32px; font-size: 10px; }
 .fallback-order-hint { display: flex; align-items: center; gap: 6px; margin: 13px 2px 10px; color: #738c97; font-size: 10px; }
-.fallback-dialog .strategy-card-grid { gap: 12px; margin-top: 0; }
+.fallback-dialog .strategy-card-grid { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 0; }
 .fallback-dialog .strategy-config-card { padding: 12px; }
 .fallback-dialog .strategy-config-card > header strong { font-size: 12px; }
 .fallback-dialog .strategy-current { min-height: 14px; font-size: 9px; }

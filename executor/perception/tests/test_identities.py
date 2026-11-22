@@ -122,6 +122,24 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual([False, True, True, False, False], [card.support for card in cards])
         self.assertEqual([2, 0, 0, 1, 1], [card.servant_slot for card in cards])
         self.assertNotIn('command_card_identity', readiness_gaps(observation))
+
+    def test_command_cards_read_advantage_resist_and_neutral_markers(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+        observation = self.perception.read(
+            load_frame('captures/2026-11-19-ember/key/06-card-select.png'))
+        resisted = self.perception.read(
+            load_frame('captures/2026-11-19-ember/key/10-np-card-select.png'))
+
+        self.assertIs(BasePage.CARD, observation.base_page)
+        self.assertEqual(['advantage', 'neutral', 'advantage', 'neutral', 'advantage'],
+                         [observation.control(f'卡{index}').card.affinity for index in range(1, 6)])
+        self.assertEqual(['resist'] * 5,
+                         [resisted.control(f'卡{index}').card.affinity for index in range(1, 6)])
+
     def test_command_card_slot_is_not_guessed_without_formation(self) -> None:
         observation = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
 

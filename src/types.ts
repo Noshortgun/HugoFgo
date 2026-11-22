@@ -91,7 +91,7 @@ export interface PlanAction {
 }
 
 export type CardColor = 'buster' | 'arts' | 'quick';
-export type StrategyCriterion = 'servant' | 'cards' | 'crit';
+export type StrategyCriterion = 'servant' | 'cards' | 'crit' | 'affinity';
 export type NpPosition = 'auto' | 1 | 2 | 3;
 
 /** 固定卡序仅作为策略之上的可选约束，运行时按发牌校验。 */

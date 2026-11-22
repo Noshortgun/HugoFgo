@@ -198,6 +198,15 @@ class CompileJobTest(unittest.TestCase):
                           result.plan.strategy_by_wave[1].servant_order_slots))
         self.assertIsNone(result.plan.strategy_by_wave[2])
 
+    def test_strategy_order_accepts_affinity(self):
+        job = self.valid_job()
+        job['strategy']['strategyOrder'] = ['affinity', 'servant', 'cards', 'crit']
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        self.assertEqual(('affinity', 'servant', 'cards', 'crit'), result.plan.strategy.strategy_order)
+
     def test_fallback_strategy_rejects_empty_slots(self):
         job = self.valid_job()
         job['strategy']['servantOrderSlots'] = [4]

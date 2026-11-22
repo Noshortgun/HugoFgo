@@ -228,6 +228,24 @@ class IdentityMatcher:
             return None
         return ranked[0][0]
 
+    @staticmethod
+    def _command_affinity(image: np.ndarray, box: tuple[int, int, int, int]) -> str | None:
+        _x1, y1, x2, _y2 = box
+        left, right = cn.COMMAND_AFFINITY_X_OFFSETS
+        top, bottom = cn.COMMAND_AFFINITY_Y_OFFSETS
+        region = image[y1 + top:y1 + bottom, x2 + left:x2 + right]
+        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+        hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+        colored = ((saturation > cn.COMMAND_AFFINITY_MIN_SATURATION)
+                   & (value > cn.COMMAND_AFFINITY_MIN_VALUE))
+        red = int((colored & ((hue < 12) | (hue > 168))).sum())
+        blue = int((colored & (hue > 90) & (hue < 125)).sum())
+        if red < cn.COMMAND_AFFINITY_MIN_PIXELS and blue < cn.COMMAND_AFFINITY_MIN_PIXELS:
+            return 'neutral'
+        if red >= cn.COMMAND_AFFINITY_MIN_PIXELS and blue >= cn.COMMAND_AFFINITY_MIN_PIXELS:
+            return None
+        return 'advantage' if red > blue else 'resist'
+
     def command(self, image: np.ndarray, box: tuple[int, int, int, int]) -> CommandCardIdentity | None:
         if self._command_templates is None:
             self._command_templates = self._load_commands()
@@ -263,4 +281,5 @@ class IdentityMatcher:
             result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
             support = float(np.nan_to_num(result.max(), nan=0.0)) >= cn.COMMAND_SUPPORT_THRESHOLD
         return CommandCardIdentity(servant_slot=self._formation_slots.get((servant_id, support), -1),
-                                   card_type=card_type, svt_id=servant_id, support=support)
+                                   card_type=card_type, svt_id=servant_id, support=support,
+                                   affinity=self._command_affinity(image, box))

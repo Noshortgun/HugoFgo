@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from itertools import combinations
 
 from executor.domain import ExecutionPlan, FallbackStrategy
-from executor.perception import BasePage, Control, ControlKind, Observation
+from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,10 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
 
     color_ranks = {color: rank for rank, color in enumerate(effective.color_priority)}
 
+    def affinity_value(cards: list[CommandCardIdentity]) -> tuple:
+        return tuple(sorted((-affinity_ranks.get(card.affinity, affinity_ranks['neutral'])
+                             for card in cards)))
+
     def key(indexed: tuple[tuple[int, Control], ...]) -> tuple:
         cards = [control.card for _, control in reserved] + [control.card for _, control in indexed]
         values = []
@@ -96,8 +100,10 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
                                             for card in cards))))
             elif criterion == 'crit':
                 values.append(tuple(sorted((-(card.crit_rate or 0) for card in cards))))
-        values.append(tuple(sorted((-affinity_ranks.get(card.affinity, affinity_ranks['neutral'])
-                                    for card in cards))))
+            elif criterion == 'affinity':
+                values.append(affinity_value(cards))
+        if 'affinity' not in effective.strategy_order:
+            values.append(affinity_value(cards))
         return (*values, tuple(index for index, _ in indexed))
 
     chosen_indexed = min(combinations(enumerate(candidates), needed), key=key)
