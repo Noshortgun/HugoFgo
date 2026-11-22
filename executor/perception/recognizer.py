@@ -233,10 +233,8 @@ def _fields(page: BasePage, cached: Mapping[str, Field] | None,
 def _with_turn_boundary(observation: Observation) -> Observation:
     if observation.base_page is not BasePage.BATTLE:
         return observation
-    turn = observation.field('turn')
     attack = observation.control('攻击')
-    valid = (turn is not None and turn.usable and isinstance(turn.value, int) and turn.value >= 1
-             and attack is not None and attack.actionable
+    valid = (attack is not None and attack.actionable
              and Variant.BATTLE_ANIMATION not in observation.variants)
     field = Field(FieldStatus.CONFIRMED, True) if valid else Field(FieldStatus.UNCERTAIN, False)
     return observation.with_fields({'turn_boundary': field})

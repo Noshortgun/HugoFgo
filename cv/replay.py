@@ -986,7 +986,8 @@ def check_executor_safety():
                support_states[0].data['wave'] if support_states else None,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
-    observations = [battle(2, 3), battle(2, 3), *([card] * 6), animation,
+    resumed = battle(2, 3).with_fields({'turn': Field(FieldStatus.UNCERTAIN, None)})
+    observations = [resumed, resumed, *([card] * 6), animation,
                     battle(3, 4), battle(3, 4), wrong]
     result, _, events = run_core_scenario(
         observations, [index * 0.5 for index in range(len(observations))], make_plan(wave_count=3))

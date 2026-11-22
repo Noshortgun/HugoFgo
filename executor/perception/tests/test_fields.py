@@ -67,6 +67,18 @@ class FieldTest(unittest.TestCase):
         self.assertIs(FieldStatus.CONFIRMED, ready.field('turn_boundary').status)
         self.assertIs(True, ready.field('turn_boundary').value)
 
+    def test_turn_boundary_allows_actionable_battle_without_turn_ocr(self) -> None:
+        perception = isolated_perception(
+            self.addCleanup,
+            ocr_reader=lambda image: [OcrLine('1/3', 910, 26, 0.99)])
+        perception.read(self.battle)
+
+        ready = perception.read_fields(self.battle, ['wave', 'turn'], timeout=5)
+
+        self.assertIs(FieldStatus.UNCERTAIN, ready.field('turn').status)
+        self.assertIs(FieldStatus.CONFIRMED, ready.field('turn_boundary').status)
+        self.assertIs(True, ready.field('turn_boundary').value)
+
     def test_ocr_only_runs_once_per_frame(self) -> None:
         self.perception.read(self.battle)
         self.perception.read_fields(self.battle, ['wave'])
