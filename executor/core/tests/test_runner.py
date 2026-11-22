@@ -494,6 +494,7 @@ class RunnerTest(unittest.TestCase):
         target = Observation(
             base_page=BasePage.BATTLE,
             variants=frozenset({Variant.SKILL_TARGET}),
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
             controls=tuple(Control(f'目标从者{index}', ControlKind.TARGET,
                                    (index * 300, 269, index * 300 + 200, 499), True)
                            for index in range(1, 4)),
@@ -514,6 +515,64 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['御主技能', '御主技能2', '目标从者2', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
+
+    def test_master_skill_without_target_does_not_tap_a_servant(self) -> None:
+        master = ActionPlan(kind='master', title='御主二技能', detail='', icon='', skill=1)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('御主技能', (1141, 162, 1245, 250)))
+        menu = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+            controls=tuple(Control(f'御主技能{index}', ControlKind.BUTTON,
+                                   (850 + index * 90, 275, 920 + index * 90, 352), True)
+                           for index in range(1, 4)),
+        )
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, menu, menu, animation, battle, battle, wrong_cards],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((master,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['御主技能', '御主技能2', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.data.get('control', '').startswith('目标从者')
+                             for event in events.events if event.type == 'action'))
+
+    def test_master_skill_target_timeout_stops_without_attacking(self) -> None:
+        master = ActionPlan(kind='master', title='御主二技能', detail='', icon='',
+                            skill=1, player_target_slot=1)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('御主技能', (1141, 162, 1245, 250)))
+        menu = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+            controls=tuple(Control(f'御主技能{index}', ControlKind.BUTTON,
+                                   (850 + index * 90, 275, 920 + index * 90, 352), True)
+                           for index in range(1, 4)),
+        )
+        target = Observation(
+            base_page=BasePage.BATTLE,
+            variants=frozenset({Variant.SKILL_TARGET}),
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+        )
+        device, perception = scripted(
+            [battle, battle, menu, menu, target, target, target],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 31.2],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((master,)), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('target_selection_timeout', result.reason)
+        self.assertEqual(1, events.events[-1].data['slot'])
+        self.assertIn('目标', events.events[-1].data['message'])
+        self.assertEqual(['御主技能', '御主技能2'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_default_run_creates_an_evidence_directory(self) -> None:
         unknown = observe(BasePage.UNKNOWN)
