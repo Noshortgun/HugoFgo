@@ -19,11 +19,11 @@ class ExecutorReplayTest(unittest.TestCase):
         self.assertEqual('completed', report.result.status.value)
         self.assertEqual('completed', report.result.reason)
         self.assertEqual([
-            '助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4',
+            '助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
             '结算推进', '结算推进', '下一步',
         ], [event.data['control'] for event in report.events.events if event.type == 'action'])
         self.assertEqual([(628, 431), (1165, 672), (1136, 608), (128, 535),
-                          (384, 535), (894, 535), (1130, 660), (1130, 660), (1110, 641)],
+                          (384, 535), (894, 535), (1200, 360), (1130, 660), (1130, 660), (1110, 641)],
                          [(action['x'], action['y']) for action in report.device.actions])
         self.assertIn('animation', {variant.value for observation in report.observations
                                     for variant in observation.variants})
@@ -64,7 +64,7 @@ class ExecutorReplayTest(unittest.TestCase):
             report = run_case(get_case('battle-status-detail'), Path(directory))
 
         self.assertEqual('completed', report.result.reason)
-        self.assertEqual(['敌方2', '关闭', '攻击', '卡1', '卡2', '卡4',
+        self.assertEqual(['敌方2', '关闭', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
                           '结算推进', '结算推进', '下一步'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])

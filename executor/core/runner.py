@@ -20,6 +20,8 @@ from executor.session.evidence import RunEvidence
 SUPPORT_REFRESH_COOLDOWN_SECONDS = 5.0
 NP_CARD_CENTERS = (420, 635, 855)
 NP_CARD_CENTER_TOLERANCE = 100
+BATTLE_SKIP_POINT = (1200, 360)
+ACTION_RECOVERY_SECONDS = 2.0
 
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
@@ -204,18 +206,23 @@ class Runner:
         self.pending_pages: frozenset[BasePage] | None = None
         self.pending_since: float | None = None
         self.pending_frame_hash: str | None = None
-        self.pending_animation_required = False
-        self.pending_animation_seen = False
+        self.pending_stage = 'page'
+        self.pending_skill_skip = False
+        self.pending_recovery_control: str | None = None
+        self.pending_recovery_used = False
         self.pending_variant: Variant | None = None
         self.pending_overlay: Overlay | None = None
         self.job_target_slot: int | None = None
         self.target_selection_since: float | None = None
         self.optional_target = False
         self.master_action: ActionPlan | None = None
+        self.pending_master_action = False
         self.order_action: ActionPlan | None = None
+        self.pending_order_action = False
         self.order_stage: str | None = None
         self.pending_swap: tuple[int, int] | None = None
         self.spell_action: ActionPlan | None = None
+        self.pending_spell_action = False
         self.spell_stage: str | None = None
         self.incidental_overlay: Overlay | None = None
         self.incidental_since: float | None = None
@@ -239,6 +246,7 @@ class Runner:
         self.starting_next_run = False
         self.result_seen = False
         self.awaiting_attack_end = False
+        self.last_attack_skip_at: float | None = None
         self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
@@ -314,13 +322,46 @@ class Runner:
         self.reset_stability()
         return True
 
+    def tap_action(self, observation: Observation, name: str, now: float) -> bool:
+        control = observation.control(name)
+        if control is None or not control.actionable:
+            return False
+        x, y = control.center
+        self.tap_point(observation, now, name, x, y, 'battle_action')
+        self.reset_stability()
+        return True
+
+    def tap_point(self, observation: Observation, now: float, control: str,
+                  x: int, y: int, reason: str) -> None:
+        self.check_stop()
+        started = time.perf_counter()
+        self.device.tap(x, y)
+        input_finished_at = time.time()
+        channel_ms = (time.perf_counter() - started) * 1000
+        self.pending_frame_hash = observation.frame_hash
+        self.emit('action', now, control=control, x=x, y=y, reason=reason,
+                  wave=self.progress.wave, turn=self.progress.turn,
+                  action_index=self.progress.action_index, wait_ms=0.0, channel_ms=channel_ms,
+                  input_finished_at=input_finished_at)
+
+    def battle_ready(self, observation: Observation) -> bool:
+        attack = observation.control('攻击')
+        menu = observation.control('战斗菜单')
+        return (observation.base_page is BasePage.BATTLE
+                and not observation.overlays
+                and attack is not None and attack.actionable
+                and menu is not None and menu.actionable
+                and Variant.BATTLE_ANIMATION not in observation.variants)
+
     def wait_for_pages(self, now: float, *pages: BasePage) -> None:
         self.pending_pages = frozenset(pages)
         self.pending_since = now
         self.pending_variant = None
         self.pending_overlay = None
-        self.pending_animation_required = False
-        self.pending_animation_seen = False
+        self.pending_stage = 'page'
+        self.pending_skill_skip = False
+        self.pending_recovery_control = None
+        self.pending_recovery_used = False
 
     def wait_for_page(self, page: BasePage, now: float) -> None:
         self.wait_for_pages(now, page)
@@ -328,7 +369,8 @@ class Runner:
     def wait_for_job_action(self, now: float) -> None:
         self.confirming_job_action = True
         self.wait_for_page(BasePage.BATTLE, now)
-        self.pending_animation_required = True
+        self.pending_stage = 'battle_ready'
+        self.pending_skill_skip = True
 
     def fallback_tap(self, observation: Observation, now: float, control: str,
                      x: int, y: int, reason: str) -> bool:
@@ -465,7 +507,7 @@ class Runner:
             self.emit('failed', now, reason='order_change_invalid')
             return self.result(RunStatus.STOPPED, 'order_change_invalid')
         if self.order_stage == 'master_menu':
-            if self.tap_stable(observation, '御主技能3', now):
+            if self.tap_action(observation, '御主技能3', now):
                 self.order_stage = 'swap_out'
                 self.wait_for_overlay(now, Overlay.ORDER_CHANGE)
         elif self.order_stage == 'swap_out':
@@ -473,7 +515,7 @@ class Runner:
                 self.emit('failed', now, reason='order_change_invalid')
                 return self.result(RunStatus.STOPPED, 'order_change_invalid')
             position = self.active_slots.index(action.swap_out_slot) + 1
-            if self.tap_stable(observation, f'先发第{position}位', now):
+            if self.tap_action(observation, f'先发第{position}位', now):
                 self.order_stage = 'swap_in'
                 self.wait_for_overlay(now, Overlay.ORDER_CHANGE)
         elif self.order_stage == 'swap_in':
@@ -481,12 +523,13 @@ class Runner:
             if not 1 <= position <= 3:
                 self.emit('failed', now, reason='order_change_invalid')
                 return self.result(RunStatus.STOPPED, 'order_change_invalid')
-            if self.tap_stable(observation, f'候补第{position}位', now):
+            if self.tap_action(observation, f'候补第{position}位', now):
                 self.order_stage = 'confirm'
                 self.wait_for_overlay(now, Overlay.ORDER_CHANGE)
-        elif self.order_stage == 'confirm' and self.tap_stable(observation, '进行更替', now):
+        elif self.order_stage == 'confirm' and self.tap_action(observation, '进行更替', now):
             self.pending_swap = (action.swap_out_slot, action.swap_in_slot)
             self.order_action = None
+            self.pending_order_action = True
             self.order_stage = None
             self.wait_for_job_action(now)
         return None
@@ -498,7 +541,7 @@ class Runner:
             return self.result(RunStatus.STOPPED, 'spell_invalid')
         if self.spell_stage == 'menu':
             name = '灵基修复' if action.skill == 1 else '宝具解放'
-            if self.tap_stable(observation, name, now):
+            if self.tap_action(observation, name, now):
                 target = action.player_target_slot if action.player_target_slot is not None else action.member_slot
                 if action.skill == 1 and target is not None:
                     self.spell_stage = f'target:{target}'
@@ -512,18 +555,19 @@ class Runner:
                 self.emit('failed', now, reason='target_unavailable', slot=target)
                 return self.result(RunStatus.STOPPED, 'target_unavailable')
             position = self.active_slots.index(target) + 1
-            if self.tap_stable(observation, f'目标从者{position}', now):
+            if self.tap_action(observation, f'目标从者{position}', now):
                 self.spell_stage = 'confirm'
                 self.wait_for_overlay(now, Overlay.COMMAND_SPELL_CONFIRM)
-        elif self.spell_stage == 'confirm' and self.tap_stable(observation, '决定', now):
+        elif self.spell_stage == 'confirm' and self.tap_action(observation, '决定', now):
             self.spell_action = None
+            self.pending_spell_action = True
             self.spell_stage = None
             self.wait_for_job_action(now)
         return None
 
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
-            if self.tap_stable(observation, '攻击', now):
+            if self.tap_action(observation, '攻击', now):
                 self.wait_for_page(BasePage.CARD, now)
             return None
         wave = self.plan.waves[self.progress.wave - 1]
@@ -534,7 +578,7 @@ class Runner:
                 self.progress.action_index += 1
                 return self.handle_battle(observation, now)
             if action.kind == 'spell':
-                if self.tap_stable(observation, '令咒', now):
+                if self.tap_action(observation, '令咒', now):
                     self.spell_action = action
                     self.spell_stage = 'menu'
                     self.wait_for_overlay(now, Overlay.COMMAND_SPELL_MENU)
@@ -544,18 +588,18 @@ class Runner:
                 if target is None:
                     self.emit('failed', now, reason='target_unavailable')
                     return self.result(RunStatus.STOPPED, 'target_unavailable')
-                if self.tap_stable(observation, f'敌方{target}', now):
+                if self.tap_action(observation, f'敌方{target}', now):
                     self.confirming_job_action = True
                     self.wait_for_page(BasePage.BATTLE, now)
                 return None
             if action.kind == 'orderChange':
-                if self.tap_stable(observation, '御主技能', now):
+                if self.tap_action(observation, '御主技能', now):
                     self.order_action = action
                     self.order_stage = 'master_menu'
                     self.wait_for_overlay(now, Overlay.MASTER_SKILLS)
                 return None
             if action.kind == 'master':
-                if self.tap_stable(observation, '御主技能', now):
+                if self.tap_action(observation, '御主技能', now):
                     self.master_action = action
                     self.pending_pages = frozenset({BasePage.BATTLE})
                     self.pending_since = now
@@ -567,7 +611,7 @@ class Runner:
                 return self.result(RunStatus.STOPPED, 'unsupported_action')
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
-            if self.tap_stable(observation, name, now):
+            if self.tap_action(observation, name, now):
                 if action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
                     self.target_selection_since = now
@@ -577,12 +621,17 @@ class Runner:
                     self.pending_since = now
                     self.pending_variant = None if self.optional_target else Variant.SKILL_TARGET
                     self.pending_overlay = None
-                    self.pending_animation_required = self.optional_target
-                    self.pending_animation_seen = False
+                    self.pending_recovery_control = None if self.optional_target else name
+                    self.pending_recovery_used = False
+                    if not self.optional_target:
+                        self.pending_stage = 'skill_target'
+                    if self.optional_target:
+                        self.pending_stage = 'battle_ready'
+                        self.pending_skill_skip = True
                 else:
                     self.wait_for_job_action(now)
             return None
-        if self.tap_stable(observation, '攻击', now):
+        if self.tap_action(observation, '攻击', now):
             self.wait_for_page(BasePage.CARD, now)
         return None
 
@@ -667,7 +716,9 @@ class Runner:
             self.card_index = 0
             self.card_selection = None
             self.awaiting_attack_end = True
+            self.last_attack_skip_at = None
             self.wait_for_pages(now, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
+            self.pending_stage = 'attack_end'
         else:
             self.confirming_card = True
             self.wait_for_page(BasePage.CARD, now)
@@ -918,12 +969,15 @@ class Runner:
                     and (not self.result_seen or page not in {BasePage.BATTLE, BasePage.DROPS, BasePage.UNKNOWN})):
                 unexpected = unexpected | {Overlay.REPEAT_DIALOG}
             if (Overlay.MASTER_SKILLS in unexpected
-                    and (self.master_action or self.order_action or self.job_target_slot is not None)):
+                    and (self.master_action or self.order_action or self.pending_master_action
+                         or self.job_target_slot is not None)):
                 unexpected = unexpected - {Overlay.MASTER_SKILLS}
-            if Overlay.ORDER_CHANGE in observation.overlays and self.order_action is None:
+            if (Overlay.ORDER_CHANGE in observation.overlays
+                    and self.order_action is None and not self.pending_order_action):
                 unexpected = unexpected | {Overlay.ORDER_CHANGE}
-            if (observation.overlays & {Overlay.COMMAND_SPELL_MENU, Overlay.COMMAND_SPELL_TARGET,
-                                        Overlay.COMMAND_SPELL_CONFIRM}) and self.spell_action is None:
+            if ((observation.overlays & {Overlay.COMMAND_SPELL_MENU, Overlay.COMMAND_SPELL_TARGET,
+                                         Overlay.COMMAND_SPELL_CONFIRM})
+                    and self.spell_action is None and not self.pending_spell_action):
                 unexpected = unexpected | (observation.overlays & {Overlay.COMMAND_SPELL_MENU,
                                                                    Overlay.COMMAND_SPELL_TARGET,
                                                                    Overlay.COMMAND_SPELL_CONFIRM})
@@ -975,23 +1029,56 @@ class Runner:
             if (self.job_target_slot is not None and self.target_selection_since is not None
                     and now - self.target_selection_since >= self.options.action_timeout):
                 self.emit('failed', now, reason='target_selection_timeout', slot=self.job_target_slot,
+                          stage='skill_target', wait_ms=(now - self.target_selection_since) * 1000,
                           message='技能目标未在限定时间内变为可选择')
                 return self.result(RunStatus.STOPPED, 'target_selection_timeout')
 
             if self.pending_pages is not None:
                 if (self.awaiting_attack_end and page is BasePage.BATTLE
+                        and Variant.BATTLE_ANIMATION in observation.variants and not observation.overlays
+                        and observation.frame_hash != self.pending_frame_hash
+                        and (self.last_attack_skip_at is None
+                             or now - self.last_attack_skip_at + 1e-9 >= 1.0)):
+                    x, y = BATTLE_SKIP_POINT
+                    self.tap_point(observation, now, '战斗跳过', x, y, 'attack_animation_skip')
+                    self.last_attack_skip_at = now
+                    time.sleep(self.options.poll_interval)
+                    continue
+                if (self.pending_recovery_control is not None and not self.pending_recovery_used
+                        and self.pending_variant is not None
+                        and self.pending_variant not in observation.variants
+                        and self.pending_since is not None
+                        and now - self.pending_since >= ACTION_RECOVERY_SECONDS
+                        and observation.frame_hash != self.pending_frame_hash):
+                    control = self.pending_recovery_control
+                    if self.tap_action(observation, control, now):
+                        self.pending_recovery_used = True
+                        self.pending_since = now
+                        self.emit('warning', now, reason='action_recovery', control=control, attempt=1,
+                                  wave=self.progress.wave, turn=self.progress.turn,
+                                  action_index=self.progress.action_index)
+                        time.sleep(self.options.poll_interval)
+                        continue
+                if (self.pending_skill_skip and self.pending_stage == 'battle_ready'
+                        and page is BasePage.BATTLE and not observation.overlays
+                        and Variant.SKILL_TARGET not in observation.variants
+                        and observation.frame_hash != self.pending_frame_hash):
+                    x, y = BATTLE_SKIP_POINT
+                    self.tap_point(observation, now, '战斗跳过', x, y, 'skill_animation_skip')
+                    self.pending_skill_skip = False
+                    time.sleep(self.options.poll_interval)
+                    continue
+                if (self.awaiting_attack_end and page is BasePage.BATTLE
                         and Variant.BATTLE_ANIMATION not in observation.variants):
                     observation = self.perception.read_fields(
                         frame, ('wave', 'turn'), timeout=self.options.page_timeout)
                     self.record_observation(frame, observation)
-                if self.pending_animation_required and Variant.BATTLE_ANIMATION in observation.variants:
-                    self.pending_animation_seen = True
                 confirmed = (page in self.pending_pages
                              and observation.frame_hash != self.pending_frame_hash
-                             and (not self.pending_animation_required or self.pending_animation_seen
-                                  or (self.optional_target and Variant.SKILL_TARGET in observation.variants))
                              and (self.pending_variant is None or self.pending_variant in observation.variants)
                              and (self.pending_overlay is None or self.pending_overlay in observation.overlays)
+                             and (self.pending_stage != 'battle_ready' or self.battle_ready(observation)
+                                  or (self.optional_target and Variant.SKILL_TARGET in observation.variants))
                              and not (page is BasePage.BATTLE
                                       and Variant.BATTLE_ANIMATION in observation.variants))
                 if confirmed and self.awaiting_attack_end and page is BasePage.BATTLE:
@@ -1033,14 +1120,22 @@ class Runner:
                                 self.emit('wave_started', now, wave=wave, turn=1)
                                 self.emit('turn_started', now, wave=wave, turn=1)
                 if confirmed:
+                    self.emit('action_confirmed', now, stage=self.pending_stage,
+                              wait_ms=((now - self.pending_since) * 1000
+                                       if self.pending_since is not None else 0.0),
+                              wave=self.progress.wave, turn=self.progress.turn,
+                              action_index=self.progress.action_index)
                     self.pending_pages = None
                     self.pending_since = None
                     self.pending_frame_hash = None
-                    self.pending_animation_required = False
-                    self.pending_animation_seen = False
+                    self.pending_stage = 'page'
+                    self.pending_skill_skip = False
+                    self.pending_recovery_control = None
+                    self.pending_recovery_used = False
                     self.pending_variant = None
                     self.pending_overlay = None
                     self.awaiting_attack_end = False
+                    self.last_attack_skip_at = None
                     if self.starting_next_run:
                         self.progress.wave = 1
                         self.progress.turn = 1
@@ -1068,11 +1163,16 @@ class Runner:
                     if self.confirming_job_action:
                         self.progress.action_index += 1
                         self.confirming_job_action = False
+                        self.pending_master_action = False
+                        self.pending_order_action = False
+                        self.pending_spell_action = False
                 elif self.pending_since is not None and now - self.pending_since >= self.options.action_timeout:
-                    self.emit('failed', now, reason='action_confirmation_timeout',
+                    self.emit('failed', now, reason='action_confirmation_timeout', stage=self.pending_stage,
+                              wait_ms=(now - self.pending_since) * 1000,
                               expected=sorted(item.value for item in self.pending_pages), actual=page.value)
                     return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
                 else:
+                    self.pending_frame_hash = observation.frame_hash
                     time.sleep(self.options.poll_interval)
                     continue
 
@@ -1092,8 +1192,9 @@ class Runner:
                     return result
             elif self.master_action is not None:
                 action = self.master_action
-                if self.tap_stable(observation, f'御主技能{action.skill + 1}', now):
+                if self.tap_action(observation, f'御主技能{action.skill + 1}', now):
                     self.master_action = None
+                    self.pending_master_action = True
                     if action.player_target_slot is not None:
                         self.job_target_slot = action.player_target_slot
                         self.target_selection_since = now
@@ -1101,6 +1202,9 @@ class Runner:
                         self.pending_since = now
                         self.pending_variant = Variant.SKILL_TARGET
                         self.pending_overlay = None
+                        self.pending_recovery_control = f'御主技能{action.skill + 1}'
+                        self.pending_recovery_used = False
+                        self.pending_stage = 'skill_target'
                     else:
                         self.wait_for_job_action(now)
             elif self.job_target_slot is not None:
@@ -1108,7 +1212,7 @@ class Runner:
                     self.emit('failed', now, reason='target_unavailable', slot=self.job_target_slot)
                     return self.result(RunStatus.STOPPED, 'target_unavailable')
                 position = self.active_slots.index(self.job_target_slot) + 1
-                if self.tap_stable(observation, f'目标从者{position}', now):
+                if self.tap_action(observation, f'目标从者{position}', now):
                     self.job_target_slot = None
                     self.target_selection_since = None
                     self.wait_for_job_action(now)

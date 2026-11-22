@@ -134,7 +134,10 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
     "action_index": 0,
     "x": 1050,
     "y": 620,
-    "reason": "stable_actionable"
+    "reason": "battle_action",
+    "wait_ms": 0.0,
+    "channel_ms": 1.2,
+    "input_finished_at": 1760000000.01
   }
 }
 ```
@@ -146,8 +149,9 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | `run_started` | 进程与作业启动信息 |
 | `state_changed` | 感知基页变化 |
 | `wave_started` / `turn_started` | 面或面内回合推进 |
-| `action` | 实际设备动作及坐标、原因、面/回合 |
-| `warning` | 可恢复等待、字段降级等非终端警告 |
+| `action` | 实际设备动作及坐标、原因、面/回合；战斗动作另含 `wait_ms`、`channel_ms` 与输入完成时间 |
+| `action_confirmed` | 动作后画面确认；`stage` 标识等待阶段，`wait_ms` 记录该阶段耗时 |
+| `warning` | 可恢复等待、字段降级等非终端警告；有限动作恢复记录控件与次数 |
 | `recovery_used` | 后续画面确认后的恢复消耗 |
 | `drain_started` | 固定场数完成，进入清 AP |
 | `finished` / `stopped` / `failed` | 完成、停止、失败终端事件 |

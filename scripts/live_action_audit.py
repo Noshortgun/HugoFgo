@@ -49,7 +49,8 @@ def main() -> int:
                 order.append(key)
         elif event['type'] == 'action':
             control = data.get('control', '?')
-            if data.get('reason') == 'stable_actionable' or data.get('reason', '').endswith('fallback'):
+            reason = data.get('reason', '')
+            if reason in {'stable_actionable', 'battle_action'} or reason.endswith('fallback'):
                 actual.setdefault(current, []).append(control)
 
     print(f'运行目录：{run_dir}')
