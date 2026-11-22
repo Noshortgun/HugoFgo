@@ -1013,6 +1013,35 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['连续出击', '助战卡片第1行', '开始任务', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
+    def test_repeat_support_can_go_directly_to_battle(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        repeat = Observation(base_page=BasePage.DROPS,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击'),))
+        candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+        support = observe(BasePage.SUPPORT,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                  support=candidate))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [repeat, repeat, support, support, battle, battle, wrong_cards, battle],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 31.2],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events, options=RunOptions(run_count=2))
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        self.assertEqual(['连续出击', '助战卡片第1行', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'failed' and event.data.get('reason') == 'action_confirmation_timeout'
+                             for event in events.events))
+
     def test_two_runs_tap_repeat_once_and_count_each_dialog_once(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         team = observe(BasePage.TEAM, button('开始任务', (1086, 635, 1248, 707)))

@@ -721,6 +721,21 @@ def check_executor_repeat_support():
     add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
+    observations = [repeat, repeat, support, support, battle, battle, wrong, battle]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 31.2]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events,
+                     options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['连续出击', '助战卡片第1行', '攻击']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:repeat-support-skips-team', SUPPORT_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
 
 def check_executor_recovery():
     from executor.core import RunOptions

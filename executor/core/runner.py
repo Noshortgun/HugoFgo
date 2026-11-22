@@ -415,7 +415,7 @@ class Runner:
                 self.support_scrolls = 0
                 self.support_previous_rows = None
                 self.reset_support_search()
-                self.wait_for_page(BasePage.TEAM, now)
+                self.wait_for_pages(now, BasePage.TEAM, BasePage.BATTLE)
             return None
         rows = tuple((item.name, item.box,
                       item.support.svt_id if item.support else None,
