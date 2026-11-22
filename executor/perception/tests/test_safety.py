@@ -239,6 +239,13 @@ class SafetyTest(unittest.TestCase):
         names = [item.name for item in effect.controls if item.name.startswith('宝具卡')]
         self.assertEqual([], names)
 
+    def test_np_charge_light_effect_does_not_create_np_card(self) -> None:
+        observation = self.read('captures/2026-11-22/key/card-np-charge-light-effect.png')
+
+        self.assertEqual('card', observation.base_page.value)
+        self.assertEqual([], [item.name for item in observation.controls
+                              if item.name.startswith('宝具卡')])
+
     def test_order_change_needs_both_selections(self) -> None:
         waiting = self.read('captures/2026-11-20/key/61-order-change-select.png')
         ready = self.read('captures/2026-11-19-mystic/key/07-swap-in-selected.png')

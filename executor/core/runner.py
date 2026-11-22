@@ -222,6 +222,7 @@ class Runner:
         self.stable_box: tuple[int, int, int, int] | None = None
         self.card_index = 0
         self.card_selection: CardSelection | None = None
+        self.np_reservation_since: float | None = None
         self.confirming_card = False
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
@@ -597,6 +598,12 @@ class Runner:
                     for position, wanted in scheduled_np_requests(turn):
                         reserved_control = matching_card_control(observation, wanted, set())
                         if reserved_control is None:
+                            if self.np_reservation_since is None:
+                                self.np_reservation_since = now
+                                self.emit('warning', now, reason='np_reservation_waiting',
+                                          card_position=position, servant_slot=wanted.servant_slot)
+                            if now - self.np_reservation_since < self.options.action_timeout:
+                                return None
                             mapped_slots = sorted({item.card.servant_slot for item in observation.controls
                                                    if item.card is not None and item.card.noble_phantasm})
                             message = (np_mapping_diagnostic or
@@ -608,6 +615,7 @@ class Runner:
                                       message=message)
                             return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
                         reserved.append((position, reserved_control))
+                self.np_reservation_since = None
                 self.card_selection = select_cards(observation, self.plan.strategy,
                                                    self.plan, self.progress.wave, tuple(reserved))
                 for warning in self.card_selection.warnings:

@@ -1152,6 +1152,24 @@
         "敌方1"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-22/key/card-np-charge-light-effect.png",
+      "base": "card",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "卡1",
+        "卡2",
+        "卡3",
+        "卡4",
+        "卡5"
+      ],
+      "absentControls": [
+        "宝具卡1"
+      ],
+      "basis": "annotated"
     }
   ]
 }

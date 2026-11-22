@@ -541,6 +541,21 @@ def check_strategy_executor():
                expected, controls, 'tap', f'reason={result.reason}',
                result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)
 
+    effect_only = Observation(base_page=BasePage.CARD, controls=tuple(
+        command(index, (index - 1) % 3) for index in range(1, 6)))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), effect_only, isolated_middle, isolated_middle, isolated_middle,
+         isolated_middle, isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    waited = any(event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting'
+                 for event in events.events)
+    add_report('strategy:executor-np-waits-for-settled-frame',
+               ROOT / 'captures/2026-11-22/key/card-np-charge-light-effect.png',
+               expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
+               result.reason == 'unknown_timeout' and waited and controls == expected, simulated_ocr=True)
+
     next_battle = battle(turn=2)
     animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
     normal_cards = Observation(base_page=BasePage.CARD, controls=tuple(
