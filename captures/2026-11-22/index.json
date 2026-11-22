@@ -6,7 +6,7 @@
     "density": 280
   },
   "capturedAt": "2026-11-22",
-  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880 与 run-1795291320461-33880",
+  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880、run-1795291320461-33880 与 run-1795293140147-4220",
   "keyFrames": [
     {
       "file": "key/support-refresh-cooldown.png",
@@ -15,6 +15,10 @@
     {
       "file": "key/battle-status-change-detail.png",
       "state": "敌人状态变化详细面板（点击面板外关闭）"
+    },
+    {
+      "file": "key/card-select-missing-rank-data.png",
+      "state": "指令卡选择页（普通卡身份已知，暴击率与克制信息缺失，宝具卡身份未知）"
     }
   ]
 }
