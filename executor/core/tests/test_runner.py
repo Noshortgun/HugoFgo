@@ -47,6 +47,9 @@ def observe(page: BasePage, *controls: Control) -> Observation:
             'turn': Field(FieldStatus.CONFIRMED, 1),
             'turn_boundary': Field(FieldStatus.CONFIRMED, True),
         }
+        if (any(control.name == '攻击' and control.actionable for control in controls)
+                and not any(control.name == '战斗菜单' for control in controls)):
+            controls = (*controls, button('战斗菜单', (1141, 162, 1245, 250)))
     return Observation(base_page=page, controls=tuple(controls), fields=fields, frame_hash=page.value)
 
 
@@ -248,21 +251,20 @@ class RunnerTest(unittest.TestCase):
 
         result = run(single_wave_plan((skill,)), device, perception, events)
 
-        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
         actions = [event for event in events.events if event.type == 'action']
-        self.assertEqual(['从者1技能1', '攻击'], [event.data['control'] for event in actions])
-        self.assertEqual(1.8, actions[-1].timestamp)
+        self.assertEqual(['从者1技能1', '战斗跳过', '攻击'], [event.data['control'] for event in actions])
+        self.assertEqual(1.3, actions[-1].timestamp)
 
-    def test_skill_confirmation_requires_the_expected_animation(self) -> None:
+    def test_skill_skips_without_animation_start_and_records_timing(self) -> None:
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
-        battle = observe(BasePage.BATTLE, button('攻击'),
+        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
-        animation = Observation(base_page=BasePage.BATTLE,
-                                variants=frozenset({Variant.BATTLE_ANIMATION}))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, battle, battle, battle, animation, battle, battle, wrong_cards],
-            [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9],
+            [battle, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3],
         )
         events = MemoryEventSink()
 
@@ -270,7 +272,15 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual('card_mismatch', result.reason)
         actions = [event for event in events.events if event.type == 'action']
-        self.assertEqual(1.8, actions[-1].timestamp)
+        self.assertEqual(['从者1技能1', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in actions])
+        self.assertEqual([0.0, 0.1, 0.2], [event.timestamp for event in actions])
+        self.assertTrue(all(event.data['channel_ms'] >= 0 for event in actions))
+        self.assertTrue(all(event.data['wait_ms'] >= 0 for event in actions))
+        self.assertTrue(all(event.data['input_finished_at'] > 0 for event in actions))
+        confirmed = next(event for event in events.events if event.type == 'action_confirmed')
+        self.assertEqual('battle_ready', confirmed.data['stage'])
+        self.assertGreaterEqual(confirmed.data['wait_ms'], 100.0)
 
     def test_servant_skill_is_confirmed_before_attack(self) -> None:
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
@@ -288,7 +298,7 @@ class RunnerTest(unittest.TestCase):
         result = run(single_wave_plan((skill,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['从者1技能1', '攻击'],
+        self.assertEqual(['从者1技能1', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
 
@@ -309,7 +319,7 @@ class RunnerTest(unittest.TestCase):
         result = run(single_wave_plan((skill,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['从者2技能3', '攻击'],
+        self.assertEqual(['从者2技能3', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
 
@@ -337,14 +347,14 @@ class RunnerTest(unittest.TestCase):
         result = run(single_wave_plan((skill,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['从者2技能3', '目标从者2', '攻击'],
+        self.assertEqual(['从者2技能3', '战斗跳过', '目标从者2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
 
-    def test_targeted_skill_selects_target_before_progressing(self) -> None:
+    def test_targeted_skill_confirms_target_panel_open_and_close(self) -> None:
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                            member_slot=0, skill=0, player_target_slot=1)
-        battle = observe(BasePage.BATTLE, button('攻击'),
+        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
         target = Observation(
             base_page=BasePage.BATTLE,
@@ -353,21 +363,72 @@ class RunnerTest(unittest.TestCase):
                                    (index * 300, 269, index * 300 + 200, 499), True)
                            for index in range(1, 4)),
         )
-        animation = Observation(base_page=BasePage.BATTLE,
-                                variants=frozenset({Variant.BATTLE_ANIMATION}))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, battle, target, target, animation, battle, battle, wrong_cards],
-            [0.0, 0.5, 0.6, 1.1, 1.2, 1.6, 2.1, 2.2],
+            [battle, target, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4],
         )
         events = MemoryEventSink()
 
         result = run(single_wave_plan((skill,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['从者1技能1', '目标从者2', '攻击'],
+        self.assertEqual(['从者1技能1', '目标从者2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual([0.0, 0.1, 0.2, 0.3],
+                         [event.timestamp for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
+
+    def test_targeted_skill_recovers_once_from_missing_state_change(self) -> None:
+        skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
+                           member_slot=0, skill=0, player_target_slot=1)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        target = Observation(
+            base_page=BasePage.BATTLE,
+            variants=frozenset({Variant.SKILL_TARGET}),
+            controls=tuple(Control(f'目标从者{index}', ControlKind.TARGET,
+                                   (index * 300, 269, index * 300 + 200, 499), True)
+                           for index in range(1, 4)),
+        )
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, battle, target, battle, battle, wrong_cards],
+            [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        recoveries = [event for event in events.events
+                      if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+        self.assertEqual(1, len(recoveries))
+        self.assertEqual(1, recoveries[0].data['attempt'])
+
+    def test_targeted_skill_stops_after_one_failed_recovery(self) -> None:
+        skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
+                           member_slot=0, skill=0, player_target_slot=1)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        device, perception = scripted(
+            [battle, battle, battle, battle, battle],
+            [0.0, 0.1, 2.1, 2.2, 32.2],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('target_selection_timeout', result.reason)
+        self.assertEqual(['从者1技能1', '从者1技能1'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, len([event for event in events.events
+                                 if event.type == 'warning' and event.data.get('reason') == 'action_recovery']))
+        self.assertEqual('skill_target', events.events[-1].data['stage'])
+        self.assertGreaterEqual(events.events[-1].data['wait_ms'], 30000.0)
 
     def test_order_change_selects_both_slots_before_confirming(self) -> None:
         order_change = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
@@ -407,7 +468,8 @@ class RunnerTest(unittest.TestCase):
         result = run(plan, device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['御主技能', '御主技能3', '先发第1位', '候补第1位', '进行更替', '从者1技能1', '攻击'],
+        self.assertEqual(['御主技能', '御主技能3', '先发第1位', '候补第1位', '进行更替',
+                          '战斗跳过', '从者1技能1', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(2, result.progress.action_index)
 
@@ -432,7 +494,7 @@ class RunnerTest(unittest.TestCase):
         result = run(single_wave_plan((spell,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['令咒', '宝具解放', '决定', '攻击'],
+        self.assertEqual(['令咒', '宝具解放', '决定', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
 
@@ -443,15 +505,15 @@ class RunnerTest(unittest.TestCase):
                                    (index * 250, 20, index * 250 + 200, 100), True)
                            for index in range(1, 4)))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
-        device, perception = scripted([battle, battle, battle, battle, wrong_cards],
-                                      [0.0, 0.5, 0.6, 1.1, 1.2])
+        device, perception = scripted([battle, battle, wrong_cards], [0.0, 0.1, 0.2])
         events = MemoryEventSink()
 
         result = run(single_wave_plan((target,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['敌方2', '攻击'],
-                         [event.data['control'] for event in events.events if event.type == 'action'])
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual(['敌方2', '攻击'], [event.data['control'] for event in actions])
+        self.assertEqual([0.0, 0.1], [event.timestamp for event in actions])
         self.assertEqual(1, result.progress.action_index)
 
     def test_wave_target_and_matching_planned_target_tap_once(self) -> None:
@@ -524,8 +586,8 @@ class RunnerTest(unittest.TestCase):
                              controls=(button('关闭', (990, 640, 1010, 660)),))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, battle, detail, detail, battle, battle, wrong_cards],
-            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8],
+            [battle, detail, detail, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.6, 0.7, 1.2, 1.3],
         )
         events = MemoryEventSink()
 
@@ -569,9 +631,35 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual('card_mismatch', result.reason,
                          [(event.type, dict(event.data)) for event in events.events])
-        self.assertEqual(['御主技能', '御主技能2', '目标从者2', '攻击'],
+        self.assertEqual(['御主技能', '御主技能2', '目标从者2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
+
+    def test_master_target_skill_recovers_once_when_panel_does_not_change(self) -> None:
+        master = ActionPlan(kind='master', title='御主二技能', detail='', icon='',
+                            skill=1, player_target_slot=1)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('御主技能', (1141, 162, 1245, 250)))
+        menu = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+            controls=tuple(Control(f'御主技能{index}', ControlKind.BUTTON,
+                                   (850 + index * 90, 275, 920 + index * 90, 352), True)
+                           for index in range(1, 4)),
+        )
+        device, perception = scripted(
+            [battle, menu, menu, menu, menu, menu],
+            [0.0, 0.1, 0.2, 2.2, 2.3, 32.3],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((master,)), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('target_selection_timeout', result.reason)
+        self.assertEqual(['御主技能', '御主技能2', '御主技能2'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, len([event for event in events.events
+                                 if event.type == 'warning' and event.data.get('reason') == 'action_recovery']))
 
     def test_master_skill_without_target_does_not_tap_a_servant(self) -> None:
         master = ActionPlan(kind='master', title='御主二技能', detail='', icon='', skill=1)
@@ -595,7 +683,7 @@ class RunnerTest(unittest.TestCase):
         result = run(single_wave_plan((master,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['御主技能', '御主技能2', '攻击'],
+        self.assertEqual(['御主技能', '御主技能2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertFalse(any(event.data.get('control', '').startswith('目标从者')
                              for event in events.events if event.type == 'action'))
@@ -943,23 +1031,83 @@ class RunnerTest(unittest.TestCase):
                 self.assertEqual('宝具卡1', actions[1]['control'])
                 self.assertEqual(expected_x, actions[1]['x'])
 
-    def test_third_command_card_stops_input_and_waits_for_attack(self) -> None:
+    def test_third_command_card_skips_attack_animation_at_most_once_per_second(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
         animation = Observation(base_page=BasePage.BATTLE,
                                 variants=frozenset({Variant.BATTLE_ANIMATION}))
-        observations = [battle, battle, card, card, card, card, card, card, card, animation,
+        observations = [battle, card, card, card, card, card, card,
+                        animation, animation, animation,
                         observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 33.0]
+        times = [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.0, 2.9, 3.0, 33.0]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
         result = run(single_wave_plan(), device, perception, events)
 
         self.assertEqual(RunStatus.STOPPED, result.status)
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过', '战斗跳过'],
+                         [event.data['control'] for event in actions])
+        self.assertEqual([1.9, 2.9], [event.timestamp for event in actions
+                                      if event.data['reason'] == 'attack_animation_skip'])
+        self.assertEqual(6, len(device.actions))
+
+    def test_card_page_remaining_after_third_card_never_skips(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        observations = [battle, card, card, card, card, card, card, card, card, card]
+        times = [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.9, 31.9]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('action_confirmation_timeout', result.reason)
         self.assertEqual(['攻击', '卡1', '卡2', '卡3'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(4, len(device.actions))
+
+    def test_unexpected_popup_after_third_card_stops_without_skip(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        popup = Observation(base_page=BasePage.BATTLE,
+                            overlays=frozenset({Overlay.STORY_SKIP_CONFIRM}))
+        observations = [battle, card, card, card, card, card, card, popup]
+        times = [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('unexpected_overlay', result.reason)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(4, len(device.actions))
+
+    def test_skill_waits_when_battle_menu_has_not_recovered(self) -> None:
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        battle = Observation(
+            base_page=BasePage.BATTLE,
+            fields={
+                'wave': Field(FieldStatus.CONFIRMED, 1),
+                'turn': Field(FieldStatus.CONFIRMED, 1),
+                'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+            },
+            controls=(button('攻击'),
+                      Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True)),
+        )
+        device, perception = scripted([battle, battle, battle, battle], [0.0, 0.1, 0.2, 30.2])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        self.assertEqual(['从者1技能1', '战斗跳过'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_last_run_finishes_at_repeat_dialog_without_an_extra_tap(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -981,7 +1129,7 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.COMPLETED, result.status)
         self.assertEqual(1, result.progress.completed_runs)
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '结算推进', '下一步'],
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过', '结算推进', '下一步'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertNotIn('连续出击', [event.data['control'] for event in events.events
                                       if event.type == 'action'])
@@ -1015,7 +1163,7 @@ class RunnerTest(unittest.TestCase):
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
         self.assertEqual(2, result.progress.wave)
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击'], controls)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击'], controls)
         self.assertTrue(any(event.type == 'wave_started' and event.data['wave'] == 2
                             for event in events.events))
 
@@ -1072,7 +1220,7 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual('unknown_timeout', result.reason)
         self.assertEqual(2, result.progress.turn)
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3'],
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击', '卡1', '卡2', '卡3'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_cumulative_counter_preserves_one_planned_turn_per_wave(self) -> None:
@@ -1205,7 +1353,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('unknown_timeout', result.reason,
                          [(event.type, event.data) for event in events.events])
         self.assertEqual((2, 1), (result.progress.wave, result.progress.turn))
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3'],
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击', '卡1', '卡2', '卡3'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertTrue(any(event.type == 'wave_started' and event.data['wave'] == 2
                             and event.data['turn'] == 1 for event in events.events))

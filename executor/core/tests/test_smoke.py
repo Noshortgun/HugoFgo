@@ -15,7 +15,7 @@ from executor.session import MemoryEventSink, RunControl
 
 
 class FrameBudgetTest(unittest.TestCase):
-    def test_budget_stops_before_an_extra_tap(self) -> None:
+    def test_budget_allows_the_last_frame_action_then_stops(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         device, perception = scripted([battle, battle, battle], [0.0, 0.5, 1.0])
         control = RunControl()
@@ -24,7 +24,8 @@ class FrameBudgetTest(unittest.TestCase):
         result = run(single_wave_plan(), budget, perception, MemoryEventSink())
 
         self.assertEqual('manual_stop', result.reason)
-        self.assertEqual([], device.actions)
+        self.assertEqual([{'action': 'tap', 'x': 1132, 'y': 600,
+                           'device_x': 1132, 'device_y': 600}], device.actions)
 
 
 class SmokeCliTest(unittest.TestCase):
