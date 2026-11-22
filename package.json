@@ -26,6 +26,7 @@
     "test:run-state": "node scripts/run-state.selftest.mjs",
     "test:job-roundtrip": "node scripts/job-roundtrip.selftest.mjs",
     "desktop:selftest": "node scripts/desktop-package.selftest.mjs",
+    "scrcpy:verify": "node scripts/scrcpy-resources.mjs",
     "desktop:prepare": "node scripts/desktop-package.mjs --prepare-only",
     "package:windows": "node scripts/desktop-package.mjs"
   },

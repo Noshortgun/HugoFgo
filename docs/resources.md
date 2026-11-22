@@ -9,6 +9,7 @@
 | Atlas 图库与元数据 | `data/<区服>/assets/`、`atlas-*.json` | 编队 UI 与实机身份识别 | 图库和原始大 JSON 默认不入库；由资源管线再生成 |
 | 资源清单 | `data/<区服>/resource-manifest.json` | 完整性校验、类别合约 | 入库；记录来源、版本、数量、路径与 SHA-256 |
 | 当前感知模板 | `executor/perception/templates/cn/` | 实机识别器直接加载 | 运行硬依赖，全部入库 |
+| 固定 scrcpy 服务端 | `resources/scrcpy/` | scrcpy 通道启动前校验并推送到设备 | 官方 3.3.3 服务端、来源清单、SHA-256 与 Apache-2.0 许可证全部入库；随 Windows 安装包分发 |
 | 内置身份样本 | `executor/perception/templates/cn/identities/` | 离线回归与少量未绑定分析 | 不是从者登记表，不代替生产图库 |
 | 感知断言 | `executor/perception/fixtures/` | 单测、统一回放、fixtures 校验 | 测试硬依赖，全部入库 |
 | 旧分类模板与标注 | `cv/templates/`、`cv/labels.json` | 旧四态分类器和统一回放 | 只服务离线验证，全部入库 |
