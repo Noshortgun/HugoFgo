@@ -511,18 +511,19 @@ def check_strategy_executor():
         return Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
                        card=CommandCardIdentity(slot, card_type, crit_rate=10, affinity='neutral'))
 
-    np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
-                      card=CommandCardIdentity(0, 'buster', noble_phantasm=True,
-                                               crit_rate=0, affinity='neutral'))
+    np_cards = (
+        Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'),
+        Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B'),
+    )
     cards = Observation(base_page=BasePage.CARD, controls=(
-        np_card, *(command(index, (index - 1) % 3) for index in range(1, 6))))
+        *np_cards, *(command(index, (index - 1) % 3) for index in range(1, 6))))
     unknown = Observation(base_page=BasePage.UNKNOWN)
-    plan = make_plan(TurnPlan(np_positions={0: 'auto'}))
+    plan = make_plan(TurnPlan(np_positions={1: 'auto'}))
     result, device, events = run_core_scenario(
         [battle(), battle(), cards, cards, cards, cards, cards, cards, unknown, unknown],
         [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['攻击', '宝具卡A', '卡1', '卡2']
+    expected = ['攻击', '宝具卡2', '卡1', '卡2']
     add_report('strategy:executor-np-auto', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, controls, 'tap', f'reason={result.reason}',
                result.reason == 'unknown_timeout' and controls == expected, simulated_ocr=True)

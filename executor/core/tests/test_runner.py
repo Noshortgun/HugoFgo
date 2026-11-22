@@ -648,6 +648,67 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['攻击', '卡1', '宝具卡A', '卡2'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
+    def test_unidentified_np_regions_use_formation_order_for_reservation(self) -> None:
+        base = single_wave_plan()
+        formation = (
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        )
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
+        plan = replace(base, formation=formation,
+                       waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [
+            replace(command_card(index, slot), card=CommandCardIdentity(slot, card_type, svt_id=svt_id))
+            for index, (slot, card_type, svt_id) in enumerate((
+                (1, 'buster', 705000), (2, 'buster', 2800100), (1, 'buster', 705000),
+                (2, 'quick', 2800100), (1, 'quick', 705000),
+            ), start=1)
+        ]
+        np_cards = (
+            Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'),
+            Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B'),
+        )
+        card = observe(BasePage.CARD, *normal, *np_cards)
+        observations = [battle, battle, card, card, card, card, card, card,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        device, perception = scripted(observations, [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        self.assertEqual(['攻击', '宝具卡2', '卡1', '卡3'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'failed' and event.data.get('reason') == 'fallback_cards_unavailable'
+                             for event in events.events[:-2]))
+
+    def test_ambiguous_np_regions_stop_with_formation_order_diagnostic(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+        duplicate_regions = (
+            Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A'),
+            Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:A'),
+        )
+        card = observe(BasePage.CARD, *normal, *duplicate_regions)
+        device, perception = scripted([battle, battle, card, card], [0.0, 0.5, 0.6, 1.1])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('fallback_cards_unavailable', result.reason)
+        self.assertEqual(['攻击'], [event.data['control'] for event in events.events
+                                    if event.type == 'action'])
+        diagnostic = events.events[-1].data.get('message', '')
+        self.assertIn('宝具卡区域重复', diagnostic)
+        self.assertIn('编队顺序', diagnostic)
+
     def test_third_command_card_stops_input_and_waits_for_attack(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
