@@ -607,9 +607,9 @@ def check_strategy_executor():
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
     progress = (result.progress.wave, result.progress.turn)
-    add_report('strategy:executor-forward-wave-fallback', LOADING_IMAGE, expected, controls,
+    add_report('strategy:executor-forward-wave-planned-turn', LOADING_IMAGE, expected, controls,
                'tap', f'reason={result.reason}; progress={progress}',
-               result.reason == 'unknown_timeout' and progress == (2, 2) and controls == expected,
+               result.reason == 'unknown_timeout' and progress == (2, 1) and controls == expected,
                simulated_ocr=True)
 
     short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))
@@ -719,6 +719,21 @@ def check_executor_repeat_support():
     expected = ['连续出击', '助战卡片第1行', '开始任务', '攻击']
     ok = result.reason == 'card_mismatch' and controls == expected
     add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    observations = [repeat, repeat, support, support, battle, battle, wrong, battle]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 31.2]
+    frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
+              for index, at in enumerate(times)]
+    device = FakeDevice(frames)
+    events = MemoryEventSink()
+    with mock.patch('executor.core.runner.time.sleep', return_value=None):
+        result = run(plan, device, ScriptedPerception(), events,
+                     options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['连续出击', '助战卡片第1行', '攻击']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:repeat-support-skips-team', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
 
@@ -911,7 +926,7 @@ def check_executor_safety():
     drops = Observation(base_page=BasePage.DROPS, controls=(
         Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
     observations = [battle(), battle(), card, card, card, card, card, card, animation,
-                    battle(2), battle(2), card, card, card, card, card, card, animation,
+                    battle(2, 2), battle(2, 2), card, card, card, card, card, card, animation,
                     result_page, result_page, drops, drops, repeat, repeat, support, support]
     result, _, events = run_core_scenario(
         observations, [index * 0.5 for index in range(len(observations))],
