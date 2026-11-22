@@ -556,6 +556,22 @@ def check_strategy_executor():
                expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
                result.reason == 'unknown_timeout' and waited and controls == expected, simulated_ocr=True)
 
+    obscured = Observation(base_page=BasePage.CARD, controls=(
+        *(replace(item, card=None) for item in effect_only.controls), isolated_middle.controls[0]))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), isolated_middle, isolated_middle, obscured,
+         isolated_middle, isolated_middle, isolated_middle, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '宝具卡1', '卡1', '卡2']
+    waited = any(event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting'
+                 for event in events.events)
+    add_report('strategy:executor-card-confirmation-waits',
+               ROOT / 'captures/2026-11-20/key/card-np-selected.png',
+               expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
+               result.reason == 'unknown_timeout' and waited and controls == expected
+               and controls.count('宝具卡1') == 1, simulated_ocr=True)
+
     next_battle = battle(turn=2)
     animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
     normal_cards = Observation(base_page=BasePage.CARD, controls=tuple(

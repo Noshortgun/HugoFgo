@@ -223,6 +223,7 @@ class Runner:
         self.card_index = 0
         self.card_selection: CardSelection | None = None
         self.np_reservation_since: float | None = None
+        self.card_confirmation_since: float | None = None
         self.confirming_card = False
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
@@ -269,6 +270,13 @@ class Runner:
         self.stable_signature = None
         self.stable_since = None
         self.stable_box = None
+
+    def wait_for_card_confirmation(self, now: float) -> bool:
+        if self.card_confirmation_since is None:
+            self.card_confirmation_since = now
+            self.emit('warning', now, reason='card_confirmation_waiting',
+                      card_position=self.card_index + 1)
+        return now - self.card_confirmation_since < self.options.action_timeout
 
     def tap_stable(self, observation: Observation, name: str, now: float) -> bool:
         control = observation.control(name)
@@ -630,6 +638,8 @@ class Runner:
             control = observation.control(wanted_control.name)
             reason = 'fallback_cards_unavailable'
             if control is None or not control.actionable or control.card != wanted_control.card:
+                if self.wait_for_card_confirmation(now):
+                    return None
                 self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
                           message='已选指令卡在当前画面不可确认')
                 return self.result(RunStatus.STOPPED, reason)
@@ -646,10 +656,13 @@ class Runner:
             wanted = requests[self.card_index]
             control = matching_card_control(observation, wanted, set())
             if control is None:
+                if self.wait_for_card_confirmation(now):
+                    return None
                 self.emit('failed', now, reason=reason, card_position=self.card_index + 1,
                           servant_slot=wanted.servant_slot, card_type=wanted.card_type,
                           deck_index=wanted.deck_index, noble_phantasm=wanted.noble_phantasm)
                 return self.result(RunStatus.STOPPED, reason)
+        self.card_confirmation_since = None
         if not self.tap_stable(observation, control.name, now):
             return None
         if self.card_index == 2:
