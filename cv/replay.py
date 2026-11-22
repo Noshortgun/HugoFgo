@@ -6,19 +6,20 @@ import json
 import subprocess
 from dataclasses import replace
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from rapidocr_onnxruntime import RapidOCR
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "cv"))
 
-import farm_ember as farm
 from image_io import read_image, write_image
-from state_classifier import load_templates, result_for_image
+from state_classifier import classify, load_templates, result_for_image
 from executor.device.base import Frame
 from executor.device.fake import FakeDevice
 from executor.perception import Perception
@@ -1062,16 +1063,280 @@ def check_executor_safety():
                simulated_ocr=True)
 
 
+# 旧原型的纯流程仅作为回归参照保留；所有设备输入都由用例 mock。
+legacy = sys.modules[__name__]
+state_templates = load_templates()
+_ocr_engine = None
+
+
+class FarmError(RuntimeError):
+    pass
+
+
+def tap(x, y, reason=''):
+    raise AssertionError('旧原型回放的设备输入必须 mock')
+
+
+def swipe(x1, y1, x2, y2, ms=350):
+    raise AssertionError('旧原型回放的设备输入必须 mock')
+
+
+def shot(name='legacy.png'):
+    raise AssertionError('旧原型回放的设备截图必须 mock')
+
+
+def trace(message):
+    print(message, flush=True)
+
+
+def ocr(image):
+    global _ocr_engine
+    if _ocr_engine is None:
+        _ocr_engine = RapidOCR()
+    result, _ = _ocr_engine(image)
+    rows = []
+    for box, text, score in result or []:
+        if score < 0.5:
+            continue
+        xs = [point[0] for point in box]
+        ys = [point[1] for point in box]
+        rows.append((text.strip(), sum(xs) / 4, sum(ys) / 4))
+    return rows
+
+
+def has(rows, needle):
+    return any(needle in text for text, _, _ in rows)
+
+
+def find(rows, needle):
+    for row in rows:
+        if needle in row[0]:
+            return row
+    return None
+
+
+def click_row(rows, needle, reason='', fallback=None):
+    hit = find(rows, needle)
+    if hit:
+        _, x, y = hit
+        tap(x, y, reason or needle)
+        return True
+    if fallback:
+        tap(fallback[0], fallback[1], f'{reason or needle}（固定坐标回退）')
+        return True
+    return False
+
+
+def wait_state(pred, timeout=20):
+    end = time.time() + timeout
+    while time.time() < end:
+        rows = ocr(shot())
+        result = pred(rows)
+        if result:
+            return result
+        time.sleep(0.8)
+    return None
+
+
+SKILL_X = [[95, 180, 265], [435, 525, 615], [710, 795, 880]]
+ALLY_X = [400, 640, 880]
+ENEMY_X = [180, 480, 780]
+MASTER_SKILL_X = [910, 1000, 1090]
+JOB = json.loads((ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8'))
+
+
+def is_attack_button(rows):
+    return any('攻击' in text and x > 1000 and y > 500 for text, x, y in rows)
+
+
+def command_cards(rows):
+    cards = []
+    for label in ('力击', '迅击', '技击'):
+        for text, x, y in rows:
+            if label in text and 450 < y < 650:
+                cards.append((x, label))
+    return sorted(cards)
+
+
+def select_ally_target(action):
+    target = action.get('playerTargetSlot')
+    if target is None or action.get('detail') == '目标：自身':
+        return
+    rows = wait_state(lambda current: current if has(current, '请选择对象') else None, 6)
+    if not rows:
+        raise FarmError(f"{action['title']} 未出现对象选择框")
+    tap(ALLY_X[target], 350, f"{action['title']} 目标：从者{target + 1}")
+    time.sleep(1.5)
+
+
+def run_wave_actions(wave):
+    if not 1 <= wave <= len(JOB['waves']):
+        raise FarmError(f'作业没有第 {wave} 面配置')
+    actions = JOB['waves'][wave - 1]['turns'][0]['actions']
+    for action in actions:
+        if action['kind'] == 'target':
+            target = action['toTarget']
+            tap(ENEMY_X[target - 1], 120, f'切换目标：敌方{target}')
+            time.sleep(0.5)
+        elif action['kind'] == 'skill':
+            member = action['memberSlot']
+            skill = action['skill']
+            tap(SKILL_X[member][skill], 575, action['title'])
+            time.sleep(0.8)
+            select_ally_target(action)
+            time.sleep(1.2)
+        elif action['kind'] == 'master':
+            tap(1195, 310, '打开御主技能')
+            time.sleep(0.8)
+            tap(MASTER_SKILL_X[action['skill']], 300, action['title'])
+            time.sleep(0.8)
+            select_ally_target(action)
+            time.sleep(1.2)
+
+
+def support_state(rows):
+    if has(rows, '从者详情'):
+        return 'detail'
+    if has(rows, '好友申请') or has(rows, '发送好友申请'):
+        return 'friend'
+    if has(rows, '连续进行同一关卡'):
+        return 'repeat'
+    if has(rows, '助战编队确认') and has(rows, '冠位编队'):
+        return 'grand'
+    if has(rows, '队伍确认') or has(rows, '开始任务'):
+        return 'team'
+    if has(rows, '加载中') or has(rows, '小贴士'):
+        return 'loading'
+    return 'unknown'
+
+
+def wait_support_state(timeout=12):
+    outcome = wait_state(lambda rows: (support_state(rows), rows) if support_state(rows) != 'unknown' else None, timeout)
+    return outcome or ('unknown', [])
+
+
+def select_support(servant='娄希', search_only=False):
+    delay_scale = 0.45 if search_only else 1.0
+    initial_rows = ocr(shot('support-entry.png'))
+    if not has(initial_rows, '助战选择'):
+        raise FarmError('当前不在助战选择页，已停止')
+    tap(560, 125, '切换娄希的狂战士职阶页')
+    time.sleep(1.2 * delay_scale)
+    for refresh_index in range(3):
+        for _ in range(8):
+            swipe(640, 260, 640, 620, 200)
+            time.sleep(0.15 * delay_scale)
+        for _ in range(8):
+            time.sleep(0.7 * delay_scale)
+            rows = ocr(shot('support.png'))
+            if not has(rows, '助战选择'):
+                raise FarmError('搜索过程中离开了助战选择页，已停止')
+            hit = find(rows, servant)
+            if hit:
+                if search_only:
+                    trace(f'找到测试助战：{servant}；未点击条目')
+                    return True
+                tap(600, hit[2], f'选择{servant}助战条目（普通或冠位）')
+                handled = set()
+                started = time.time()
+                last_state = 'unknown'
+                while time.time() - started < 30:
+                    state, rows = wait_support_state()
+                    last_state = state
+                    if state in ('team', 'loading'):
+                        return True
+                    if state == 'unknown':
+                        return False
+                    if state == 'detail':
+                        raise FarmError('误入了从者详情，请重新选择助战')
+                    if state == 'grand':
+                        raise FarmError('普通助战流程误入冠位编队页，未选择任何冠位卡面')
+                    if state in handled:
+                        time.sleep(0.8)
+                        continue
+                    handled.add(state)
+                    if state == 'friend':
+                        if not click_row(rows, '结束', '结束好友申请', (330, 618)):
+                            raise FarmError('好友申请弹窗未找到结束按钮')
+                    elif state == 'repeat':
+                        if not click_row(rows, '连续出击', '连续出击', (870, 577)):
+                            raise FarmError('连续出击弹窗未找到按钮')
+                raise FarmError(f'助战流程未离开状态：{last_state}')
+            swipe(640, 550, 640, 260, 450)
+        if refresh_index < 2:
+            rows = ocr(shot('support-bottom.png'))
+            update_area = [row for row in rows if row[1] > 850 and row[2] < 170]
+            if not click_row(update_area, '列表更新', '列表已到底，更新助战列表', (930, 125)):
+                raise FarmError('助战列表到底，但没有找到列表更新按钮')
+            confirm_rows = wait_state(
+                lambda current: current if has(current, '列表更新') and has(current, '是否确认执行') else None,
+                5,
+            )
+            if not confirm_rows:
+                raise FarmError('列表更新后没有出现确认弹窗')
+            confirm_area = [row for row in confirm_rows if row[0] == '是' and row[1] > 640 and row[2] > 450]
+            if not click_row(confirm_area, '是', '确认更新助战列表', (840, 565)):
+                raise FarmError('列表更新确认弹窗未找到是按钮')
+            if not wait_state(lambda current: current if has(current, '助战选择') else None, 8):
+                raise FarmError('确认更新后没有返回助战选择页')
+            time.sleep(1.0 * delay_scale)
+    return False
+
+
+def result_action(rows):
+    if has(rows, '行动力回复') or has(rows, '消耗道具回复行动力'):
+        return 'recovery'
+    if has(rows, '连续进行同一关卡'):
+        return 'repeat'
+    if has(rows, '助战选择'):
+        return 'support'
+    if has(rows, '下一步') or has(rows, '战利品'):
+        return 'next'
+    if has(rows, '战斗结果') or has(rows, '与从者的牵绊'):
+        return 'result'
+    return 'wait'
+
+
+def finish_results(allow_repeat=True):
+    started = time.time()
+    while time.time() - started < 35:
+        rows = ocr(shot('result.png'))
+        action = result_action(rows)
+        if action == 'recovery':
+            raise FarmError('行动力不足；未使用苹果或圣晶石')
+        if action == 'repeat':
+            if not allow_repeat:
+                trace('最后一次战斗已完成；不点击连续出击')
+                return True
+            if not click_row(rows, '连续出击', '连续出击', (870, 577)):
+                raise FarmError('连续出击弹窗未找到按钮')
+            time.sleep(2.0)
+            continue
+        if action == 'support':
+            return True
+        if action == 'next':
+            if not click_row(rows, '下一步', '结算下一步', (1130, 660)):
+                raise FarmError('战利品页未找到下一步按钮')
+            time.sleep(1.4)
+            continue
+        if action == 'result':
+            tap(640, 360, '战斗结果')
+            time.sleep(1.2)
+            continue
+        time.sleep(0.8)
+    return has(ocr(shot()), '助战选择')
+
+
 def check_result_action(name, rows, expected_action, expected_tap=None):
     taps, tap = recorder()
-    with mock.patch.object(farm, "tap", tap):
-        actual_action = farm.result_action(rows)
+    with mock.patch.object(legacy, "tap", tap):
+        actual_action = legacy.result_action(rows)
         if actual_action == "next":
-            farm.click_row(rows, "下一步", "结算下一步", (1130, 660))
+            legacy.click_row(rows, "下一步", "结算下一步", (1130, 660))
         elif actual_action == "repeat":
-            farm.click_row(rows, "连续出击", "连续出击", (870, 577))
+            legacy.click_row(rows, "连续出击", "连续出击", (870, 577))
         elif actual_action == "result":
-            farm.tap(640, 360, "战斗结果")
+            legacy.tap(640, 360, "战斗结果")
     ok = actual_action == expected_action
     if expected_tap is not None:
         ok = ok and len(taps) == 1 and (taps[0]["x"], taps[0]["y"]) == expected_tap
@@ -1088,15 +1353,15 @@ def check_support_sequence(name, following_rows, expected, expected_reasons, exp
     actual = None
     error = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", side_effect=sequences),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm, "swipe") as swipe,
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", side_effect=sequences),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy, "swipe") as swipe,
+        mock.patch.object(legacy.time, "sleep"),
     ):
         try:
-            actual = farm.select_support()
-        except farm.FarmError as exc:
+            actual = legacy.select_support()
+        except legacy.FarmError as exc:
             error = str(exc)
     reasons = [item["reason"] for item in taps]
     top_scrolls = [call.args for call in swipe.call_args_list]
@@ -1116,13 +1381,13 @@ def check_support_refresh():
     sequences = [no_match] * 10 + [confirm, SUPPORT_ROWS, SUPPORT_ROWS, team]
     actual = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", side_effect=sequences),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm, "swipe"),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", side_effect=sequences),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy, "swipe"),
+        mock.patch.object(legacy.time, "sleep"),
     ):
-        actual = farm.select_support()
+        actual = legacy.select_support()
     reasons = [item["reason"] for item in taps]
     expected = ["切换娄希的狂战士职阶页", "列表已到底，更新助战列表（固定坐标回退）",
                 "确认更新助战列表", "选择娄希助战条目（普通或冠位）"]
@@ -1138,14 +1403,14 @@ def check_finish_safety(name, image_path, rows, allow_repeat, expected, expected
     actual = None
     error = None
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", return_value=rows),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", return_value=rows),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy.time, "sleep"),
     ):
         try:
-            actual = farm.finish_results(allow_repeat=allow_repeat)
-        except farm.FarmError as exc:
+            actual = legacy.finish_results(allow_repeat=allow_repeat)
+        except legacy.FarmError as exc:
             error = str(exc)
     ok = not taps and ((error == expected_error) if expected_error else actual == expected)
     add_report(name, image_path, expected_error or expected, error or actual,
@@ -1156,12 +1421,12 @@ def check_job_actions(wave, expected_points):
     taps, tap = recorder()
     image = read_image(ROOT / "captures/2026-11-19-ember/key/04-battle-wave1.png")
     with (
-        mock.patch.object(farm, "shot", return_value=image),
-        mock.patch.object(farm, "ocr", return_value=[("请选择对象", 640, 190)]),
-        mock.patch.object(farm, "tap", tap),
-        mock.patch.object(farm.time, "sleep"),
+        mock.patch.object(legacy, "shot", return_value=image),
+        mock.patch.object(legacy, "ocr", return_value=[("请选择对象", 640, 190)]),
+        mock.patch.object(legacy, "tap", tap),
+        mock.patch.object(legacy.time, "sleep"),
     ):
-        farm.run_wave_actions(wave)
+        legacy.run_wave_actions(wave)
     points = [(item["x"], item["y"]) for item in taps]
     add_report(f"action:job-wave-{wave}", ROOT / "jobs/娄希、娄希、奥伯龙.json", expected_points,
                points, "tap", f"taps={taps}", points == expected_points, simulated_ocr=True)
@@ -1170,10 +1435,10 @@ def check_job_actions(wave, expected_points):
 def check_team_start():
     taps, tap = recorder()
     rows = [("队伍确认", 120, 45), ("开始任务", 1190, 655)]
-    with mock.patch.object(farm, "tap", tap):
-        allowed = farm.has(rows, "队伍确认") or farm.has(rows, "开始任务")
+    with mock.patch.object(legacy, "tap", tap):
+        allowed = legacy.has(rows, "队伍确认") or legacy.has(rows, "开始任务")
         if allowed:
-            farm.click_row(rows, "开始任务", "开始任务", (1190, 655))
+            legacy.click_row(rows, "开始任务", "开始任务", (1190, 655))
     ok = allowed and len(taps) == 1 and (taps[0]["x"], taps[0]["y"]) == (1190, 655)
     add_report("action:team-confirm", TEAM_IMAGE, "start", "start" if allowed else "wait",
                "tap" if taps else "wait", f"taps={taps}", ok, simulated_ocr=True)
@@ -1181,10 +1446,10 @@ def check_team_start():
 
 def check_ocr_action(name, path, expected):
     image = read_image(path)
-    rows = farm.ocr(image)
-    state = farm.classify(image, farm.state_templates)["state"]
-    cards = farm.command_cards(rows) if state == "card" else []
-    attack = farm.is_attack_button(rows) if state == "battle" else False
+    rows = legacy.ocr(image)
+    state = legacy.classify(image, legacy.state_templates)["state"]
+    cards = legacy.command_cards(rows) if state == "card" else []
+    attack = legacy.is_attack_button(rows) if state == "battle" else False
     action = "cards" if cards else "attack" if attack else "wait"
     add_report(name, path, expected, action, "observe", f"ocr={rows}", action == expected)
 

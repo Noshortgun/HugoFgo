@@ -20,7 +20,7 @@ npm run verify
 
 Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scripts/python.exe`；macOS / Linux 使用 `cv/.venv/bin/python`。
 
-`npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。`python -m executor.replay` 默认运行新执行器的真实截图场景，可用 `--only <名称>` 选择；`python -m executor.replay --filter <文本>` 转发到 `cv/replay.py` 旧用例集并沿用其 `--output` 报告参数与退出码。
+`npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。`python -m executor.replay` 默认运行新执行器的真实截图场景，可用 `--only <名称>` 选择；`python -m executor.replay --filter <文本>` 转发到 `cv/replay.py` 统一用例集并沿用其 `--output` 报告参数与退出码。
 
 `npm run issues:check` 还需要 GitHub CLI 登录和网络，用于检查本地票据源与 GitHub 是否漂移。
 

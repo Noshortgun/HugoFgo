@@ -1,6 +1,6 @@
 # HugoFgo
 
-FGO 自动刷本桌面工具：Vue 3 + Vite 前端，Tauri 2 (Rust) 桌面壳，Python + OpenCV + RapidOCR 图像识别与实机执行原型。
+FGO 自动刷本桌面工具：Vue 3 + Vite 前端，Tauri 2 (Rust) 桌面壳，Python + OpenCV + RapidOCR 图像识别与实机执行器。
 
 ## Agent skills
 

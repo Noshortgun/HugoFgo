@@ -599,3 +599,11 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 验证：统一回放 156/156、执行器回放 19/19（策略过滤 16/16）、执行器单测 169、`cargo check --tests` 通过、`cargo test --lib` 11/11、`npm run package:windows` 本机与 CI 均产出 NSIS 安装包（23.48 MiB）。
 - 环境：本机新装 rustup stable 与 VS Build Tools（C++ 工作负载）；修复 `history.rs` 测试用字符串比较 Windows 路径的缺陷（`b703438`）；CI 打包解压由 PowerShell 改为 bsdtar（`026c819`）。
 - 未验收：#12 实机、#41 感知留出集、安装包实际安装运行；不宣称稳定。
+
+
+## 68. 种火作业实机验收与旧后端清理（#12，2026-11-22）
+
+- 五个实机场景全部通过：两场连刷、中途接续、白名单 AP 恢复、空白名单安全停止、清 AP。
+- 删除 `scripts/farm_ember.py`；`cv/state_classifier.py` 移除 adb 截图与 watch 设备入口，保留离线分类、评估、模板与标注。旧动作流程作为无设备输入的回归参照移入 `cv/replay.py`，统一回放仍覆盖全部 172 个用例。
+- 运行文档统一指向桌面 UI 与 `executor/`，外部自动化进程扫描移除旧脚本规则。
+- 验证：`npm run replay` 172/172、`python -m executor.replay` 21/21、执行器单测 200 项、`npm run build` 与 `npm run verify` 全部通过。
