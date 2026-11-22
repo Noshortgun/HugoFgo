@@ -1,84 +1,48 @@
 # HugoFgo
 
-HugoFgo 是一个 FGO 自动刷本桌面工具：用可视化界面编队、编排作业，并由执行器驱动安卓模拟器完成战斗。项目使用 Vue 3、TypeScript、Tauri 2 和 Python。
+HugoFgo 是一个 FGO 自动刷本桌面工具：用可视化界面编队、编排作业，并由本地 Python 执行器驱动安卓模拟器完成战斗。项目使用 Vue 3、TypeScript、Tauri 2 和 Python。
 
-编队、作业编辑和桌面执行器桥接已接通，种火作业的五项实机验收已通过；识别留出集、安装版和其他副本仍未完整验收，不能视为通用稳定的一键刷本工具。具体能力与限制见 [当前状态](docs/status.md)。
+当前仅在指定国服种火作业上完成五项实机验收；识别泛化、安装版和其他副本仍未完整验收。不要把本项目视为任意作业都稳定的一键刷本工具。准确的证据范围和限制见 [当前状态](docs/status.md)。
 
-## 快速开始
+## 选择使用方式
 
-环境要求：
+- **安装版**：适合验收测试。安装包能构建，但安装、首启和完整实机流程尚未验收；准备与运行步骤见 [使用指南](docs/user-guide.md)。
+- **源码开发版**：用于当前实机使用和开发。需要 Node.js 20+、Rust、Python、adb 和安卓模拟器。
+- **浏览器预览**：用于查看和编辑界面，不支持设备、真实运行、桌面作业库或资源任务。
 
-- Node.js 20+
-- Rust 工具链（运行 Tauri 桌面版）
-- Python 3.11+（回放与执行器）
-- adb 和安卓模拟器（设备功能）
+源码开发版快速启动：
 
 ```bash
 npm install
-npm run resources:update   # 首次克隆后下载图库与元数据
-npm run dev                # 浏览器预览
-npm run tauri dev          # 桌面版
-```
-
-浏览器预览只读：设备命令、作业保存与资源任务需要 `npm run tauri dev` 启动的桌面版。桌面壳负责作业读写，并按区服把图库与清单放在 `data/<区服>/`。
-
-运行作业统一从桌面版进行：检测并选择设备，设置场数与 AP 恢复白名单，保存作业后在编队页点击“开始”。旧 `scripts/farm_ember.py` 已移除，不再提供独立 Python 刷本入口；详细步骤见 [使用指南](docs/user-guide.md#5-启动运行)。
-
-Python 回放环境：
-
-```bash
 python -m venv cv/.venv
 cv/.venv/Scripts/python.exe -m pip install -r cv/requirements.txt   # Windows
 cv/.venv/bin/python -m pip install -r cv/requirements.txt           # macOS / Linux
+npm run resources:update
+npm run tauri dev
 ```
 
-也可用 `HUGOFGO_PYTHON` 指定解释器。
-
-## Windows 安装版与发布
-
-安装包不包含图库。首次启动会使用占位卡；打开“设置与资源”，选择区服并点击“增量更新”，下载完成后编队会自动刷新。资源更新使用随包附带的 Node.js，无需另装 Node.js。
-
-安装版的作业、图库、设置和运行证据统一保存在 `%APPDATA%/com.hugofgo.desktop/` 下的 `jobs/`、`data/`、`run-settings.json` 与 `logs/farm/`，不依赖源码目录或开发服务器。
-
-**Python 执行器采用检测用户 Python 的分发策略，不随包附带 Python。** 运行作业前请安装 64 位 Python 3.12，再按实际安装位置安装固定依赖：
-
-```powershell
-py -3.12 -m pip install -r "<HugoFgo 安装目录>\cv\requirements.txt"
-```
-
-也可用 `HUGOFGO_PYTHON` 指向已安装这些依赖的解释器。设备运行另需可用的 adb 与安卓模拟器；假运行可用于离线联调。
-
-发布者在具备 Rust 工具链的 Windows 机器上执行：
-
-```bash
-npm ci
-python -m pip install -r cv/requirements.txt
-npm run package:windows
-```
-
-该命令先准备固定版本 Node.js 运行时，再执行前端构建、全量回放和 `tauri build`。NSIS 安装包输出到 `src-tauri/target/release/bundle/nsis/`。CI 的“Windows 安装包”任务使用同一命令并上传安装包。发布时需核对：空库首启、国服下载、作业保存/打开，以及假运行或实机运行与历史记录；未做完整实机验收前不得标记稳定。
+也可用 `HUGOFGO_PYTHON` 指定解释器、`HUGOFGO_ADB` 指定 adb。只需要浏览器界面时使用 `npm run dev`。
 
 ## 文档
 
 从 [文档地图](docs/README.md) 进入：
 
-- [使用指南](docs/user-guide.md)：资源、编队、作业和设备预览。
-- [当前状态](docs/status.md)：已实现能力、限制和后续工作。
-- [作业格式](docs/job-format.md)：作业 JSON v1 字段与示例。
+- [使用指南](docs/user-guide.md)：安装与开发启动、资源、编队、运行和故障处理。
+- [当前状态](docs/status.md)：实机证据、已实现能力和明确限制。
+- [作业格式](docs/job-format.md)：作业 JSON v1 字段、执行语义与示例。
 - [开发指南](docs/development.md)：环境、预检、构建、分支和 issue。
-- [测试与验收](docs/testing.md)：单元测试、离线回放、素材和实机验收。
-- [需求基线](docs/requirements.md) 与 [目标架构](docs/architecture.md)：产品和系统设计。
-- [领域术语](GLOSSARY.md) 与 [架构决策](docs/adr/)：统一用词和关键取舍。
+- [架构与接口](docs/architecture.md)：进程模型、Tauri 命令、Python CLI 和文件契约。
+- [测试与验收](docs/testing.md)：验证入口、资源引用、回放和实机验收。
+- [需求基线](docs/requirements.md)、[领域术语](GLOSSARY.md) 与 [架构决策](docs/adr/)：产品目标、统一用词和关键取舍。
 
 ## 常用验证
 
 ```bash
 npm run preflight -- --offline
-npm run build
-npm run replay
+npm run verify
 ```
 
-完整验证命令见 [测试与验收](docs/testing.md)。执行器或图像识别行为变更必须同步更新离线回放，实机验收完成前不得标记为稳定。
+执行器或图像识别行为变更必须同步更新离线回放；完整规则见 [测试与验收](docs/testing.md)。
 
 ## 免责声明
 
@@ -88,5 +52,3 @@ npm run replay
 - 游戏内图像与文本的版权归原权利方所有；仓库中的截图仅用于自动化流程的兼容性测试，不构成授权。
 - 图库与从者数据在运行时从 Atlas Academy 获取，不随本仓库分发。
 - 请勿将游戏素材用于商业用途；因使用本工具导致的账号风险由使用者自行承担。
-
-截图与运行产物的入库规则见 [测试与验收](docs/testing.md#3-验证素材与运行产物)。

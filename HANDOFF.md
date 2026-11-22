@@ -1,4 +1,6 @@
+# 历史进展
 
+本文件按阶段追加历史实施与验证记录，旧条目是当时状态的快照，不代表当前命令、文件或能力仍然存在。当前使用和开发方式以 [文档地图](docs/README.md) 为准；新阶段只在末尾追加，不改写旧条目。
 
 ## 13. 自动刷本原型的问题与本轮修复（2026-11-19）
 
@@ -607,3 +609,14 @@ PYTHONUTF8=1 cv/.venv/Scripts/python.exe scripts/farm_ember.py --support-test �
 - 删除 `scripts/farm_ember.py`；`cv/state_classifier.py` 移除 adb 截图与 watch 设备入口，保留离线分类、评估、模板与标注。旧动作流程作为无设备输入的回归参照移入 `cv/replay.py`，统一回放仍覆盖全部 172 个用例。
 - 运行文档统一指向桌面 UI 与 `executor/`，外部自动化进程扫描移除旧脚本规则。
 - 验证：`npm run replay` 172/172、`python -m executor.replay` 21/21、执行器单测 200 项、`npm run build` 与 `npm run verify` 全部通过。
+
+
+## 69. 文档质量与资源引用整理（#45 / GitHub #46，2026-11-22）
+
+- 当前状态改按实机、离线和未交付证据分层；补齐 #12 五场景运行目录、#41 新采 78 帧的真实结果，修正留出集、弹窗复验和宝具左右中位证据的过期表述。
+- README 收敛为入口；使用指南区分安装版、源码版和浏览器预览，增加已验收种火作业路径、安全停止与证据说明。安装版和圣晶石确认路径不作未验证承诺。
+- 架构页补充真实 Tauri commands、Python CLI、stdin 停止、事件、退出码、运行文件和内部 Python 接口；明确前端 Schema 生成仍是目标。
+- 资源与测试文档建立图库、模板、fixtures、截图和本地证据的分类、引用关系与清理原则；作业格式同步 `wave.target`、额外字段和二次选择边界。
+- 新增 `scripts/README.md` 与 `check-references.mjs`：检查公开文档本地链接、模板文件和模板来源；默认不依赖本机 logs 或被忽略原图，`--include-local` 检查本机唯一来源。
+- 未移动、重命名或删除素材，未处理 worktree，未改变运行时行为；现有作业修改与未跟踪留出集采帧脚本不属于本票提交。
+- 验证：`npm run verify` 全绿，执行器单测 200 项、统一回放 172/172；引用检查覆盖 56 个文档链接、39 个模板与 39 个来源，默认和 `--include-local` 均通过。

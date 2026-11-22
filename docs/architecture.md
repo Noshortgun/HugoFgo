@@ -1,20 +1,22 @@
-# HugoFgo 目标架构
+# HugoFgo 架构与接口
 
-版本：v1（2026-11-19 与用户逐轮对齐）。范围：**Vue 前端与 Tauri/Rust 壳复用**，执行器全部新写，作业存储与资源任务归属重做。术语见 `GLOSSARY.md`，模块设计用词（模块 / 接口 / 实现 / 缝 / 适配器）遵循 codebase-design。
+版本：v1。范围：**Vue 前端与 Tauri/Rust 壳复用**，Python 执行器独立成包，作业存储与资源任务归属桌面壳。术语见 [领域术语](../GLOSSARY.md)。
+
+本页同时描述当前模块边界和已实现的本地接口；尚未落地的目标会单独标注。这里没有 HTTP 后端、REST/GraphQL 路由、API 端口或应用层鉴权。
 
 ## 1. 进程模型
 
-一个桌面进程（Tauri）+ 按需一个 Python 执行器子进程（ADR-0001）。没有本地网络服务、没有端口、没有鉴权。执行器自带设备层；壳的 adb 代码只服务设备预览，避免高频战斗路径跨进程。
+一个桌面进程（Tauri）+ 按需一个 Python 执行器子进程（ADR-0001）。执行器自带设备层；壳的 adb 代码只服务设备预览，避免高频战斗路径跨进程。
 
-```
+```text
 ┌────────────────────────── Tauri 桌面进程 ──────────────────────────┐
-│  Vue 前端（保留）                                                   │
-│      │ 命令 + 事件订阅                                              │
+│  Vue 前端                                                          │
+│      │ Tauri commands + 事件订阅                                    │
 │  壳 Shell：作业存储 / 资源任务 / 设备查询 / 运行控制                 │
 └───────┬───────────────────────────────────────────────┬───────────┘
-        │ 启动参数 + stdout JSON Lines + 退出码           │ adb（设备查询与预览）
+        │ 启动参数 + stdin 停止 + stdout JSON Lines + 退出码│ adb（设备查询与预览）
         ▼                                                 ▼
-┌──────────────── 执行器子进程（新写） ─────────────┐   模拟器
+┌──────────────── 执行器子进程 ─────────────────────┐   模拟器
 │  作业模型 → 执行器核心 → 设备网关                  │      ▲
 │                ↑            ↑                      │      │
 │           画面感知      运行会话（日志/证据）        │      │
@@ -22,89 +24,227 @@
                             │ adb（截图与输入）──────────────┘
 ```
 
-执行器与壳之间只有进程缝：启动参数、JSON Lines 事件、退出码。任何一方可独立替换。
+壳与执行器之间的进程缝包括启动参数、stdin 控制、stdout JSON Lines 和退出码。任何一方可独立替换，但必须遵守第 3 节契约。
 
 ## 2. 模块与接口
 
-设计原则：每个模块一个小接口，复杂实现藏在后面；调用方与测试走同一个缝。不引入"未来可能有用"的缝——适配器只有一个时，缝就是假的。
+设计原则：每个模块一个小接口，复杂实现藏在后面；调用方与测试走同一个缝。不引入“未来可能有用”的缝。
 
 ### 2.1 作业模型 Job Model
 
-- **接口**：`parse(文本) → 作业 | 诊断`；`compile(作业) → 执行计划 | 诊断`。
-- **实现**：schema 校验、槽位解析、面/回合展开、能力支持检查、错误定位到面与回合。
-- **缝**：作业 JSON Schema 是跨语言契约单源，前端与执行器都从它生成或校验，不各写一套。
-- **删除测试**：删掉它，"这份作业能不能跑、哪一步不合法"的判断会散落到 UI 与执行器各处——它必须有。
+- **接口**：`compile_job(文本) → 执行计划 | 诊断`。
+- **实现**：Schema 校验、槽位解析、面/回合展开、能力支持检查、错误定位到面与回合。
+- **机器契约**：`schemas/job-v1.schema.json`；人读说明见 [作业格式](job-format.md)。
+- **当前与目标**：执行器从 Schema 校验；前端目前仍维护手写 TypeScript 类型。“前端也从 Schema 生成”是目标，不是当前实现。
 
 ### 2.2 设备网关 Device Gateway
 
-- **接口**：`devices()`（设备发现）+ `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`；坐标参数是 1280×720 基准，serial 与区服属于 `DeviceConfig`。
-- **实现**：adb 发现与路径解析、坐标基准换算、截图校验、超时与错误上下文、设备配置（含区服）。
-- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）。这是真实存在的缝，因为有三个适配器。
-- **ldplayer-window**：从 LDPlayer 的 `RenderWindow` 取 1280×720 BGR24 原始帧，跳过 adb 子进程与 PNG 编解码；默认不启用，失败时明确报错、不静默退回 adb。窗口比画面矮时首次采集自动加高被裁像素（上限 16 px），无法修正时报 `clipped`。只截图不输入，`tap`/`swipe` 仍走 adb。最小化/隐藏不可用，被遮挡可用，多开不支持；其他模拟器不因此获得支持。
-- **分辨率**：仅支持精确 16:9 横屏且不低于 1280×720；其他分辨率拒绝执行，不盲目缩放点击（ADR-0005）。
-- **区服**：区服是设备的属性（ADR-0003），设备配置必填并决定后续加载哪套识别配置与图库。
-- **不暴露**：adb 命令行细节、文件路径、PNG 编解码。
+- **接口**：`devices()` 与 `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`。
+- **坐标**：动作使用 1280×720 基准，由适配器换算到真实分辨率；serial 与区服属于 `DeviceConfig`。
+- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）。
+- **LDPlayer 边界**：原始帧适配器只截图，`tap`/`swipe` 会明确报错；当前完整实机闭环仍走 adb，不把该通道算作独立刷本通道。
+- **分辨率**：仅支持精确 16:9 横屏且不低于 1280×720；其他分辨率拒绝执行（ADR-0005）。
+- **区服**：设备配置必填并决定识别配置与图库；当前执行器只接受 CN（ADR-0003）。
 
 ### 2.3 画面感知 Perception
 
-- **接口**：`read(帧) → 观察`（基页 + 画面变体 + 覆盖层 + 控件 + 字段状态）；`read_fields(帧, 字段, timeout)` 才等待后台 OCR。执行器只消费"观察"，永远不碰像素。
-- **身份**：助战候选通过区域图库匹配输出从者与概念礼装 ID；普通指令卡使用 Atlas `commands` 的透明立绘原图做局部特征与几何一致匹配，再独立输出卡色和助战标记，不需要逐从者手工裁剪模板。执行器通过 `bind_formation(编队)` 传入编译后的结构化编队，感知用 `(svt_id, 是否助战)` 消歧编队槽位；没有上下文或特征分差不足时保持未知，不猜槽位。绑定编队后，助战识别只从完整图库加载作业所需的从者与概念礼装模板，指令卡只加载当前编队成员的各再临 `commands` 原图；未绑定的助战离线分析可做全库识别，指令卡离线分析只使用少量内置原图，避免对整套图库做特征提取。感知不读取作业文件。
-- **双速**：同步快路径只用区域化模板、颜色与布局证据，禁止 OCR、网络与按次付费服务；OCR 在后台单线程按需补 NP、面/回合、AP 等字段，结果绑定帧哈希，画面已变则只进缓存。
-- **观察内容**：基页（`menu / support / team / battle / card / result / drops / ap_recovery / story / loading / unknown`）、版式变体（普通/冠位助战、普通/冠位队伍）、覆盖层（可与基页并存）、带基准坐标的控件、以及每个控件的可行动标记。`battle` 不代表攻击按钮可用，`card` 不代表还能选卡；`unknown / loading` 永远不输出可行动控件。
-- **字段状态**：`not_applicable / not_read / pending / uncertain / confirmed`，不把"不需要读"和"读取失败"混成一个 `uncertain`。
-- **区服**：识别配置按区服隔离（当前只有 `executor/perception/regions/cn.py` 与 `templates/cn/`）；缺配置时报"该区服未支持"，不允许误识别后继续。
-- **注意**：观察必须能表达"不确定"，而不是强行给一个状态。被模态覆盖层或目标选择变体盖住时，基页控件**不输出**（而不是列一堆不可点）；御主技能展开是非模态，攻击、从者技能、敌人、战斗菜单、令咒此时仍可点。
-- **中间态与变体**：攻击/技能/换人动画归为 `battle + animation`，不输出任何控件；结算分 `bond / exp / loot`，己方单体技能选目标为 `skill_target` 变体。随滚动变化的助战卡片行、AP 道具行不写死坐标，逐帧检测或按锚点选布局。
-
+- **接口**：`read(帧) → 观察`；`read_fields(帧, 字段, timeout)` 才等待后台 OCR。执行器只消费观察，不碰像素。
+- **身份**：助战候选通过区域图库匹配输出从者与概念礼装 ID；普通指令卡使用 Atlas `commands` 原图，再独立输出卡色和助战标记。`bind_formation(编队)` 用于同名从者槽位消歧。
+- **资源加载**：绑定编队后只加载当前作业所需身份素材；未绑定的离线分析使用内置少量素材，不对整套图库做特征提取。感知不读取作业文件。
+- **双速**：同步快路径只用区域模板、颜色与布局证据；OCR 在后台单线程按需补 NP、面/回合、AP 等字段，结果绑定帧哈希。
+- **观察内容**：基页、版式变体、覆盖层、控件、字段状态、帧哈希与证据。`unknown / loading` 不输出可行动控件。
+- **字段状态**：`not_applicable / not_read / pending / uncertain / confirmed`，区分“不需要读”和“读取失败”。
+- **中间态**：攻击/技能/换人动画归为 `battle + animation`；结算分 `bond / exp / loot`。被模态覆盖层或目标选择变体盖住时，不输出基页控件。
+- **当前限制**：只有国服识别配置；真实帧尚未输出指令卡暴击率和克制/抵抗，完整留出集验收未完成。
 
 ### 2.4 执行器核心 Executor
 
-- **接口**：`run(执行计划, 设备网关, 画面感知, 事件出口) → 运行结果`。
-- **实现**：画面状态机、动作后确认、补刀策略、安全停止、连续出击计数、恢复策略（ADR-0004：白名单 + 清 AP 阶段禁用道具 + 后续画面确认消耗后计数）。
-- **这是系统里最深的一个模块**：调用方只给作业和事件出口，全部战斗复杂性都在里面。
-- **测试缝就在这个接口上**：假设备 + 截图语料 + 假感知 = 回放。不需要为测试再开别的口。
+- **接口**：`run(执行计划, 设备网关, 画面感知, 事件出口, options, control) → 运行结果`。
+- **实现**：画面状态机、动作后确认、补刀策略、安全停止、连续出击计数、AP 白名单与清 AP（ADR-0004）。
+- **测试缝**：假设备 + 截图语料 + 假感知 = 回放，不另开测试专用行为入口。
 
 ### 2.5 运行会话 Run Session
 
-- **接口**：事件出口 + `stop()`；产出运行目录与历史记录。
-- **实现**：动作日志、失败截图、状态快照、结果分类、历史索引。执行器在收到完成、停止或失败终端事件时向 `logs/run-history.jsonl` 追加一条记录；桌面壳从同一文件查询记录，不另行推断战斗结果。
-- **停止语义**：收到停止后，在当前动作边界结束，不留下半个动作。壳等待执行器的终端事件，最多宽限 30 秒；只有超时未收到终端事件才强制终止进程树，并记录异常停止。
+- **接口**：事件出口 + `RunControl.stop()`；产出运行目录与历史记录。
+- **实现**：动作日志、失败截图、状态快照、结果分类、历史索引。
+- **停止语义**：收到停止后在当前动作边界结束。壳最多等待终端事件 30 秒，超时才强制终止进程树并记录异常停止。
 
 ### 2.6 壳 Shell
 
-- **接口（给前端）**：设备查询、作业 CRUD、资源任务、运行控制、事件订阅、运行历史查询与证据路径定位。
+- **接口**：设备查询、作业 CRUD、资源任务、运行控制、事件订阅、运行历史与证据路径定位。
 - **实现**：执行器进程生命周期、文件读写、设置持久化、前端事件转发。
-- **不包含**：任何战斗逻辑、任何识别逻辑。
+- **不包含**：战斗逻辑或识别逻辑。
 
-### 2.7 前端 UI（保留）
+### 2.7 前端 UI
 
-- 编队、编排、导入、作业库界面不变。
-- 仅运行面板与历史页改为消费真实事件与记录。
+- 编队、编排、导入和作业库界面。
+- 运行面板消费真实 `run-event`；历史页读取壳返回的真实记录。
+- 浏览器预览没有桌面命令、真实运行、资源任务或历史能力。
 
-## 3. 进程缝协议
+## 3. 当前接口契约
 
-- **启动参数**：作业文件路径、设备 serial、显式区服、运行目录、连续出击场数。执行入口当前只接受 CN，缺失或其他区服直接报错。
-- **事件**：JSON Lines，类型含状态切换、动作、面/回合推进、警告、完成、失败。
-- **控制**：壳发出停止信号，执行器在动作边界安全停止。
-- **退出码**：0 完成；非 0 失败或停止，原因已在事件中给出。
+这些是本地产品和开发集成入口，不是跨版本稳定 SDK。普通使用优先走桌面 UI；本地自动化优先使用 Job JSON、`python -m executor` 和 JSON Lines 事件。
+
+### 3.1 Python 执行器 CLI
+
+```bash
+python -m executor <job.json> \
+  --serial <adb serial> \
+  --region CN \
+  [--run-dir <目录>] \
+  [--battles <场数>] \
+  [--recovery [saint_quartz|gold|silver|bronze|copper ...]] \
+  [--drain-after-turns] \
+  [--adb <adb路径>] \
+  [--channel adb|ldplayer-window] \
+  [--fake]
+```
+
+- `--region` 必填，当前只接受 `CN`。
+- 省略 `--recovery` 时默认仅允许 `bronze`；单独写 `--recovery` 且不带值表示空白名单。
+- `--drain-after-turns` 在固定场数完成后清 AP，此阶段禁用恢复道具。
+- `--fake --serial fake` 不接触设备，仅用于联调。
+- 开发期默认写入项目 `logs/farm/<时间戳>/`；安装版由壳传入应用数据目录。
+
+其他常用入口：
+
+```bash
+python -m executor.domain <job.json> [--json]          # 校验与编译
+python -m executor.perception <截图> [--ready] [--json] # 单帧感知
+python -m executor.replay [--only <名称> ...]           # 执行器回放
+python -m executor.device --self-test                  # 设备自检
+```
+
+### 3.2 stdin、stdout 与退出码
+
+壳向执行器 stdin 写入单独一行 `stop\n`，请求动作边界停止。
+
+stdout 与 `events.jsonl` 每行一个 JSON 对象：
+
+```json
+{
+  "type": "action",
+  "timestamp": 1760000000.0,
+  "data": {
+    "control": "攻击",
+    "wave": 1,
+    "turn": 1,
+    "action_index": 0,
+    "x": 1050,
+    "y": 620,
+    "reason": "stable_actionable"
+  }
+}
+```
+
+事件类型包括：
+
+| 类型 | 含义 |
+| --- | --- |
+| `run_started` | 进程与作业启动信息 |
+| `state_changed` | 感知基页变化 |
+| `wave_started` / `turn_started` | 面或面内回合推进 |
+| `action` | 实际设备动作及坐标、原因、面/回合 |
+| `warning` | 可恢复等待、字段降级等非终端警告 |
+| `recovery_used` | 后续画面确认后的恢复消耗 |
+| `drain_started` | 固定场数完成，进入清 AP |
+| `finished` / `stopped` / `failed` | 完成、停止、失败终端事件 |
+
+退出码：**0 完成；1 停止或运行失败；2 非法作业**。终端原因以事件和 `result.json` 为准，不能只凭退出码判断具体结果。
+
+### 3.3 Tauri commands
+
+前端通过 `invoke<T>(command, args)` 调用。Rust 的 `AppHandle` 和 `State` 由 Tauri 注入；命令成功返回 `T`，失败 reject 为字符串错误。
+
+| 范围 | 命令 | 前端参数与用途 |
+| --- | --- | --- |
+| 设备 | `list_devices` | 无；返回 adb 设备数组 |
+| 设备 | `get_device_info` | `{ serial }`；返回分辨率、DPI、型号 |
+| 设备 | `capture_frame` | `{ serial }`；返回 PNG base64、临时路径和尺寸 |
+| 设备 | `tap_normalized` | `{ serial, x, y, width?, height? }`；归一化坐标测试点击 |
+| 运行 | `start_run` | `{ serial, jobPath, settings, region }`；启动唯一执行器进程 |
+| 运行 | `stop_run` | 无；请求动作边界停止 |
+| 运行 | `get_run_state` | 无；返回当前或最近一次运行快照 |
+| 作业 | `list_jobs` / `read_job` | 列表；`read_job` 接收 `{ file }` |
+| 作业 | `save_job` / `delete_job` | 分别接收 `{ name, job }`、`{ file }` |
+| 历史 | `list_run_history` | `{ limit? }`；默认 100、最多 500 |
+| 历史 | `get_run_record` / `open_run_artifacts` | 均接收 `{ id }`；后者只返回证据路径，不打开文件管理器 |
+| 资源 | `check_resources` / `verify_resources` | `{ region }` |
+| 资源 | `update_resources` | `{ region, refresh }`；`refresh=true` 表示完整校准 |
+| 设置 | `get_run_settings` / `save_run_settings` | 读取；保存接收 `{ settings }` |
+
+`start_run` 示例：
+
+```ts
+const state = await invoke('start_run', {
+  serial: 'emulator-5554',
+  jobPath: 'jobs/example.json',
+  region: 'CN',
+  settings: {
+    battles: 2,
+    recovery: { allowed: ['bronze'], drain_after_turns: false },
+  },
+});
+```
+
+恢复项为 `saint_quartz | gold | silver | bronze | copper`。`RunState` 使用 snake_case：`running/run_id/serial/job_name/job_path/started_at_ms/status/screen/wave/turn/action/completed_runs/recovery_used/log_dir/error/exit_code`。
+
+前端还使用：
+
+- `run-event`：载荷为 `{ run_id, type, timestamp, data }`。
+- `resource-task-output`：载荷为 `{ region, action, stream, text }`。
+- `hugofgo-data` 自定义协议：只读本地资源；Windows 上表现为 `http://hugofgo-data.localhost/...`，不监听网络端口。
+
+### 3.4 作业、运行与历史文件
+
+作业输入以 `schemas/job-v1.schema.json` 为准。运行设置：
+
+```json
+{
+  "battles": 1,
+  "recovery": { "allowed": ["bronze"], "drain_after_turns": false }
+}
+```
+
+每次运行目录可包含：
+
+| 文件 | 内容 |
+| --- | --- |
+| `events.jsonl` | 完整事件流 |
+| `result.json` | 状态、原因、进度、作业、设备、起止时间、最后观察与失败帧路径 |
+| `observation.json` | 最后一帧感知结果 |
+| `failure.png` / `failure.bgr24` | 非完成状态下的最后一帧（可用时） |
+| `fake-actions.json` | 仅假运行的模拟动作记录 |
+
+`logs/run-history.jsonl` 每次终端事件追加一条 camelCase 记录：`id/jobName/jobFile/serial/region/startedAt/finishedAt/durationMs/result/reason/battlesCompleted/recoveryUsed/runDir/error`。
+
+### 3.5 Python 内部模块入口
+
+这些属于内部开发 API，没有独立版本化或兼容承诺：
+
+- `executor.domain.compile_job(text)`：作业校验与编译。
+- `executor.core.run(plan, device, perception, events, options=..., control=...)`：执行核心。
+- `executor.device.open_device(config)`：打开设备适配器。
+- `executor.perception.Perception.read(frame)` / `read_fields(...)`：单帧感知。
+- `executor.session.JsonlEventSink` / `MemoryEventSink` / `RunControl`：事件与停止控制。
 
 ## 4. 存储布局
 
 | 位置 | 内容 | 说明 |
 | --- | --- | --- |
-| `jobs/` | 作业 JSON | 格式 v1 不变 |
-| `data/<区服>/` | 图库元数据、素材、资源清单 | 管线保留，按区服隔离，不随安装包分发 |
-| `logs/run-history.jsonl` | 每次运行一条历史索引记录 | 开发期位于项目运行目录；桌面版位于应用数据目录的 `logs/` 下 |
-| `logs/farm/<时间戳>/` | 每次运行的日志与失败截图 | 沿用现有结构 |
-| `captures/` | 验证素材与索引 | 新回放的输入，不重新采集 |
-| `schemas/` | 作业 JSON Schema | 前后端与执行器的契约单源 |
+| `jobs/` | 作业 JSON | 格式 v1；安装版位于应用数据目录 |
+| `data/<区服>/` | 图库元数据、素材、资源清单 | 按区服隔离，图库不随安装包分发 |
+| `logs/run-history.jsonl` | 每次运行一条历史索引 | 开发期在项目目录，安装版在应用数据目录 |
+| `logs/farm/<运行ID>/` | 每次运行的日志与失败截图 | 本地证据，不入库 |
+| `captures/` | 验证素材与索引 | 回放和模板源，不是实机运行输入 |
+| `schemas/` | 作业 JSON Schema | 执行器机器契约 |
 
-## 5. 建议目录结构
+## 5. 目录结构
 
-```
-src/            前端（保留）
+```text
+src/            前端
 src-tauri/      壳
-executor/       新后端（独立包）
+executor/       Python 执行器
   domain/       作业模型与编译
   device/       设备网关（adb + fake + 可选 ldplayer-window）
   perception/   画面感知
@@ -118,15 +258,15 @@ captures/       验证素材
 
 ## 6. 测试策略
 
-- **主缝只有一个**：执行器接口上的回放（截图进、动作与停止出）。
-- 契约层用 Schema 校验测试覆盖非法作业，不需要再开新缝。
-- 每个实机故障补一条回放用例，永久保留。
-- 实机验收独立进行，按 `docs/requirements.md` 第 5 节执行。
+- **主缝**：执行器接口上的回放（截图进、动作与停止出）。
+- **契约层**：Schema 校验测试覆盖非法作业。
+- **实机故障**：每个故障补一条回放用例，永久保留。
+- **证据边界**：离线、真实截图、实机和安装版验收分别记录，见 [测试与验收](testing.md)。
 
 ## 7. 关键取舍
 
-- **单执行器**：设备访问、识别、执行各一份实现，杜绝三套并行。
-- **进程隔离**：执行器崩溃不拖垮桌面端；代价是要维护一份事件协议。
-- **契约前置**：作业 Schema 先行，避免前端与执行器对格式的理解漂移。
-- **识别与执行分离**：感知模块可独立演进（换 OCR、加模板），不动状态机。
-- **区服维度正交**：区服只影响设备配置、识别配置与图库路径，不进入作业格式与状态机逻辑；新增区服 = 新增配置与素材，不改执行器。
+- **单执行器**：设备访问、识别、执行各一份实现。
+- **进程隔离**：执行器崩溃不拖垮桌面端；代价是维护事件协议。
+- **契约前置**：作业 Schema 先行，减少格式理解漂移。
+- **识别与执行分离**：感知可独立演进，不动状态机。
+- **区服维度正交**：区服只影响设备配置、识别配置与图库路径，不进入作业格式与状态机。

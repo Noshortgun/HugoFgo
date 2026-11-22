@@ -19,7 +19,7 @@
 | `warnings` | 字符串数组 | 可选警告信息 |
 | `provenance` | 任意 JSON | 可选来源信息，不作为执行动作 |
 
-Schema 不允许未列出的顶层字段。
+Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保留原文件中的额外顶层字段，以免导入导出意外丢数据；但“编辑器保留”不等于“执行器接受”，含额外字段的文件仍需通过 Schema 与编译器校验才能运行。
 
 ## 2. 编队与槽位
 
@@ -49,7 +49,7 @@ Schema 不允许未列出的顶层字段。
 每个 `waves` 元素包含：
 
 - `turnCount`：回合数，必须与 `turns` 数组长度一致。
-- `target`：该面的初始敌方目标，范围 1–6。
+- `target`：保留的作业与界面元数据，范围 1–6；执行器不会据此自动切敌，需要切敌时必须在回合 `actions` 中显式添加 `target` 动作。
 - `turns`：回合数组，每项包含 `actions`，可另含 `npPositions` 和 `attack`。
 
 `actions` 按数组顺序执行。每个动作需要 `kind`、`title`、`detail` 和 `icon`，其中后三项用于显示。`kind` 可取：
@@ -63,7 +63,7 @@ Schema 不允许未列出的顶层字段。
 | `target` | 切换敌方目标 | `enemyTarget` 或 `fromTarget`、`toTarget` |
 | `orderChange` | 换人 | `swapOutSlot`、`swapInSlot` |
 
-`skill` 从 0 开始计数，0 表示一技能。换人上下场槽位不能相同。`secondarySelection` 保存技能或宝具的二次选择，例如暴击星消耗和宝具卡色。
+`skill` 从 0 开始计数，0 表示一技能。换人上下场槽位不能相同。`secondarySelection` 保存技能或宝具的二次选择，例如暴击星消耗和宝具卡色；当前执行器会拒绝包含该字段的作业，不能仅凭 Schema 通过就认定可以运行。
 
 ## 4. 宝具卡序与指令卡
 
