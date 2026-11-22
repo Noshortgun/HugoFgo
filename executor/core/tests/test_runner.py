@@ -712,6 +712,61 @@ class RunnerTest(unittest.TestCase):
                    if event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting']
         self.assertEqual(1, len(waiting))
 
+    def test_card_confirmation_waits_for_transient_overlay(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+        np_region = Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
+        settled = observe(BasePage.CARD, *normal, np_region)
+        transient = observe(BasePage.CARD, *(replace(item, card=None) for item in normal), np_region)
+        observations = [battle, battle, settled, settled, transient,
+                        settled, settled, settled, settled,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        actions = [event.data for event in events.events if event.type == 'action']
+        self.assertEqual(1, sum(item['control'] == '宝具卡1' for item in actions))
+        self.assertEqual(4, len(actions))
+        waiting = [event for event in events.events
+                   if event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting']
+        self.assertEqual(1, len(waiting))
+        self.assertEqual(2, waiting[0].data['card_position'])
+
+    def test_unconfirmable_card_selection_stops_after_wait_without_double_tap(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+        np_region = Control('宝具卡1', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
+        settled = observe(BasePage.CARD, *normal, np_region)
+        transient = observe(BasePage.CARD, *(replace(item, card=None) for item in normal), np_region)
+        observations = [battle, battle, settled, settled, transient, transient, transient]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 31.2]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual(RunStatus.STOPPED, result.status)
+        self.assertEqual('fallback_cards_unavailable', result.reason)
+        self.assertEqual('已选指令卡在当前画面不可确认', events.events[-1].data['message'])
+        self.assertEqual(2, events.events[-1].data['card_position'])
+        self.assertGreaterEqual(events.events[-1].timestamp, 31.2)
+        actions = [event.data for event in events.events if event.type == 'action']
+        self.assertEqual(['攻击', '宝具卡1'], [item['control'] for item in actions])
+        waiting = [event for event in events.events
+                   if event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting']
+        self.assertEqual(1, len(waiting))
+
     def test_ambiguous_np_regions_stop_with_fixed_position_diagnostic(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
