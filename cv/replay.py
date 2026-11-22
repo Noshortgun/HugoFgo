@@ -1022,6 +1022,17 @@ def check_executor_safety():
                controls == expected and (device.actions[1]['x'], device.actions[1]['y']) == (1000, 650),
                simulated_ocr=True)
 
+    plan = make_plan((target,))
+    plan = replace(plan, waves=(replace(plan.waves[0], target=2),))
+    result, _, events = run_core_scenario(
+        [target_battle, target_battle, target_battle, target_battle, wrong],
+        [0.0, 0.5, 0.6, 1.1, 1.2], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['敌方2', '攻击']
+    add_report('executor:wave-target-explicit-only', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}', result.reason == 'card_mismatch' and controls == expected,
+               simulated_ocr=True)
+
 
 def check_result_action(name, rows, expected_action, expected_tap=None):
     taps, tap = recorder()

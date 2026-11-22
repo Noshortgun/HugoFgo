@@ -240,8 +240,6 @@ class Runner:
         self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
-        self.initial_target_pending = bool(plan.waves and plan.waves[0].target != 1)
-        self.confirming_initial_target = False
         self.support_stage = 'idle'
         self.support_refreshes = 0
         self.support_scrolls = 0
@@ -527,11 +525,6 @@ class Runner:
                 self.wait_for_page(BasePage.CARD, now)
             return None
         wave = self.plan.waves[self.progress.wave - 1]
-        if self.initial_target_pending:
-            if self.tap_stable(observation, f'敌方{wave.target}', now):
-                self.confirming_initial_target = True
-                self.wait_for_page(BasePage.BATTLE, now)
-            return None
         turn = wave.turns[self.progress.turn - 1]
         if self.progress.action_index < len(turn.actions):
             action = turn.actions[self.progress.action_index]
@@ -778,7 +771,6 @@ class Runner:
             self.progress.turn = turn.value
             self.last_observed_turn = turn.value
             self.progress.action_index = 0
-            self.initial_target_pending = self.plan.waves[wave.value - 1].target != 1
         elif page not in {BasePage.SUPPORT, BasePage.TEAM, BasePage.RESULT, BasePage.DROPS}:
             self.emit('failed', now, reason='unsupported_start', actual=page.value)
             return observation, self.result(RunStatus.STOPPED, 'unsupported_start')
@@ -1004,7 +996,6 @@ class Runner:
                             self.last_observed_turn = turn
                             self.progress.action_index = 0
                             self.fallback_mode = False
-                            self.initial_target_pending = self.plan.waves[wave - 1].target != 1
                             self.emit('wave_started', now, wave=wave, turn=1)
                             self.emit('turn_started', now, wave=wave, turn=1)
                 if confirmed:
@@ -1023,16 +1014,12 @@ class Runner:
                         self.progress.action_index = 0
                         self.fallback_mode = False
                         self.active_slots = [0, 1, 2]
-                        self.initial_target_pending = self.plan.waves[0].target != 1
                         self.run_settled = False
                         self.starting_next_run = False
                         self.result_seen = False
                     if self.confirming_card:
                         self.card_index += 1
                         self.confirming_card = False
-                    if self.confirming_initial_target:
-                        self.initial_target_pending = False
-                        self.confirming_initial_target = False
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False
