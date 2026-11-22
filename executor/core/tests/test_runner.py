@@ -67,9 +67,7 @@ def single_wave_plan(actions=(), np_positions=None) -> ExecutionPlan:
 
 
 def append_planned_turn_frames(observations: list[Observation], battle: Observation,
-                               card: Observation, animation: Observation, *, target: bool) -> None:
-    if target:
-        observations.extend([battle, battle])
+                               card: Observation, animation: Observation) -> None:
     observations.extend([battle, battle, animation, battle, battle])
     observations.extend([card] * 6)
     observations.append(animation)
@@ -455,6 +453,65 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['敌方2', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
+
+    def test_wave_target_and_matching_planned_target_tap_once(self) -> None:
+        target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+        base = single_wave_plan((target,))
+        plan = replace(base, waves=(replace(base.waves[0], target=2),))
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         *(Control(f'敌方{index}', ControlKind.ENEMY,
+                                   (index * 250, 20, index * 250 + 200, 100), True)
+                           for index in range(1, 4)))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([battle, battle, battle, battle, wrong_cards],
+                                      [0.0, 0.5, 0.6, 1.1, 1.2])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['敌方2', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.data.get('control') == '关闭' for event in events.events
+                             if event.type == 'action'))
+
+    def test_distinct_planned_enemy_targets_still_switch(self) -> None:
+        targets = tuple(ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=target)
+                        for target in (2, 3))
+        base = single_wave_plan(targets)
+        plan = replace(base, waves=(replace(base.waves[0], target=2),))
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         *(Control(f'敌方{index}', ControlKind.ENEMY,
+                                   (index * 250, 20, index * 250 + 200, 100), True)
+                           for index in range(1, 4)))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, battle, battle, battle, battle, wrong_cards],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['敌方2', '敌方3', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_wave_target_without_planned_target_action_does_not_tap(self) -> None:
+        base = single_wave_plan()
+        plan = replace(base, waves=(replace(base.waves[0], target=2),))
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         *(Control(f'敌方{index}', ControlKind.ENEMY,
+                                   (index * 250, 20, index * 250 + 200, 100), True)
+                           for index in range(1, 4)))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([battle, battle, wrong_cards], [0.0, 0.5, 0.6])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_enemy_status_detail_closes_before_battle_continues(self) -> None:
         target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
@@ -929,7 +986,7 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn('连续出击', [event.data['control'] for event in events.events
                                       if event.type == 'action'])
 
-    def test_next_wave_applies_initial_target_before_attacking(self) -> None:
+    def test_next_wave_without_target_action_attacks_without_enemy_tap(self) -> None:
         base = single_wave_plan()
         first_wave = base.waves[0]
         second_wave = WavePlan(number=2, target=2, turns=first_wave.turns)
@@ -948,8 +1005,8 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE,
                                 variants=frozenset({Variant.BATTLE_ANIMATION}))
         observations = [battle, battle, card, card, card, card, card, card, animation,
-                        second_battle, second_battle, second_battle, second_battle, wrong_cards]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 3.1, 3.6, 3.7]
+                        second_battle, second_battle, wrong_cards]
+        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 3.1]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -958,7 +1015,7 @@ class RunnerTest(unittest.TestCase):
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
         self.assertEqual(2, result.progress.wave)
-        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '敌方2', '攻击'], controls)
+        self.assertEqual(['攻击', '卡1', '卡2', '卡3', '攻击'], controls)
         self.assertTrue(any(event.type == 'wave_started' and event.data['wave'] == 2
                             for event in events.events))
 
@@ -1046,10 +1103,10 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE,
                                 variants=frozenset({Variant.BATTLE_ANIMATION}))
         observations: list[Observation] = []
-        append_planned_turn_frames(observations, battles[1, 1], card, animation, target=True)
-        append_planned_turn_frames(observations, battles[2, 2], card, animation, target=True)
+        append_planned_turn_frames(observations, battles[1, 1], card, animation)
+        append_planned_turn_frames(observations, battles[2, 2], card, animation)
         observations.extend([battles[2, 3], battles[2, 3], *([card] * 6), animation])
-        append_planned_turn_frames(observations, battles[3, 4], card, animation, target=True)
+        append_planned_turn_frames(observations, battles[3, 4], card, animation)
         times = [index * 0.5 for index in range(len(observations))]
         observations.extend([observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)])
         times.extend([len(times) * 0.5, len(times) * 0.5 + 30.0])
@@ -1065,7 +1122,7 @@ class RunnerTest(unittest.TestCase):
                          [(item['wave'], item['turn']) for item in actions
                           if item['control'] == '从者1技能1'])
         self.assertEqual(3, sum(item['control'] == '宝具卡1' for item in actions))
-        self.assertEqual(3, sum(item['control'] == '敌方2' for item in actions))
+        self.assertEqual(0, sum(item['control'] == '敌方2' for item in actions))
         self.assertEqual(4, sum(item['control'] == '攻击' for item in actions))
         self.assertEqual((3, 1), (result.progress.wave, result.progress.turn))
 
@@ -1097,10 +1154,10 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE,
                                 variants=frozenset({Variant.BATTLE_ANIMATION}))
         observations: list[Observation] = []
-        append_planned_turn_frames(observations, battles[1, 1], card, animation, target=True)
-        append_planned_turn_frames(observations, battles[1, 2], card, animation, target=False)
-        append_planned_turn_frames(observations, battles[2, 3], card, animation, target=True)
-        append_planned_turn_frames(observations, battles[2, 4], card, animation, target=False)
+        append_planned_turn_frames(observations, battles[1, 1], card, animation)
+        append_planned_turn_frames(observations, battles[1, 2], card, animation)
+        append_planned_turn_frames(observations, battles[2, 3], card, animation)
+        append_planned_turn_frames(observations, battles[2, 4], card, animation)
         times = [index * 0.5 for index in range(len(observations))]
         observations.extend([observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)])
         times.extend([len(times) * 0.5, len(times) * 0.5 + 30.0])
@@ -1116,7 +1173,7 @@ class RunnerTest(unittest.TestCase):
                          [(item['wave'], item['turn']) for item in actions
                           if item['control'] == '从者1技能1'])
         self.assertEqual(4, sum(item['control'] == '宝具卡1' for item in actions))
-        self.assertEqual(2, sum(item['control'] == '敌方2' for item in actions))
+        self.assertEqual(0, sum(item['control'] == '敌方2' for item in actions))
         self.assertEqual((2, 2), (result.progress.wave, result.progress.turn))
 
     def test_forward_wave_cumulative_counter_starts_planned_turn_one(self) -> None:
