@@ -607,9 +607,9 @@ def check_strategy_executor():
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
     progress = (result.progress.wave, result.progress.turn)
-    add_report('strategy:executor-forward-wave-fallback', LOADING_IMAGE, expected, controls,
+    add_report('strategy:executor-forward-wave-planned-turn', LOADING_IMAGE, expected, controls,
                'tap', f'reason={result.reason}; progress={progress}',
-               result.reason == 'unknown_timeout' and progress == (2, 2) and controls == expected,
+               result.reason == 'unknown_timeout' and progress == (2, 1) and controls == expected,
                simulated_ocr=True)
 
     short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))
@@ -926,7 +926,7 @@ def check_executor_safety():
     drops = Observation(base_page=BasePage.DROPS, controls=(
         Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
     observations = [battle(), battle(), card, card, card, card, card, card, animation,
-                    battle(2), battle(2), card, card, card, card, card, card, animation,
+                    battle(2, 2), battle(2, 2), card, card, card, card, card, card, animation,
                     result_page, result_page, drops, drops, repeat, repeat, support, support]
     result, _, events = run_core_scenario(
         observations, [index * 0.5 for index in range(len(observations))],

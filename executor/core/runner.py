@@ -195,6 +195,7 @@ class Runner:
         self.options = options
         self.control = control
         self.progress = RunProgress()
+        self.last_observed_turn = 1
         self.last_page: BasePage | None = None
         self.unknown_since: float | None = None
         self.unknown_retries = 0
@@ -773,6 +774,7 @@ class Runner:
                 return observation, self.result(RunStatus.STOPPED, 'resume_uncertain')
             self.progress.wave = wave.value
             self.progress.turn = turn.value
+            self.last_observed_turn = turn.value
             self.progress.action_index = 0
             self.initial_target_pending = self.plan.waves[wave.value - 1].target != 1
         elif page not in {BasePage.SUPPORT, BasePage.TEAM, BasePage.RESULT, BasePage.DROPS}:
@@ -973,25 +975,29 @@ class Runner:
                         wave = wave_field.value
                         turn = turn_field.value
                         current = (self.progress.wave, self.progress.turn)
-                        if not isinstance(wave, int) or not isinstance(turn, int) or (wave, turn) <= current:
+                        if (not isinstance(wave, int) or not isinstance(turn, int)
+                                or wave < current[0] or turn <= self.last_observed_turn):
                             confirmed = False
-                        elif wave == current[0] and turn == current[1] + 1:
-                            self.fallback_mode = turn > len(self.plan.waves[wave - 1].turns)
-                            self.progress.turn = turn
-                            self.progress.action_index = 0
-                            self.emit('turn_started', now, wave=wave, turn=turn)
-                        elif wave == current[0] + 1 and 1 <= turn and wave <= len(self.plan.waves):
-                            self.progress.wave = wave
-                            self.progress.turn = turn
-                            self.progress.action_index = 0
-                            self.fallback_mode = turn > len(self.plan.waves[wave - 1].turns)
-                            self.initial_target_pending = self.plan.waves[wave - 1].target != 1
-                            self.emit('wave_started', now, wave=wave, turn=turn)
-                            self.emit('turn_started', now, wave=wave, turn=turn)
-                        else:
+                        elif (wave > current[0] + 1 or wave > len(self.plan.waves)
+                              or turn != self.last_observed_turn + 1):
                             self.emit('failed', now, reason='progress_uncertain',
                                       observed_wave=wave, observed_turn=turn)
                             return self.result(RunStatus.STOPPED, 'progress_uncertain')
+                        elif wave == current[0]:
+                            self.progress.turn += 1
+                            self.last_observed_turn = turn
+                            self.fallback_mode = self.progress.turn > len(self.plan.waves[wave - 1].turns)
+                            self.progress.action_index = 0
+                            self.emit('turn_started', now, wave=wave, turn=self.progress.turn)
+                        else:
+                            self.progress.wave = wave
+                            self.progress.turn = 1
+                            self.last_observed_turn = turn
+                            self.progress.action_index = 0
+                            self.fallback_mode = False
+                            self.initial_target_pending = self.plan.waves[wave - 1].target != 1
+                            self.emit('wave_started', now, wave=wave, turn=1)
+                            self.emit('turn_started', now, wave=wave, turn=1)
                 if confirmed:
                     self.pending_pages = None
                     self.pending_since = None
@@ -1004,6 +1010,7 @@ class Runner:
                     if self.starting_next_run:
                         self.progress.wave = 1
                         self.progress.turn = 1
+                        self.last_observed_turn = 1
                         self.progress.action_index = 0
                         self.fallback_mode = False
                         self.active_slots = [0, 1, 2]
