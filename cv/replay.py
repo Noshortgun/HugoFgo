@@ -2051,6 +2051,7 @@ def check_manual_key_frames():
             ('perception:turn-digit-5', 'battle-w3-t5.png', '2026-11-22', ('wave', 'turn'), (3, 5)),
             ('perception:turn-digit-6', 'battle-w3-t6.png', '2026-11-22', ('wave', 'turn'), (3, 6)),
             ('perception:turn-digit-7', 'battle-w3-t7.png', '2026-11-22', ('wave', 'turn'), (3, 7)),
+            ('perception:turn-live-variant', 'live-battle-w2-turn2.png', '2026-11-23', ('wave', 'turn'), (2, 2)),
             ('perception:crit-all-100', 'manual-w3-t1-cards-25.png', '2026-11-23',
              ('crit',), (100, 100, 100, 100, 100)),
             ('perception:crit-no-digits', 'manual-w1-t1-cards-09.png', '2026-11-23', ('crit',), None),

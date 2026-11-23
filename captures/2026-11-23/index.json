@@ -626,6 +626,11 @@
       "file": "key/live-card-support-obscured.png",
       "state": "scrcpy 实机选卡页；助战娄希被“极星天球充循环”技能文字遮挡，助战标签仍可见，用于唯一助战槽位身份兜底",
       "expectedObservation": {"card": 4, "svtId": 705000, "servantSlot": 0, "support": true, "cardType": "quick"}
+    },
+    {
+      "file": "key/live-battle-w2-turn2.png",
+      "state": "scrcpy 实机第 2 面第 2 回合；面数可确认但旧回合模板得分不足，用于回合 2 抗锯齿变体",
+      "expectedFields": {"wave": 2, "turn": 2}
     }
   ]
 }

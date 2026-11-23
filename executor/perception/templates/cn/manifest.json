@@ -482,6 +482,16 @@
         104
       ]
     },
+    "turn/2-live": {
+      "file": "digits/turn-2-live.png",
+      "source": "captures/2026-11-23/key/live-battle-w2-turn2.png",
+      "box": [
+        907,
+        87,
+        919,
+        104
+      ]
+    },
     "turn/3": {
       "file": "digits/turn-3.png",
       "source": "captures/2026-11-23/key/manual-w3-t1-start-15.png",

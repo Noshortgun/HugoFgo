@@ -44,6 +44,7 @@ DIGITS: tuple[DigitSource, ...] = (
     DigitSource('wave', 3, 'captures/2026-11-23/key/manual-w3-t1-start-15.png', (885, 17, 897, 34)),
     DigitSource('turn', 1, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (911, 87, 918, 104)),
     DigitSource('turn', 2, 'captures/2026-11-23/key/manual-w2-t1-start-10.png', (907, 86, 919, 104)),
+    DigitSource('turn', 2, 'captures/2026-11-23/key/live-battle-w2-turn2.png', (907, 87, 919, 104), 'live'),
     DigitSource('turn', 3, 'captures/2026-11-23/key/manual-w3-t1-start-15.png', (907, 86, 919, 104)),
     DigitSource('turn', 4, 'captures/2026-11-22/key/battle-w2-t4.png', (905, 87, 918, 104)),
     DigitSource('turn', 5, 'captures/2026-11-22/key/battle-w3-t5.png', (906, 87, 918, 104)),

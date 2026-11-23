@@ -81,6 +81,7 @@ class ManualFieldTest(unittest.TestCase):
             ('captures/2026-11-22/key/battle-w3-t5.png', 3, 5),
             ('captures/2026-11-22/key/battle-w3-t6.png', 3, 6),
             ('captures/2026-11-22/key/battle-w3-t7.png', 3, 7),
+            ('captures/2026-11-23/key/live-battle-w2-turn2.png', 2, 2),
         ):
             with self.subTest(wave=wave, turn=turn):
                 observation = self.read_fields(name, 'wave', 'turn')
