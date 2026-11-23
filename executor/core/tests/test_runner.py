@@ -93,16 +93,35 @@ class RunnerTest(unittest.TestCase):
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [support, support, team, team, battle, battle, wrong_cards],
-            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8],
+            [support, support, support, team, team, battle, battle, wrong_cards],
+            [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5],
         )
         events = MemoryEventSink()
 
         result = run(plan, device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['助战卡片第1行', '开始任务', '攻击'],
+        self.assertEqual(['职阶筛选:berserker', '助战卡片第1行', '开始任务', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual((565, 128), (device.actions[0]['x'], device.actions[0]['y']))
+
+    def test_support_uses_extra_tab_next_to_berserker(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='奥伯龙', support=True, support_required=True,
+                               svt_id=2800100, role='Pretender')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        candidate = SupportCandidate(name='奥伯龙', svt_id=2800100, role='Pretender')
+        support = observe(BasePage.SUPPORT,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                  support=candidate))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([support, support, wrong_cards], [0.0, 0.5, 31.0])
+
+        result = run(plan, device, perception, MemoryEventSink())
+
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        self.assertEqual('tap', device.actions[0]['action'])
+        self.assertEqual((632, 128), (device.actions[0]['x'], device.actions[0]['y']))
 
     def test_support_search_refreshes_at_bottom_and_rechecks_candidates(self) -> None:
         plan = single_wave_plan()
@@ -124,10 +143,8 @@ class RunnerTest(unittest.TestCase):
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
-        observations = [wrong, wrong, wrong, wrong, wrong, wrong, confirm, confirm,
-                        match, match, team, team, battle, battle, wrong_cards]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3,
-                 2.4, 2.9, 3.0, 3.5, 3.6, 4.1, 4.2]
+        observations = [wrong] * 7 + [confirm, confirm, match, match, team, team, battle, battle, wrong_cards]
+        times = [index * 0.5 for index in range(len(observations))]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -135,9 +152,10 @@ class RunnerTest(unittest.TestCase):
 
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第1行', '开始任务', '攻击'],
-                         controls)
-        self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions[:2]])
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是',
+                          '助战卡片第1行', '开始任务', '攻击'], controls)
+        self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions
+                                             if action['action'] == 'swipe'])
 
     def test_second_support_refresh_waits_for_candidates_before_not_found(self) -> None:
         plan = single_wave_plan()
@@ -160,7 +178,7 @@ class RunnerTest(unittest.TestCase):
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
-        observations = [wrong] * 6 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
+        observations = [wrong] * 7 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
         observations += [blank, blank, match, match, team, team, battle, battle, wrong_cards]
         times = [index * 0.5 for index in range(len(observations))]
         device, perception = scripted(observations, times)
@@ -191,21 +209,21 @@ class RunnerTest(unittest.TestCase):
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
                                 support=candidate))
         unknown = observe(BasePage.UNKNOWN)
-        observations = [wrong, wrong, wrong, wrong, wrong, wrong, cooldown, cooldown,
-                        wrong, match, match, unknown, unknown]
-        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0]
+        observations = [wrong] * 7 + [cooldown, cooldown, wrong, match, match, unknown, unknown]
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
         result = run(plan, device, perception, events)
 
         self.assertEqual('unknown_timeout', result.reason)
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭',
+                          '助战卡片第1行'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         close = next(action for action in device.actions if action['action'] == 'tap'
                      and (action['x'], action['y']) == (640, 565))
         self.assertEqual((640, 565), (close['x'], close['y']))
-        self.assertEqual(9.5, next(event.timestamp for event in events.events
+        self.assertEqual(9.0, next(event.timestamp for event in events.events
                                    if event.type == 'action' and event.data['control'] == '助战卡片第1行'))
 
     def test_support_refresh_tolerates_confirmation_still_visible(self) -> None:
@@ -228,10 +246,8 @@ class RunnerTest(unittest.TestCase):
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
-        observations = [wrong, wrong, wrong, wrong, wrong, wrong, confirm, confirm,
-                        confirm, confirm, match, match, match, team, team, battle, battle, wrong_cards]
-        times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3,
-                 2.5, 2.9, 3.0, 3.5, 4.0, 4.1, 4.6, 4.7, 5.2, 5.3]
+        observations = [wrong] * 7 + [confirm] * 4 + [match] * 3 + [team, team, battle, battle, wrong_cards]
+        times = [index * 0.5 for index in range(len(observations))]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -239,8 +255,8 @@ class RunnerTest(unittest.TestCase):
 
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第1行', '开始任务', '攻击'],
-                         controls)
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是',
+                          '助战卡片第1行', '开始任务', '攻击'], controls)
 
     def test_support_refresh_without_confirmation_stops_without_repeating_tap(self) -> None:
         plan = single_wave_plan()
@@ -252,8 +268,8 @@ class RunnerTest(unittest.TestCase):
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
-        observations = [wrong, wrong, wrong, wrong, wrong, wrong, wrong]
-        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 33.5]
+        observations = [wrong] * 8
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5]
         device, perception = scripted(observations, times)
         events = MemoryEventSink()
 
@@ -261,7 +277,7 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('action_confirmation_timeout', result.reason)
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual('page', events.events[-1].data['stage'])
 
@@ -289,7 +305,7 @@ class RunnerTest(unittest.TestCase):
         result = run(plan, device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['结束', '助战卡片第1行', '开始任务', '攻击'],
+        self.assertEqual(['结束', '职阶筛选:berserker', '助战卡片第1行', '开始任务', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_unchanged_frame_cannot_confirm_an_action(self) -> None:
@@ -1812,7 +1828,7 @@ class RunnerTest(unittest.TestCase):
         result = run(plan, device, perception, events, options=RunOptions(run_count=2))
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['连续出击', '助战卡片第1行', '开始任务', '攻击'],
+        self.assertEqual(['连续出击', '职阶筛选:berserker', '助战卡片第1行', '开始任务', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_repeat_support_can_go_directly_to_battle(self) -> None:
@@ -1839,7 +1855,7 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual('card_mismatch', result.reason,
                          [(event.type, event.data) for event in events.events])
-        self.assertEqual(['连续出击', '助战卡片第1行', '攻击'],
+        self.assertEqual(['连续出击', '职阶筛选:berserker', '助战卡片第1行', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertFalse(any(event.type == 'failed' and event.data.get('reason') == 'action_confirmation_timeout'
                              for event in events.events))

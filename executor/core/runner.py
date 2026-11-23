@@ -24,6 +24,13 @@ BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
 COMMAND_CARD_INTERVAL_SECONDS = 0.2
 JOB_ACTION_INTERVAL_SECONDS = 1.0
+SUPPORT_CLASS_TAB_POINTS = {
+    'saber': (161, 128), 'archer': (227, 128), 'lancer': (295, 128),
+    'rider': (362, 128), 'caster': (430, 128), 'assassin': (497, 128), 'berserker': (565, 128),
+    'shielder': (632, 128), 'ruler': (632, 128), 'avenger': (632, 128),
+    'alterego': (632, 128), 'mooncancer': (632, 128), 'foreigner': (632, 128),
+    'pretender': (632, 128), 'beast': (632, 128),
+}
 
 FLOW_OVERLAYS = frozenset({
     Overlay.FRIEND_REQUEST,
@@ -274,6 +281,8 @@ class Runner:
         self.startup = True
         self.battle_since: float | None = None
         self.support_stage = 'idle'
+        self.support_class_selected = False
+        self.support_class_filter_pending = False
         self.support_refreshes = 0
         self.support_scrolls = 0
         self.support_confirm_since: float | None = None
@@ -470,12 +479,32 @@ class Runner:
             self.reset_support_search()
             self.wait_for_page(BasePage.SUPPORT, now)
         requirement = next((slot for slot in self.plan.formation if slot.support_required), None)
+        if not self.support_class_selected:
+            role = (requirement.role or '').strip().lower().replace(' ', '').replace('-', '') \
+                if requirement is not None else ''
+            point = SUPPORT_CLASS_TAB_POINTS.get(role)
+            if requirement is None:
+                self.support_class_selected = True
+            elif point is None:
+                self.emit('failed', now, reason='support_role_unavailable', role=requirement.role)
+                return self.result(RunStatus.STOPPED, 'support_role_unavailable')
+            else:
+                x, y = point
+                self.tap_point(observation, now, f'职阶筛选:{role}', x, y, 'support_class_filter')
+                self.support_class_selected = True
+                self.support_class_filter_pending = True
+                self.reset_support_search()
+                return None
         control = next((item for item in observation.controls
                         if item.support is not None and item.actionable
                         and (requirement is None or support_matches(requirement, item.support))), None)
         if control is not None:
-            if self.tap_stable(observation, control.name, now):
+            tapped = (self.tap_action(observation, control.name, now) if self.support_class_filter_pending
+                      else self.tap_stable(observation, control.name, now))
+            if tapped:
                 self.support_stage = 'idle'
+                self.support_class_selected = False
+                self.support_class_filter_pending = False
                 self.support_refreshes = 0
                 self.support_scrolls = 0
                 self.support_previous_rows = None

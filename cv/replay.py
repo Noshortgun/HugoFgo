@@ -995,7 +995,7 @@ def check_executor_repeat_support():
     with mock.patch('executor.core.runner.time.sleep', return_value=None):
         result = run(plan, device, ScriptedPerception(), events, options=RunOptions(run_count=2, write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['连续出击', '助战卡片第1行', '开始任务', '攻击']
+    expected = ['连续出击', '职阶筛选:berserker', '助战卡片第1行', '开始任务', '攻击']
     ok = result.reason == 'card_mismatch' and controls == expected
     add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
@@ -1010,7 +1010,7 @@ def check_executor_repeat_support():
         result = run(plan, device, ScriptedPerception(), events,
                      options=RunOptions(run_count=2, write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['连续出击', '助战卡片第1行', '攻击']
+    expected = ['连续出击', '职阶筛选:berserker', '助战卡片第1行', '攻击']
     ok = result.reason == 'card_mismatch' and controls == expected
     add_report('executor:repeat-support-skips-team', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
@@ -1285,16 +1285,15 @@ def check_executor_safety():
     cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
                            controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
     result, device, events = run_core_scenario(
-        [wrong_support, wrong_support, wrong_support, wrong_support, wrong_support, wrong_support,
-         cooldown, cooldown, wrong_support, support, support, Observation(base_page=BasePage.UNKNOWN),
-         Observation(base_page=BasePage.UNKNOWN)],
-        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0],
+        [wrong_support] * 7 + [cooldown, cooldown, wrong_support, support, support,
+                              Observation(base_page=BasePage.UNKNOWN), Observation(base_page=BasePage.UNKNOWN)],
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0],
         make_plan(support_required=True))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
+    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
     add_report('executor:support-refresh-cooldown', ROOT / 'captures/2026-11-22/key/support-refresh-cooldown.png',
                expected, controls, 'tap', f'reason={result.reason}',
-               controls == expected and (device.actions[3]['x'], device.actions[3]['y']) == (640, 565),
+               controls == expected and (device.actions[4]['x'], device.actions[4]['y']) == (640, 565),
                simulated_ocr=True)
 
     target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
@@ -1849,9 +1848,9 @@ def check_support_refresh_confirmation_timeout():
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
     ))
     result, device, events = run_core_scenario(
-        [wrong] * 7, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 33.5], plan)
+        [wrong] * 8, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['助战列表回顶', '助战列表向下', '列表更新']
+    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新']
     ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
           and controls == expected and events.events[-1].data.get('stage') == 'page')
     add_report('executor:support-refresh-confirmation-timeout', SUPPORT_IMAGE,
@@ -1865,7 +1864,7 @@ def check_support_refresh_confirmation_timeout():
     match = Observation(base_page=BasePage.SUPPORT, controls=(
         Control('助战卡片第2行', ControlKind.ROW, (40, 360, 1000, 560), True, support=candidate),))
     unknown = Observation(base_page=BasePage.UNKNOWN)
-    observations = [wrong] * 6 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
+    observations = [wrong] * 7 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
     observations += [blank, blank, match, match, unknown, unknown]
     times = [index * 0.5 for index in range(len(observations) - 2)]
     times += [len(times) * 0.5, len(times) * 0.5 + 30.0]
