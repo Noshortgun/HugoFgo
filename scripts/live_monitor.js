@@ -12,8 +12,6 @@ const STATUS_NAMES = {
   not_applicable: '不适用', not_read: '未读取', uncertain: '不确定', confirmed: '已确认',
 };
 const RUN_NAMES = { ready: '准备就绪', running: '实机运行中', completed: '已完成', stopped: '已停止', failed: '失败' };
-let selectedHistory = null;
-let latestState = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -142,15 +140,13 @@ function renderDecision(state) {
     data.batch_id !== undefined ? `批次 ${data.batch_id}` : null,
   ].filter(Boolean);
   for (const value of values) tags.append(el('span', 'tag', value));
-  if (state.monitor_error) {
-    tags.append(el('span', 'tag warn', '监控绘制异常，游戏执行继续'));
-  }
+  if (state.monitor_error) tags.append(el('span', 'tag warn', '监控绘制异常，游戏执行继续'));
 }
 
 function renderEvents(state) {
   const host = document.getElementById('events');
   host.replaceChildren();
-  const events = state.events || [];
+  const events = (state.events || []).slice(-12);
   if (!events.length) {
     host.append(el('div', 'empty', '等待真实执行事件'));
     return;
@@ -175,61 +171,31 @@ function renderEvents(state) {
 
 function renderHistory(state) {
   const host = document.getElementById('history');
-  const items = state.history || [];
-  setText('history-count', `${items.length} 帧`);
-  if (items.length) host.querySelectorAll('.empty').forEach(node => node.remove());
-  const existing = new Map([...host.children].filter(card => card.dataset.id)
-    .map(card => [Number(card.dataset.id), card]));
+  host.replaceChildren();
+  const items = (state.history || []).slice(-12);
+  setText('history-count', `${(state.history || []).length} 帧`);
+  if (!items.length) {
+    const row = el('tr', 'empty');
+    const cell = el('td', '', '等待关键帧数据');
+    cell.colSpan = 6;
+    row.append(cell);
+    host.append(row);
+    return;
+  }
   for (const item of items) {
-    let card = existing.get(item.id);
-    if (!card) {
-      card = el('div', 'history-card');
-      card.dataset.id = item.id;
-      const image = el('img');
-      image.src = `/history/${item.id}.jpg`;
-      image.alt = `关键帧 ${item.id}`;
-      card.append(image);
-      const info = el('div', 'history-info');
-      info.append(el('strong', '', `#${item.id} ${item.page}`));
-      info.append(el('span', 'history-progress'));
-      info.append(el('span', 'history-decision'));
-      info.append(el('span', 'history-time', fmtTime(item.timestamp)));
-      card.append(info);
-      card.addEventListener('click', () => {
-        selectedHistory = item.id;
-        updateFrame(state);
-        renderHistory(state);
-      });
-      host.append(card);
-    }
     const observation = item.observation || {};
-    card.querySelector('.history-progress').textContent =
-      `面 ${fieldValue(observation, 'wave')} · 回合 ${fieldValue(observation, 'turn')}`;
-    card.querySelector('.history-decision').textContent = item.decision?.data?.control || '等待决策';
-    card.classList.toggle('selected', selectedHistory === item.id);
+    const row = el('tr');
+    row.append(el('td', '', `#${item.id}`));
+    row.append(el('td', '', item.page));
+    row.append(el('td', '', String(fieldValue(observation, 'wave'))));
+    row.append(el('td', '', String(fieldValue(observation, 'turn'))));
+    row.append(el('td', '', item.decision?.data?.control || '等待决策'));
+    row.append(el('td', '', fmtTime(item.timestamp)));
+    host.append(row);
   }
-  if (!items.length) host.append(el('div', 'empty', '等待关键帧'));
-}
-
-function updateFrame(state) {
-  const image = document.getElementById('frame');
-  if (selectedHistory) {
-    const item = (state.history || []).find(entry => entry.id === selectedHistory);
-    if (item) {
-      image.src = `/history/${selectedHistory}.jpg?v=${state.revision}`;
-      setText('frame-label', `历史关键帧 #${selectedHistory} · ${item.page}`);
-      setText('revision', fmtTime(item.timestamp));
-      return;
-    }
-    selectedHistory = null;
-  }
-  image.src = `/frame.jpg?v=${state.revision}`;
-  setText('frame-label', state.demo ? '演示关键帧（实机尚未开始）' : '实时关键帧');
-  setText('revision', state.observation?.frame_hash ? `帧 ${state.observation.frame_hash.slice(0, 8)}` : '等待画面');
 }
 
 function render(state) {
-  latestState = state;
   const status = document.getElementById('status');
   status.className = `status ${state.status}`;
   status.textContent = RUN_NAMES[state.status] || state.status;
@@ -252,7 +218,6 @@ function render(state) {
   renderDecision(state);
   renderEvents(state);
   renderHistory(state);
-  updateFrame(state);
   if (state.error) setText('decision-reason', state.error);
 }
 
@@ -267,20 +232,12 @@ async function refresh() {
 
 document.getElementById('start').addEventListener('click', async () => {
   document.getElementById('start').disabled = true;
-  selectedHistory = null;
   await fetch('/api/start', { method: 'POST' });
   await refresh();
 });
 document.getElementById('stop').addEventListener('click', async () => {
   await fetch('/api/stop', { method: 'POST' });
   await refresh();
-});
-document.getElementById('latest').addEventListener('click', () => {
-  selectedHistory = null;
-  if (latestState) {
-    updateFrame(latestState);
-    renderHistory(latestState);
-  }
 });
 refresh();
 setInterval(refresh, 800);
