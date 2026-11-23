@@ -107,9 +107,9 @@ npm run fixtures:check                            # 感知 fixtures 与截图
 
 ## 4. CI
 
-`.github/workflows/ci.yml` 在 PR 和 main 推送时通过 `npm run verify` 执行与本地一致的全部验证，覆盖 `executor/core` 与 `executor/session`。回放失败时上传 `logs/replay/latest.json`。未关闭施工票据的正文漂移会阻断 CI。
+`.github/workflows/ci.yml` 在 PR 和 main 推送时将静态检查、执行器单测、设备自检与统一回放拆成并行任务；全部通过后构建 Windows 安装包。检查内容不减少，回放失败时上传 `logs/replay/latest.json`。未关闭施工票据的正文漂移会阻断 CI。
 
-本地使用相同命令复现 CI，不另维护一套测试入口。
+本地仍用 `npm run verify` 一次复现全部检查，CI 只负责并行调度，不另维护一套测试实现。
 
 ## 5. 实机验收
 

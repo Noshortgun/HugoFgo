@@ -9,48 +9,101 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: 构建与回放
+  checks:
+    name: 构建与静态检查
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build and static checks
+        run: |
+          npm run build
+          node scripts/run-state.selftest.mjs
+          node scripts/run-settings.selftest.mjs
+          node scripts/job-roundtrip.selftest.mjs
+          node scripts/check-references.mjs
+          node scripts/check-references.selftest.mjs
+          node scripts/check-perception-fixtures.mjs
+          node scripts/resources.mjs self-test
+          node scripts/desktop-package.selftest.mjs
+          node scripts/scrcpy-resources.mjs
+          npm run issues:selftest
+      - name: Check ticket sources
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run issues:check
 
+  executor:
+    name: 执行器单测
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: cv/requirements.txt
-
       - name: Install Python replay dependencies
         run: python -m pip install -r cv/requirements.txt
+      - name: Run executor unit tests
+        run: python -m unittest discover -s executor -t . -v
 
-      - name: Install frontend dependencies
-        run: npm ci
+  device:
+    name: 设备自检
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: cv/requirements.txt
+      - name: Install Python replay dependencies
+        run: python -m pip install -r cv/requirements.txt
+      - name: Run device self-test
+        run: python -m executor.device --self-test
 
-      - name: Run full verification
+  replay:
+    name: 统一回放
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: cv/requirements.txt
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install -r cv/requirements.txt
+      - name: Run replay
         run: |
           mkdir -p logs
           set -o pipefail
-          npm run verify 2>&1 | tee logs/verify.log
-
-      - name: Summarize verification failure
-        if: failure()
-        run: node scripts/report-ci-failure.mjs logs/verify.log
-
-      - name: Check ticket sources
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run issues:check
-
+          npm run replay 2>&1 | tee logs/replay.log
       - name: List failed replay cases
         if: failure()
         run: |
@@ -67,7 +120,6 @@ jobs:
           }
           console.log(`${report.passed}/${report.total} 通过，失败 ${report.failed} 条`);
           '
-
       - name: Upload replay report on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -78,39 +130,33 @@ jobs:
 
   package-windows:
     name: Windows 安装包
-    needs: verify
+    needs: [checks, executor, device, replay]
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: cv/requirements.txt
-
       - name: Install dependencies
         run: |
           npm ci
           python -m pip install -r cv/requirements.txt
-
       - name: Check Rust crate
         run: |
           npm run desktop:prepare
           cargo check --tests --manifest-path src-tauri/Cargo.toml
-
       - name: Build NSIS installer
         run: npm run package:windows
-
       - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
