@@ -52,6 +52,12 @@ def observe(page: BasePage, *controls: Control) -> Observation:
         if (any(control.name == '攻击' and control.actionable for control in controls)
                 and not any(control.name == '战斗菜单' for control in controls)):
             controls = (*controls, button('战斗菜单', (1141, 162, 1245, 250)))
+    elif page is BasePage.TEAM:
+        fields = {
+            'team_servants': Field(FieldStatus.CONFIRMED, (705000, 2, 3)),
+            'team_support_ce': Field(FieldStatus.CONFIRMED, 9403520),
+            'team_mystic': Field(FieldStatus.CONFIRMED, 'default'),
+        }
     return Observation(base_page=page, controls=tuple(controls), fields=fields, frame_hash=page.value)
 
 
@@ -66,7 +72,9 @@ def single_wave_plan(actions=(), np_positions=None) -> ExecutionPlan:
     cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
     turn = TurnPlan(actions=tuple(actions), np_positions=np_positions or {},
                     attack=AttackPlan(mode='verify', cards=cards))
-    formation = tuple(FormationSlotPlan(slot=slot, name=f'从者{slot}') for slot in range(3))
+    formation = (FormationSlotPlan(slot=0, name='从者0', svt_id=705000),
+                 FormationSlotPlan(slot=1, name='从者1', svt_id=2),
+                 FormationSlotPlan(slot=2, name='从者2', svt_id=3))
     return ExecutionPlan(mystic_id='default', enemy_count=3,
                          waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
 
@@ -152,10 +160,10 @@ class RunnerTest(unittest.TestCase):
 
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是',
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新', '是',
                           '助战卡片第1行', '开始任务', '攻击'], controls)
-        self.assertEqual(['swipe', 'swipe'], [action['action'] for action in device.actions
-                                             if action['action'] == 'swipe'])
+        self.assertEqual(['swipe'], [action['action'] for action in device.actions
+                                    if action['action'] == 'swipe'])
 
     def test_second_support_refresh_waits_for_candidates_before_not_found(self) -> None:
         plan = single_wave_plan()
@@ -217,7 +225,7 @@ class RunnerTest(unittest.TestCase):
         result = run(plan, device, perception, events)
 
         self.assertEqual('unknown_timeout', result.reason)
-        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭',
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新', '关闭',
                           '助战卡片第1行'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         close = next(action for action in device.actions if action['action'] == 'tap'
@@ -255,7 +263,7 @@ class RunnerTest(unittest.TestCase):
 
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是',
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新', '是',
                           '助战卡片第1行', '开始任务', '攻击'], controls)
 
     def test_support_refresh_without_confirmation_stops_without_repeating_tap(self) -> None:
@@ -277,7 +285,7 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.STOPPED, result.status)
         self.assertEqual('action_confirmation_timeout', result.reason)
-        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual('page', events.events[-1].data['stage'])
 
@@ -2365,7 +2373,7 @@ class RunnerTest(unittest.TestCase):
 
         selection = select_cards(observation, strategy, single_wave_plan(), 1)
 
-        self.assertEqual(('卡1', '卡2', '卡3'), tuple(control.name for control in selection.controls))
+        self.assertEqual(('卡1', '卡3', '卡2'), tuple(control.name for control in selection.controls))
         self.assertEqual('按补刀策略顺序选择三张指令卡', selection.reason)
         self.assertIsNone(selection.diagnostic)
         self.assertEqual(('缺少暴击率，按 0 处理', '缺少克制信息，按中立处理'), selection.warnings)

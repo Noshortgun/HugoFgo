@@ -449,7 +449,7 @@ def check_strategy_servant_priority():
 
     selection = select_cards(observation, strategy, plan, 1)
     actual = [control.name for control in selection.controls]
-    expected = ['卡2', '卡4', '卡5']
+    expected = ['卡5', '卡2', '卡4']
     add_report('strategy:servant-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', f'source={selection.source}; reason={selection.reason}',
                actual == expected and selection.source == 'global', simulated_ocr=True)
@@ -476,7 +476,7 @@ def check_strategy_color_priority():
 
     selection = select_cards(observation, strategy, plan, 1)
     actual = [control.name for control in selection.controls]
-    expected = ['卡2', '卡3', '卡4']
+    expected = ['卡2', '卡4', '卡3']
     add_report('strategy:color-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
@@ -528,7 +528,7 @@ def check_strategy_balanced_cards():
 
     selection = select_cards(observation, strategy, plan, 1)
     actual = [control.name for control in selection.controls]
-    expected = ['卡1', '卡3', '卡5']
+    expected = ['卡5', '卡3', '卡1']
     add_report('strategy:balanced-cards', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
@@ -555,7 +555,7 @@ def check_strategy_affinity_and_degraded_data():
 
     selection = select_cards(observation, strategy, plan, 1)
     actual = [control.name for control in selection.controls]
-    expected = ['卡2', '卡3', '卡4']
+    expected = ['卡3', '卡4', '卡2']
     add_report('strategy:affinity-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
@@ -635,7 +635,7 @@ def check_strategy_scope_slots_and_region():
     second = select_cards(observation, global_strategy, plan, 2)
     actual = ([control.name for control in first.controls], first.source,
               [control.name for control in second.controls], second.source)
-    expected = (['卡2', '卡3', '卡5'], 'wave', ['卡2', '卡3', '卡4'], 'global')
+    expected = (['卡3', '卡5', '卡2'], 'wave', ['卡2', '卡4', '卡3'], 'global')
     add_report('strategy:wave-override-and-global', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', '按面覆盖与全局回退', actual == expected, simulated_ocr=True)
 
@@ -959,11 +959,14 @@ def check_executor_repeat_support():
 
     repeat = Observation(base_page=BasePage.DROPS, overlays=frozenset({Overlay.REPEAT_DIALOG}),
                          controls=(Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True),))
-    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker', ce_id=9403520)
     support = Observation(base_page=BasePage.SUPPORT, controls=(
         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
-    team = Observation(base_page=BasePage.TEAM, controls=(
-        Control('开始任务', ControlKind.BUTTON, (1086, 635, 1248, 707), True),))
+    team = Observation(base_page=BasePage.TEAM, fields={
+        'team_servants': Field(FieldStatus.CONFIRMED, (705000, 2, 3)),
+        'team_support_ce': Field(FieldStatus.CONFIRMED, 9403520),
+        'team_mystic': Field(FieldStatus.CONFIRMED, 'default'),
+    }, controls=(Control('开始任务', ControlKind.BUTTON, (1086, 635, 1248, 707), True),))
     fields = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
               'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
     battle = Observation(base_page=BasePage.BATTLE, fields=fields, controls=(
@@ -985,7 +988,9 @@ def check_executor_repeat_support():
 
     formation = [FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)]
     formation[0] = FormationSlotPlan(slot=0, name='娄希', svt_id=705000, role='Berserker',
-                                     support=True, support_required=True)
+                                     support=True, support_required=True, ce_id=9403520)
+    formation[1] = FormationSlotPlan(slot=1, name='1', svt_id=2)
+    formation[2] = FormationSlotPlan(slot=2, name='2', svt_id=3)
     turn = TurnPlan(attack=AttackPlan(mode='verify', cards=tuple(
         AttackCardPlan(slot=slot, type='arts') for slot in range(3))))
     plan = ExecutionPlan(mystic_id='default', enemy_count=3,
@@ -1290,10 +1295,10 @@ def check_executor_safety():
         [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0],
         make_plan(support_required=True))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
+    expected = ['职阶筛选:berserker', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
     add_report('executor:support-refresh-cooldown', ROOT / 'captures/2026-11-22/key/support-refresh-cooldown.png',
                expected, controls, 'tap', f'reason={result.reason}',
-               controls == expected and (device.actions[4]['x'], device.actions[4]['y']) == (640, 565),
+               controls == expected and (device.actions[3]['x'], device.actions[3]['y']) == (640, 565),
                simulated_ocr=True)
 
     target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
@@ -1850,7 +1855,7 @@ def check_support_refresh_confirmation_timeout():
     result, device, events = run_core_scenario(
         [wrong] * 8, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新']
+    expected = ['职阶筛选:berserker', '助战列表向下', '列表更新']
     ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
           and controls == expected and events.events[-1].data.get('stage') == 'page')
     add_report('executor:support-refresh-confirmation-timeout', SUPPORT_IMAGE,
@@ -1876,12 +1881,69 @@ def check_support_refresh_confirmation_timeout():
                'tap', 'second refresh returned candidates after a transient frame', ok, simulated_ocr=True)
 
 
+def check_manual_key_frames():
+    from executor.device import Frame
+    from executor.perception import Perception
+    from executor.replay import ReplayFailure, get_case, manual_job_plan, run_case
+
+    with TemporaryDirectory() as directory:
+        for name in ('manual-full-loop', 'manual-team-mystic-mismatch'):
+            case = get_case(name)
+            try:
+                report = run_case(case, Path(directory))
+                actual = f'{report.result.status.value}/{report.result.reason}'
+                ok = True
+            except ReplayFailure as error:
+                actual = str(error)
+                ok = False
+            add_report(f'executor:{name}', ROOT / case.frames[0], f'{case.status.value}/{case.reason}',
+                       actual, 'replay', '人工关键帧规则回放', ok)
+
+    plan = manual_job_plan()
+    perception = Perception()
+    try:
+        perception.bind_formation(plan.formation)
+        perception.bind_mystic(plan.mystic_id)
+
+        def observe(name, fields=()):
+            path = ROOT / 'captures/2026-11-23/key' / name
+            frame = Frame(image=path.read_bytes(), width=1280, height=720, captured_at=1.0)
+            perception.read(frame)
+            return (path, perception.read_fields(frame, fields, timeout=10) if fields else perception.read(frame))
+
+        path, observation = observe('manual-team-04.png')
+        actual = tuple(observation.field(name).value for name in ('team_servants', 'team_support_ce', 'team_mystic'))
+        expected = ((705000, 705000, 2800100), 9403520, 'atlas-260')
+        add_report('perception:manual-team-job-match', path, expected, actual, 'observe',
+                   '从者、助战礼装与御主礼装', actual == expected)
+
+        path, observation = observe('manual-support-berserker-02.png')
+        actual = observation.field('support_class').value
+        add_report('perception:manual-support-class', path, 'berserker', actual, 'observe',
+                   '当前选中职阶', actual == 'berserker')
+
+        path, observation = observe('manual-w1-t1-after-s3-07.png', ('wave', 'turn', 'np'))
+        actual = tuple(observation.field(name).value for name in ('wave', 'turn', 'np'))
+        expected = (1, 1, (40, 100, 40))
+        add_report('perception:manual-wave-turn-np', path, expected, actual, 'observe',
+                   '真实OCR字段', actual == expected)
+
+        path, observation = observe('manual-w2-t1-cards-14.png', ('crit',))
+        actual = observation.field('crit').value
+        expected = (10, 100, 80, 30, 90)
+        add_report('perception:manual-card-crit', path, expected, actual, 'observe',
+                   '五张普通卡暴击率', actual == expected)
+    finally:
+        perception.close()
+
+
 def run(output: Path, name_filter: str | None = None):
     REPORTS.clear()
     check_classifications()
     check_perception()
     check_perception_identities()
     check_executor_core()
+    check_manual_key_frames()
     check_command_card_batch()
     check_support_refresh_confirmation_timeout()
     check_final_frame_evidence()
@@ -1937,7 +1999,7 @@ def run(output: Path, name_filter: str | None = None):
     check_job_actions(1, [(480, 120), (615, 575), (435, 575)])
     check_job_actions(2, [(265, 575), (95, 575), (710, 575)])
     check_job_actions(3, [(795, 575), (640, 350), (880, 575), (640, 350),
-                          (1195, 310), (1000, 300), (640, 350)])
+                          (1195, 310), (910, 300), (1195, 310), (1000, 300), (640, 350)])
     check_team_start()
     check_ocr_action("action:loading-waits", ROOT / "captures/2026-11-19-ember/05-quest-start.png", "wait")
     check_ocr_action("action:attack-animation-waits", ROOT / "captures/2026-11-19-ember/36-attack-animation.png", "wait")

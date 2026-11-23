@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import replace
 from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -104,6 +105,23 @@ def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
     if y2 - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
         boxes.append((x1, start, x2, y2))
     return boxes
+
+
+def _support_class(image: np.ndarray) -> Field:
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    scores = []
+    for x in cn.SUPPORT_CLASS_CENTERS:
+        yy, xx = np.mgrid[90:170, max(0, x - 42):x + 42]
+        distance = np.abs(xx - x) + np.abs(yy - 129)
+        region = hsv[90:170, max(0, x - 42):x + 42]
+        selected = ((distance >= 31) & (distance <= 40)
+                    & (region[..., 0] >= 85) & (region[..., 0] <= 115)
+                    & (region[..., 1] > 100) & (region[..., 2] > 120))
+        scores.append(int(selected.sum()))
+    ranked = sorted(enumerate(scores), key=lambda item: item[1], reverse=True)
+    if ranked[0][1] < cn.SUPPORT_CLASS_MIN_SCORE or ranked[0][1] - ranked[1][1] < cn.SUPPORT_CLASS_MIN_MARGIN:
+        return Field(FieldStatus.UNCERTAIN)
+    return Field(FieldStatus.CONFIRMED, cn.SUPPORT_CLASS_NAMES[ranked[0][0]])
 
 
 def _make_control(spec, evidence: Evidence, blocked: bool, reason: str) -> Control | None:
@@ -268,6 +286,9 @@ class Perception:
             self._requested.clear()
             self._latest = None
 
+    def bind_mystic(self, mystic_id: str) -> None:
+        self._identities.bind_mystic(mystic_id)
+
     def read(self, frame: Frame) -> Observation:
         started = self._clock()
         digest = evidence.frame_hash(frame)
@@ -304,12 +325,17 @@ class Perception:
             frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
                                       edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs,
                                       np_faces=np_faces, locations=locations)
+        fields = _fields(page, None, False)
+        if page is BasePage.SUPPORT:
+            fields['support_class'] = _support_class(image)
+        if page is BasePage.TEAM:
+            fields.update(self._identities.team(image))
         return Observation(
             base_page=page,
             variants=variants,
             overlays=overlays,
             controls=_controls(page, variants, overlays, frame_evidence, gray, image, self._identities),
-            fields=_fields(page, None, False),
+            fields=fields,
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),
             evidence={name: round(value, 4) for name, value in {**scores, **means, **edges, **slots, **frame_evidence.np_slots}.items()},
@@ -322,7 +348,21 @@ class Perception:
         with self._lock:
             requested = self._requested.get(digest, frozenset())
         fields = _fields(observation.base_page, cached, pending, requested)
-        return _with_turn_boundary(observation.with_fields(fields))
+        for name in ('support_class', 'team_servants', 'team_support_ce', 'team_mystic'):
+            if name in observation.fields:
+                fields[name] = observation.fields[name]
+        observation = observation.with_fields(fields)
+        crit = fields.get('crit')
+        if crit is not None and crit.usable and isinstance(crit.value, tuple):
+            controls = list(observation.controls)
+            for index, control in enumerate(controls):
+                if control.card is None or control.card.noble_phantasm:
+                    continue
+                card_index = int(control.name.removeprefix('卡')) - 1
+                if 0 <= card_index < len(crit.value):
+                    controls[index] = replace(control, card=replace(control.card, crit_rate=crit.value[card_index]))
+            observation = replace(observation, controls=tuple(controls))
+        return _with_turn_boundary(observation)
 
     def read_fields(self, frame: Frame, names: Iterable[str], *,
                     timeout: float | None = None) -> Observation:
