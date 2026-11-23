@@ -500,19 +500,18 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'team_mystic': frozenset({BasePage.TEAM}),
 }
 
-# OCR 只读这些区域；区域用 1280×720 基准坐标。
-WAVE_REGION: Box = (760, 0, 1060, 50)
-TURN_REGION: Box = (760, 80, 1060, 140)
-NP_REGION: Box = (0, 640, 1100, 720)
-CRIT_REGION: Box = (0, 340, 1280, 425)
-
-OCR_MIN_CONFIDENCE = 0.5
-
-WAVE_PATTERN = r'(\d+)\s*/\s*(\d+)'
-TURN_PATTERN = r'(\d+)\s*回合'
-AP_PATTERN = r'行动力现在[：:]\s*(\d+)\s*/\s*(\d+)'
-PERCENT_PATTERN = r'(\d{1,3})\s*%'
-TURN_FALLBACK_REGION: Box = (900, 80, 980, 120)
-# 敌人数量不依赖血条颜色/位置，直接读“敌方单位 还剩 N 名”。
-ENEMY_COUNT_REGION: Box = (760, 40, 1060, 90)
-ENEMY_COUNT_PATTERN = r'还剩\s*(\d+)\s*名'
+# 数字模板只读同帧局部区域；区域用 1280×720 基准坐标。
+WAVE_VALUE_REGION: Box = (875, 5, 900, 42)
+TURN_VALUE_REGION: Box = (900, 78, 922, 115)
+NP_VALUE_REGIONS: tuple[Box, ...] = (
+    (235, 650, 290, 685),
+    (540, 650, 595, 685),
+    (870, 650, 925, 685),
+)
+CRIT_VALUE_REGIONS: tuple[Box, ...] = (
+    (80, 355, 136, 390),
+    (310, 355, 392, 390),
+    (590, 355, 646, 390),
+    (850, 355, 904, 390),
+    (1107, 355, 1164, 390),
+)

@@ -14,7 +14,7 @@ FIXTURES = json.loads((Path(__file__).resolve().parents[1] / 'fixtures' / 'scree
 class ScreenRegressionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=None)
+        cls.perception = isolated_perception(cls.addClassCleanup)
 
     def check(self, case: dict) -> None:
         observation = self.perception.read(load_frame(case['file']))

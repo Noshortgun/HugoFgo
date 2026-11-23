@@ -1,4 +1,4 @@
-"""从者与概念礼装的区域图库匹配；不调用 OCR 或网络。"""
+"""从者与概念礼装的区域图库匹配；不访问网络。"""
 from __future__ import annotations
 
 import json

@@ -1958,34 +1958,54 @@ def check_manual_key_frames():
         perception.bind_formation(plan.formation)
         perception.bind_mystic(plan.mystic_id)
 
-        def observe(name, fields=()):
-            path = ROOT / 'captures/2026-11-23/key' / name
+        def observe(name, fields=(), root=ROOT / 'captures/2026-11-23/key'):
+            path = root / name
             frame = Frame(image=path.read_bytes(), width=1280, height=720, captured_at=1.0)
             perception.read(frame)
-            return (path, perception.read_fields(frame, fields, timeout=10) if fields else perception.read(frame))
+            if not fields:
+                return path, perception.read(frame), None
+            observed = perception.read_fields(frame, fields, timeout=0)
+            cached = perception.read_fields(frame, fields, timeout=0)
+            return path, observed, cached
 
-        path, observation = observe('manual-team-04.png')
+        def image_fields_ok(observation, cached):
+            return (observation.evidence.get('field_ms', -1) >= 0
+                    and observation.evidence.get('field_cache_hit') == 0.0
+                    and cached is not None and cached.frame_hash == observation.frame_hash
+                    and cached.fields == observation.fields
+                    and cached.evidence.get('field_cache_hit') == 1.0)
+
+        path, observation, _cached = observe('manual-team-04.png')
         actual = tuple(observation.field(name).value for name in ('team_servants', 'team_support_ce', 'team_mystic'))
         expected = ((705000, 705000, 2800100), 9403520, 'atlas-260')
         add_report('perception:manual-team-job-match', path, expected, actual, 'observe',
                    '从者、助战礼装与御主礼装', actual == expected)
 
-        path, observation = observe('manual-support-berserker-02.png')
+        path, observation, _cached = observe('manual-support-berserker-02.png')
         actual = observation.field('support_class').value
         add_report('perception:manual-support-class', path, 'berserker', actual, 'observe',
                    '当前选中职阶', actual == 'berserker')
 
-        path, observation = observe('manual-w1-t1-after-s3-07.png', ('wave', 'turn', 'np'))
+        path, observation, cached = observe('manual-w1-t1-after-s3-07.png', ('wave', 'turn', 'np'))
         actual = tuple(observation.field(name).value for name in ('wave', 'turn', 'np'))
         expected = (1, 1, (40, 100, 40))
         add_report('perception:manual-wave-turn-np', path, expected, actual, 'observe',
-                   '真实OCR字段', actual == expected)
+                   '同帧图像数字字段', actual == expected and image_fields_ok(observation, cached))
 
-        path, observation = observe('manual-w2-t1-cards-14.png', ('crit',))
+        path, observation, cached = observe('manual-w2-t1-cards-14.png', ('crit',))
         actual = observation.field('crit').value
         expected = (10, 100, 80, 30, 90)
         add_report('perception:manual-card-crit', path, expected, actual, 'observe',
-                   '五张普通卡暴击率', actual == expected)
+                   '五张普通卡暴击率与同帧缓存耗时证据',
+                   actual == expected and image_fields_ok(observation, cached))
+
+        path, observation, cached = observe('10-np-card-select.png', ('crit',),
+                                           root=ROOT / 'captures/2026-11-19-ember/key')
+        actual = observation.field('crit').value
+        expected = (20, 30, 50, 50, 30)
+        add_report('perception:legacy-card-crit', path, expected, actual, 'observe',
+                   '二十、三十与五十暴击率数字模板',
+                   actual == expected and image_fields_ok(observation, cached))
     finally:
         perception.close()
 

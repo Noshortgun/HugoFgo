@@ -44,7 +44,7 @@ npm run issues:selftest
 
 Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scripts/python.exe`；macOS / Linux 使用 `cv/.venv/bin/python`。
 
-`npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。`python -m executor.replay` 默认运行新执行器的真实截图场景，可用 `--only <名称>` 选择；`python -m executor.replay --filter <文本>` 转发到 `cv/replay.py` 统一用例集。
+`npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入（RapidOCR 只服务旧 `cv/` 回放）。执行器字段读取只使用图像数字模板，测试通过禁止导入 RapidOCR 守住该边界。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。`python -m executor.replay` 默认运行新执行器的真实截图场景，可用 `--only <名称>` 选择；`python -m executor.replay --filter <文本>` 转发到 `cv/replay.py` 统一用例集。
 
 `npm run issues:check` 还需要 GitHub CLI 登录和网络，用于检查本地票据源与 GitHub 是否漂移。
 
@@ -74,6 +74,7 @@ python -m executor.perception <截图> --ready --json
 - 人工关键帧由用户手动执行作业并确认画面字段与下一动作，执行器用同一帧和必要上下文离线回放。`captures/2026-11-23/` 的 29 张手动素材覆盖指定娄希作业完整三面；`python -m executor.replay --only manual-full-loop` 验证正常流程，`manual-team-mystic-mismatch` 验证礼装不符停止。它们属于已标注回归，不是独立留出集或新的实机验收。
 - 声称“图库自动覆盖”的识别测试必须从独立资源根加载不在仓库内置素材中的原图；内置素材只用于离线回归，不能单独证明生产图库加载路径正确。
 - 感知单测和统一回放默认使用空生成图库，测试工具通过 `isolated_perception` / `TemporaryDirectory` 显式注入；本机 `data/<区服>/assets/` 的有无不能改变测试结论。
+- 字段识别断言同时检查具体数值、同帧缓存与 `field_ms` / `field_cache_hit` 证据；禁止把不同帧的识别结果拼接成一次观察。
 - 不用文档中的固定用例数量作为验收条件，以命令退出码和当次报告为准。
 
 旧原型的行为基线见 `.scratch/backend-rebuild/behavior-baseline.md`。它记录重写时必须保留的行为及证据强度，其中被新 ADR 取代的规则以当前需求和 ADR 为准。
@@ -86,7 +87,7 @@ python -m executor.perception <截图> --ready --json
 - 被回放直接引用的故障截图可以保存在日期目录根部，但必须在 `.gitignore` 中添加显式允许规则。
 - 每个日期目录用 `index.json` 登记来源、设备和画面含义。
 - 新增回放截图时，同时更新索引、回放引用和 `.gitignore`。
-- 过程调试图、OCR 临时输出和评审报告不进入 `captures/`。
+- 过程调试图、识别临时输出和评审报告不进入 `captures/`。
 
 `logs/` 保存本地运行证据、留出集和回放报告，不入库。`.scratch/` 保存临时实验，默认不入库；现有 `.scratch/backend-rebuild/` 中已跟踪的票据源、规格与行为基线是例外。
 

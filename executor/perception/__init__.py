@@ -1,4 +1,4 @@
-"""画面感知适配器：同步快路径 + 按需后台 OCR。"""
+"""画面感知适配器：所有字段都来自当前帧的图像证据。"""
 from executor.perception.errors import PerceptionError, StaleFrameError
 from executor.perception.observation import (
     BasePage,

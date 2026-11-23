@@ -1,8 +1,11 @@
 """感知测试共用工具：按仓库相对路径构造一帧。"""
 from __future__ import annotations
 
+import builtins
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from executor.device.base import Frame
 from executor.perception.recognizer import Perception
@@ -20,3 +23,18 @@ def isolated_perception(add_cleanup, **kwargs) -> Perception:
 
 def load_frame(relative: str) -> Frame:
     return Frame(image=(ROOT / relative).read_bytes(), width=1280, height=720, captured_at=0.0)
+
+
+@contextmanager
+def reject_ocr_imports():
+    imports = []
+    original_import = builtins.__import__
+
+    def guarded_import(module, *args, **kwargs):
+        if module.startswith('rapidocr'):
+            imports.append(module)
+            raise AssertionError('画面读取不允许导入 OCR')
+        return original_import(module, *args, **kwargs)
+
+    with mock.patch('builtins.__import__', side_effect=guarded_import):
+        yield imports

@@ -1,7 +1,7 @@
 """从已入库截图裁剪国服锚点模板，生成 `templates/cn/` 与清单。
 
 运行：python -m executor.perception.build_templates
-每次只读截图、重写模板，不调用设备、不触发 OCR。
+每次只读截图、重写模板，不调用设备。
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from executor.perception.digits import normalize_glyph, white_mask
 from executor.perception.regions import cn
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,34 @@ class AnchorSource:
     margin: int | tuple[int, int, int, int]
     threshold: float
     pad: int = PAD
+
+
+@dataclass(frozen=True)
+class DigitSource:
+    style: str
+    digit: int
+    source: str
+    box: tuple[int, int, int, int]
+
+
+DIGITS: tuple[DigitSource, ...] = (
+    DigitSource('wave', 1, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (888, 17, 896, 34)),
+    DigitSource('wave', 2, 'captures/2026-11-23/key/manual-w2-t1-start-10.png', (884, 17, 897, 34)),
+    DigitSource('wave', 3, 'captures/2026-11-23/key/manual-w3-t1-start-15.png', (885, 17, 897, 34)),
+    DigitSource('turn', 1, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (911, 87, 918, 104)),
+    DigitSource('turn', 2, 'captures/2026-11-23/key/manual-w2-t1-start-10.png', (907, 86, 919, 104)),
+    DigitSource('turn', 3, 'captures/2026-11-23/key/manual-w3-t1-start-15.png', (907, 86, 919, 104)),
+    DigitSource('np', 0, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (258, 661, 269, 675)),
+    DigitSource('np', 1, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (552, 661, 558, 675)),
+    DigitSource('np', 4, 'captures/2026-11-23/key/manual-w1-t1-after-s3-07.png', (244, 661, 255, 675)),
+    DigitSource('crit', 0, 'captures/2026-11-23/key/manual-w2-t1-cards-14.png', (113, 365, 133, 380)),
+    DigitSource('crit', 1, 'captures/2026-11-23/key/manual-w2-t1-cards-14.png', (89, 365, 102, 380)),
+    DigitSource('crit', 2, 'captures/2026-11-19-ember/key/10-np-card-select.png', (88, 362, 105, 377)),
+    DigitSource('crit', 3, 'captures/2026-11-23/key/manual-w2-t1-cards-14.png', (858, 367, 873, 382)),
+    DigitSource('crit', 5, 'captures/2026-11-19-ember/key/10-np-card-select.png', (599, 362, 616, 377)),
+    DigitSource('crit', 8, 'captures/2026-11-23/key/manual-w2-t1-cards-14.png', (599, 368, 617, 383)),
+    DigitSource('crit', 9, 'captures/2026-11-23/key/manual-w2-t1-cards-14.png', (1115, 366, 1134, 381)),
+)
 
 
 SOURCES: tuple[AnchorSource, ...] = (
@@ -103,6 +132,27 @@ def build_emblems() -> dict:
     return emblems
 
 
+def build_digits() -> dict:
+    directory = cn.TEMPLATE_DIR / 'digits'
+    directory.mkdir(parents=True, exist_ok=True)
+    digits = {}
+    for source in DIGITS:
+        image = read_image(ROOT / source.source)
+        x1, y1, x2, y2 = source.box
+        patch = normalize_glyph(white_mask(image[y1:y2, x1:x2]))
+        if not patch.any():
+            raise SystemExit(f'数字模板没有白色前景：{source.style}/{source.digit}')
+        name = f'{source.style}-{source.digit}.png'
+        ok, buffer = cv2.imencode('.png', patch)
+        if not ok:
+            raise SystemExit(f'无法编码数字模板：{source.style}/{source.digit}')
+        (directory / name).write_bytes(buffer.tobytes())
+        digits[f'{source.style}/{source.digit}'] = {
+            'file': f'digits/{name}', 'source': source.source, 'box': list(source.box),
+        }
+    return digits
+
+
 def build() -> dict:
     cn.TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     templates = {}
@@ -132,7 +182,7 @@ def build() -> dict:
             'threshold': anchor.threshold,
         }
     manifest = {'region': cn.REGION, 'baseSize': list(cn.BASE_SIZE), 'templates': templates,
-                'emblems': build_emblems()}
+                'emblems': build_emblems(), 'digits': build_digits()}
     (cn.TEMPLATE_DIR / 'manifest.json').write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     return manifest

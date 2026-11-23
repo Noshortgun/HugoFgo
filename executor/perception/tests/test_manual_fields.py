@@ -6,6 +6,7 @@ from pathlib import Path
 from executor.device import Frame
 from executor.domain import compile_job
 from executor.perception import Perception
+from executor.perception.tests.fixtures import reject_ocr_imports
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,11 +15,16 @@ ROOT = Path(__file__).resolve().parents[3]
 class ManualFieldTest(unittest.TestCase):
     def read_fields(self, name: str, *fields: str):
         perception = Perception()
+        path = ROOT / name if name.startswith('captures/') else ROOT / 'captures/2026-11-23/key' / name
         try:
-            frame = Frame(image=(ROOT / 'captures/2026-11-23/key' / name).read_bytes(),
-                          width=1280, height=720, captured_at=1.0)
-            perception.read(frame)
-            return perception.read_fields(frame, fields, timeout=10)
+            frame = Frame(image=path.read_bytes(), width=1280, height=720, captured_at=1.0)
+            with reject_ocr_imports() as imports:
+                perception.read(frame)
+                observation = perception.read_fields(frame, fields, timeout=0)
+            self.assertEqual([], imports)
+            self.assertGreaterEqual(observation.evidence['field_ms'], 0.0)
+            self.assertEqual(0.0, observation.evidence['field_cache_hit'])
+            return observation
         finally:
             perception.close()
 
@@ -62,6 +68,12 @@ class ManualFieldTest(unittest.TestCase):
         self.assertEqual((10, 100, 80, 30, 90), observation.field('crit').value)
         self.assertEqual([10, 100, 80, 30, 90], [control.card.crit_rate for control in observation.controls
                                                if control.name in {'卡1', '卡2', '卡3', '卡4', '卡5'}])
+
+    def test_crit_rates_also_cover_twenties_thirties_and_fifties(self) -> None:
+        observation = self.read_fields(
+            'captures/2026-11-19-ember/key/10-np-card-select.png', 'crit')
+
+        self.assertEqual((20, 30, 50, 50, 30), observation.field('crit').value)
 
 
 if __name__ == '__main__':

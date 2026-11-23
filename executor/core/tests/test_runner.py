@@ -859,6 +859,24 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual('unknown_timeout', rows[-1]['data']['reason'])
             self.assertTrue((root / 'failure.png').is_file())
 
+    def test_perception_stats_are_saved_in_result(self) -> None:
+        unknown = observe(BasePage.UNKNOWN)
+        with tempfile.TemporaryDirectory() as directory:
+            device, perception = scripted([unknown, unknown], [0.0, 30.0])
+            perception.stats = mock.Mock(return_value={
+                'field_reads': 2, 'field_cache_hits': 3, 'field_last_ms': 4.5,
+                'field_mean_ms': 4.0, 'field_p95_ms': 4.5, 'field_max_ms': 4.5,
+            })
+
+            result = run(single_wave_plan(), device, perception, MemoryEventSink(),
+                         options=RunOptions(run_dir=directory))
+
+            payload = json.loads((Path(directory) / 'result.json').read_text(encoding='utf-8'))
+            self.assertEqual(RunStatus.STOPPED, result.status)
+            self.assertEqual(2, payload['perception']['field_reads'])
+            self.assertEqual(3, payload['perception']['field_cache_hits'])
+            self.assertEqual(4.5, payload['perception']['field_last_ms'])
+
     def test_completed_run_saves_the_final_frame(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))

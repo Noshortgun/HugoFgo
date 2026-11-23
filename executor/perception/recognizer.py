@@ -1,8 +1,4 @@
-"""画面感知适配器：同步快路径读帧，后台 OCR 只按需补字段。
-
-`read()` 只做模板、颜色与布局证据，禁止 OCR；`read_fields()` 才把字段请求交给后台线程，
-并按帧哈希拒绝已经过期的结果。
-"""
+"""画面感知适配器：模板、颜色、布局与数字字段都只使用当前帧的图像证据。"""
 from __future__ import annotations
 
 import threading
@@ -30,7 +26,7 @@ from executor.perception.observation import (
     Overlay,
     Variant,
 )
-from executor.perception.ocr import PARSEABLE_FIELDS, OcrWorker
+from executor.perception.digits import IMAGE_FIELDS, DigitReader
 from executor.perception.regions import cn
 
 __all__ = ['Perception', 'StaleFrameError']
@@ -231,21 +227,9 @@ def _overlay_controls(overlay: Overlay, evidence: Evidence, image: np.ndarray) -
     )
 
 
-def _fields(page: BasePage, cached: Mapping[str, Field] | None,
-            pending: bool, requested: frozenset[str] = frozenset()) -> dict[str, Field]:
-    fields: dict[str, Field] = {}
-    for name, pages in cn.FIELD_PAGES.items():
-        if page not in pages:
-            fields[name] = Field(FieldStatus.NOT_APPLICABLE)
-        elif name not in requested:
-            fields[name] = Field(FieldStatus.NOT_READ)
-        elif cached is not None and name in cached:
-            fields[name] = cached[name]
-        elif pending:
-            fields[name] = Field(FieldStatus.PENDING)
-        else:
-            fields[name] = Field(FieldStatus.NOT_READ)
-    return fields
+def _fields(page: BasePage) -> dict[str, Field]:
+    return {name: Field(FieldStatus.NOT_APPLICABLE if page not in pages else FieldStatus.NOT_READ)
+            for name, pages in cn.FIELD_PAGES.items()}
 
 
 def _with_turn_boundary(observation: Observation) -> Observation:
@@ -263,27 +247,28 @@ class Perception:
 
     def __init__(self, *, templates: Mapping[str, Template] | None = None,
                  emblems: Mapping[str, evidence.Emblem] | None = None,
-                 ocr_reader=None, clock=time.perf_counter, cache_size: int = 64,
+                 clock=time.perf_counter, cache_size: int = 64,
                  identity_root: Path | None = None) -> None:
         self._templates = dict(templates) if templates is not None else evidence.load_templates()
         self._emblems = dict(emblems) if emblems is not None else evidence.load_emblems()
         self._identities = IdentityMatcher(identity_root)
-        self._worker = OcrWorker(ocr_reader)
+        self._digits = DigitReader()
         self._clock = clock
         self._cache_size = cache_size
         self._cache: OrderedDict[str, Observation] = OrderedDict()
-        self._requested: dict[str, frozenset[str]] = {}
         self._lock = threading.Lock()
         self._latest: Observation | None = None
         self._timings: deque[float] = deque(maxlen=200)
+        self._field_timings: deque[float] = deque(maxlen=200)
         self._reads = 0
         self._cache_hits = 0
+        self._field_reads = 0
+        self._field_cache_hits = 0
 
     def bind_formation(self, formation) -> None:
         self._identities.bind_formation(formation)
         with self._lock:
             self._cache.clear()
-            self._requested.clear()
             self._latest = None
 
     def bind_mystic(self, mystic_id: str) -> None:
@@ -303,12 +288,11 @@ class Perception:
             with self._lock:
                 self._cache[digest] = observation
                 while len(self._cache) > self._cache_size:
-                    evicted, _ = self._cache.popitem(last=False)
-                    self._requested.pop(evicted, None)
+                    self._cache.popitem(last=False)
                 self._latest = observation
                 self._reads += 1
                 self._timings.append((self._clock() - started) * 1000.0)
-        return self._with_ocr(observation)
+        return _with_turn_boundary(observation)
 
     def _recognize(self, frame: Frame, digest: str) -> Observation:
         image = evidence.decode_frame(frame)
@@ -325,7 +309,7 @@ class Perception:
             frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
                                       edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs,
                                       np_faces=np_faces, locations=locations)
-        fields = _fields(page, None, False)
+        fields = _fields(page)
         if page is BasePage.SUPPORT:
             fields['support_class'] = _support_class(image)
         if page is BasePage.TEAM:
@@ -341,86 +325,83 @@ class Perception:
             evidence={name: round(value, 4) for name, value in {**scores, **means, **edges, **slots, **frame_evidence.np_slots}.items()},
         )
 
-    def _with_ocr(self, observation: Observation) -> Observation:
-        digest = observation.frame_hash
-        cached = self._worker.cached(digest)
-        pending = self._worker.pending(digest)
-        with self._lock:
-            requested = self._requested.get(digest, frozenset())
-        fields = _fields(observation.base_page, cached, pending, requested)
-        for name in ('support_class', 'team_servants', 'team_support_ce', 'team_mystic'):
-            if name in observation.fields:
-                fields[name] = observation.fields[name]
-        observation = observation.with_fields(fields)
-        crit = fields.get('crit')
-        if crit is not None and crit.usable and isinstance(crit.value, tuple):
-            controls = list(observation.controls)
-            for index, control in enumerate(controls):
-                if control.card is None or control.card.noble_phantasm:
-                    continue
-                card_index = int(control.name.removeprefix('卡')) - 1
-                if 0 <= card_index < len(crit.value):
-                    controls[index] = replace(control, card=replace(control.card, crit_rate=crit.value[card_index]))
-            observation = replace(observation, controls=tuple(controls))
-        return _with_turn_boundary(observation)
+    @staticmethod
+    def _with_crit(observation: Observation) -> Observation:
+        crit = observation.field('crit')
+        if crit is None or not crit.usable or not isinstance(crit.value, tuple):
+            return observation
+        controls = list(observation.controls)
+        for index, control in enumerate(controls):
+            if control.card is None or control.card.noble_phantasm:
+                continue
+            card_index = int(control.name.removeprefix('卡')) - 1
+            if 0 <= card_index < len(crit.value):
+                controls[index] = replace(control, card=replace(control.card, crit_rate=crit.value[card_index]))
+        return replace(observation, controls=tuple(controls))
 
     def read_fields(self, frame: Frame, names: Iterable[str], *,
                     timeout: float | None = None) -> Observation:
-        """按需读取字段。timeout 为 None 时立即返回；只有必要字段才值得等待。"""
+        """同步读取当前帧字段；timeout 只为兼容调用方保留，不会排队或等待。"""
+        started = self._clock()
         wanted = tuple(dict.fromkeys(names))
-        unknown = [name for name in wanted if name not in PARSEABLE_FIELDS]
+        unknown = [name for name in wanted if name not in IMAGE_FIELDS]
         if unknown:
-            raise ValueError(f'未知字段 {unknown}；可选 {list(PARSEABLE_FIELDS)}')
+            raise ValueError(f'未知字段 {unknown}；可选 {list(IMAGE_FIELDS)}')
 
         digest = evidence.frame_hash(frame)
         with self._lock:
             latest = self._latest
         if latest is None or latest.frame_hash != digest:
-            raise StaleFrameError('传入的帧不是最近一次 read() 的画面，结果只能进缓存')
+            raise StaleFrameError('传入的帧不是最近一次 read() 的画面')
 
-        applicable = frozenset(name for name in wanted if latest.base_page in cn.FIELD_PAGES[name])
+        applicable = tuple(name for name in wanted if latest.base_page in cn.FIELD_PAGES[name])
         if not applicable:
-            return self._with_ocr(latest)
+            return _with_turn_boundary(latest)
+        missing = tuple(name for name in applicable
+                        if latest.field(name) is None or latest.field(name).status is FieldStatus.NOT_READ)
+        if not missing:
+            with self._lock:
+                self._field_cache_hits += 1
+            cached = replace(latest, evidence={**latest.evidence, 'field_cache_hit': 1.0})
+            return _with_turn_boundary(cached)
+
+        fields = self._digits.read(evidence.decode_frame(frame), missing)
+        elapsed_ms = (self._clock() - started) * 1000.0
+        observation = self._with_crit(latest.with_fields(fields))
+        observation = replace(observation, evidence={**observation.evidence,
+                                                     'field_ms': round(elapsed_ms, 3),
+                                                     'field_cache_hit': 0.0})
         with self._lock:
-            self._requested[digest] = self._requested.get(digest, frozenset()) | applicable
-
-        cached = self._worker.cached(digest)
-        request_id = None
-        if cached is None:
-            request_id = self._worker.pending(digest)
-            if request_id is None:
-                request_id = self._worker.submit(digest, evidence.decode_frame(frame))
-
-        if cached is None and timeout is not None:
-            finished = self._worker.wait(digest, timeout)
-            if finished is not None:
-                finished_id, fields = finished
-                if request_id is not None and finished_id != request_id:
-                    raise StaleFrameError('OCR 结果不属于当前帧的请求，只能进缓存')
-                with self._lock:
-                    current = self._latest
-                if current is None or current.frame_hash != digest:
-                    raise StaleFrameError('等待 OCR 期间画面已变化，结果只能进缓存')
-        return self._with_ocr(latest)
+            if self._latest is None or self._latest.frame_hash != digest:
+                raise StaleFrameError('数字识别期间画面已变化，丢弃当前字段结果')
+            self._cache[digest] = observation
+            self._latest = observation
+            self._field_reads += 1
+            self._field_timings.append((self._clock() - started) * 1000.0)
+        return _with_turn_boundary(observation)
 
     def stats(self) -> dict:
         with self._lock:
             timings = list(self._timings)
+            field_timings = list(self._field_timings)
             reads = self._reads
             hits = self._cache_hits
-        if not timings:
-            return {'reads': reads, 'cache_hits': hits, 'last_ms': None,
-                    'mean_ms': None, 'p95_ms': None, 'max_ms': None}
-        ordered = sorted(timings)
-        p95 = ordered[min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))]
-        return {
-            'reads': reads,
-            'cache_hits': hits,
-            'last_ms': round(timings[-1], 2),
-            'mean_ms': round(sum(timings) / len(timings), 2),
-            'p95_ms': round(p95, 2),
-            'max_ms': round(max(timings), 2),
-        }
+            field_reads = self._field_reads
+            field_hits = self._field_cache_hits
+
+        def measured(values: list[float], prefix: str = '') -> dict:
+            if not values:
+                return {f'{prefix}last_ms': None, f'{prefix}mean_ms': None,
+                        f'{prefix}p95_ms': None, f'{prefix}max_ms': None}
+            ordered = sorted(values)
+            p95 = ordered[min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))]
+            return {f'{prefix}last_ms': round(values[-1], 2),
+                    f'{prefix}mean_ms': round(sum(values) / len(values), 2),
+                    f'{prefix}p95_ms': round(p95, 2), f'{prefix}max_ms': round(max(values), 2)}
+
+        return {'reads': reads, 'cache_hits': hits, **measured(timings),
+                'field_reads': field_reads, 'field_cache_hits': field_hits,
+                **measured(field_timings, 'field_')}
 
     def close(self) -> None:
-        self._worker.close()
+        pass

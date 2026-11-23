@@ -9,7 +9,7 @@ from executor.perception.tests.fixtures import isolated_perception, load_frame
 class SafetyTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=None)
+        cls.perception = isolated_perception(cls.addClassCleanup)
 
     def read(self, relative: str):
         return self.perception.read(load_frame(relative))

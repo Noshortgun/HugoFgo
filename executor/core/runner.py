@@ -307,7 +307,8 @@ class Runner:
             observe(frame, observation)
 
     def result(self, status: RunStatus, reason: str) -> RunResult:
-        return RunResult(status, reason, self.progress)
+        stats = getattr(self.perception, 'stats', None)
+        return RunResult(status, reason, self.progress, perception_stats=stats() if stats is not None else None)
 
     def reset_stability(self) -> None:
         self.stable_signature = None
