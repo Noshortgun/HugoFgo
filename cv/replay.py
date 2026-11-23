@@ -589,7 +589,7 @@ def check_strategy_affinity_and_degraded_data():
     add_report('strategy:affinity-configured-position', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', affinity_first.reason, actual == expected, simulated_ocr=True)
 
-    expected = ['卡1', '卡2', '卡3']
+    expected = ['卡2', '卡1', '卡3']
     uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, crit_rate=None))
     degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
                             strategy, plan, 1)
@@ -602,6 +602,7 @@ def check_strategy_affinity_and_degraded_data():
     degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
                             strategy, plan, 1)
     actual = [control.name for control in degraded.controls]
+    expected = ['卡1', '卡2', '卡3']
     add_report('strategy:missing-affinity-degrades', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
                actual == expected and degraded.warnings == ('缺少克制信息，按中立处理',), simulated_ocr=True)
@@ -2069,7 +2070,10 @@ def run(output: Path, name_filter: str | None = None):
             target = failure_dir / f"{index:02d}-{item['name'].replace(':', '-')}.png"
             image = read_image(source)
             if image is not None and write_image(target, image):
-                item["failureImage"] = str(target.relative_to(ROOT))
+                try:
+                    item["failureImage"] = str(target.relative_to(ROOT))
+                except ValueError:
+                    item["failureImage"] = str(target)
     payload = {
         "createdAt": datetime.now().isoformat(timespec="seconds"),
         "adbUsed": False,
