@@ -1322,6 +1322,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual([(0, 'arts', None), (1, 'arts', None), (2, 'arts', None)],
                          [(item['servant_slot'], item['card_type'], item['deck_index'])
                           for item in card_actions])
+        self.assertTrue(all('affinity' in item for item in card_actions))
         self.assertEqual(1, len({item['batch_id'] for item in card_actions}))
         self.assertEqual([0], list({item['batch_attempt'] for item in card_actions}))
         self.assertGreaterEqual(card_actions[0]['attack_to_first_card_ms'], 0)

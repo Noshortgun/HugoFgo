@@ -756,7 +756,8 @@ class Runner:
             }
             if control.card is not None:
                 data.update(servant_slot=control.card.servant_slot, card_type=control.card.card_type,
-                            deck_index=control.card.deck_index, noble_phantasm=control.card.noble_phantasm)
+                            deck_index=control.card.deck_index, noble_phantasm=control.card.noble_phantasm,
+                            affinity=control.card.affinity)
             if index == 0 and start_position == 1 and self.attack_submitted_at is not None:
                 data['attack_to_first_card_ms'] = (started_at - self.attack_submitted_at) * 1000
             if previous_finished_at is not None:

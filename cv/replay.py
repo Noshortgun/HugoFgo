@@ -607,6 +607,23 @@ def check_strategy_affinity_and_degraded_data():
                expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
                actual == expected and degraded.warnings == ('缺少克制信息，按中立处理',), simulated_ocr=True)
 
+    default_strategy = FallbackStrategy(servant_order=('从者0',), servant_order_slots=(0,))
+    default_plan = replace(plan, strategy=default_strategy)
+    mixed = Observation(base_page=BasePage.CARD, controls=(
+        Control('卡1', ControlKind.CARD, (46, 415, 211, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=50, affinity='neutral')),
+        Control('卡2', ControlKind.CARD, (301, 415, 466, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity='advantage')),
+        Control('卡3', ControlKind.CARD, (556, 415, 721, 655), True,
+                card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity='neutral')),
+    ))
+    default_selection = select_cards(mixed, default_strategy, default_plan, 1)
+    actual = [control.name for control in default_selection.controls]
+    expected = ['卡2', '卡1', '卡3']
+    add_report('strategy:default-order-affinity-before-crit', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', f'{default_selection.reason}; order={default_strategy.strategy_order}',
+               actual == expected, simulated_ocr=True)
+
 
 def check_strategy_np_and_short_hand():
     from dataclasses import replace

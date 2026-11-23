@@ -69,6 +69,27 @@ class StrategyTest(unittest.TestCase):
         self.assertEqual(('缺少克制信息，按中立处理',), selection.warnings)
         self.assertIsNone(selection.diagnostic)
 
+    def test_default_order_places_affinity_before_crit(self) -> None:
+        default = FallbackStrategy(servant_order=('从者0',), servant_order_slots=(0,))
+        observation = Observation(base_page=BasePage.CARD, controls=(
+            Control('卡1', ControlKind.CARD, (0, 415, 160, 655), True,
+                    card=CommandCardIdentity(0, 'buster', crit_rate=50, affinity='neutral')),
+            Control('卡2', ControlKind.CARD, (200, 415, 360, 655), True,
+                    card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity='advantage')),
+            Control('卡3', ControlKind.CARD, (400, 415, 560, 655), True,
+                    card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity='neutral')),
+        ))
+        plan = replace(self.plan, strategy=default)
+
+        selection = select_cards(observation, default, plan, 1)
+
+        self.assertEqual(('servant', 'cards', 'affinity', 'crit'), default.strategy_order)
+        self.assertEqual(['卡2', '卡1', '卡3'], [control.name for control in selection.controls])
+
+        legacy = replace(default, strategy_order=('servant', 'cards', 'crit'))
+        legacy_selection = select_cards(observation, legacy, replace(plan, strategy=legacy), 1)
+        self.assertEqual(['卡1', '卡2', '卡3'], [control.name for control in legacy_selection.controls])
+
 
 if __name__ == '__main__':
     unittest.main()

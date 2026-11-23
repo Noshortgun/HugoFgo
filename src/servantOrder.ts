@@ -52,7 +52,7 @@ export function defaultFallbackStrategy(members: Servant[]): FallbackStrategy {
     servantOrderSlots: entries.map((entry) => entry.slot),
     cards: 'buster',
     colorPriority: ['buster', 'arts', 'quick'],
-    strategyOrder: ['servant', 'cards', 'crit'],
+    strategyOrder: ['servant', 'cards', 'affinity', 'crit'],
   };
 }
 

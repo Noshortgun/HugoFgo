@@ -97,11 +97,13 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 | `servantOrderSlots` | 普通指令卡按槽位排列的先后顺序，可区分同名从者，不包含宝具卡 |
 | `cards` | `buster / arts / quick / balanced` 选卡倾向 |
 | `colorPriority` | 卡色优先顺序 |
-| `strategyOrder` | `servant / cards / crit / affinity` 各策略的比较顺序；未列入的 `affinity` 保持末位兜底 |
+| `strategyOrder` | `servant / cards / crit / affinity` 各策略的比较顺序，默认 `servant → cards → affinity → crit`；未列入的 `affinity` 保持末位兜底 |
 
 普通指令卡按卡序位置逐张选择：每个位置先按 `strategyOrder` 比较当前剩余普通卡，选定并移除一张后，再选择下一位置。已保留的宝具卡不参与普通卡排序；完全并列时选择画面中最靠左的卡。宝具固定在第二或第三卡序位置时，只占用该位置，之前的普通卡选完后，后续位置继续按同一规则选择剩余普通卡。不得改为一次性比较整组普通卡组合，也不得在选定普通卡后按屏幕位置重新排序。
 
 `strategyByWave` 的面编号键为 `"1"`、`"2"`、`"3"`；值为 `null` 表示该面没有独立覆盖。
+
+`affinity` 读取卡面上的克制/抵抗标识，结果按当前选中的敌方目标判定；需要切换攻击目标时，必须在回合 `actions` 中显式加入 `target` 动作，执行器不会因作业字段 `target` 自动切敌。
 
 ## 6. 本地校验
 
