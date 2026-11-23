@@ -882,30 +882,34 @@ def check_scrcpy_session() -> None:
         sockets.append(sock)
         return sock
 
-    config = make_config(serial='emulator-5554', channel='scrcpy', width=1280, height=720)
-    with mock.patch('executor.device.scrcpy_runtime.secrets.randbelow', return_value=0xffffffff):
-        session = ScrcpySession(config, runner=runner, popen=popen, socket_factory=connect,
-                                relay_factory=Relay)
-    try:
-        assert 0 <= int(session.scid, 16) <= 0x7fffffff, 'scid 必须能被 scrcpy 的有符号 Integer.parseInt 解析'
-        assert (session.metrics.width, session.metrics.height, session.metrics.density) == (1280, 720, 320)
-        assert session.video_url == 'tcp://127.0.0.1:32000'
-        assert process.args[1:3] == ['-s', 'emulator-5554']
-        command = ' '.join(process.args)
-        assert 'com.genymobile.scrcpy.Server 3.3.3' in command
-        assert 'control=true' in command and 'send_frame_meta=false' in command and 'audio=false' in command
-        assert f'scid={session.scid}' in command, '每个会话使用独立 socket，避免残留服务端占用 scrcpy 名称'
-        assert len(sockets) == 3 and sockets[0].dummy == b'' and sockets[1].dummy == b'\x00', \
-            'ADB 提前接受但服务端未就绪时，EOF 视频连接必须在启动期限内重建'
-        assert sockets[1].reads == 1, '视频 socket 的首个 dummy 字节不得进入 H.264 流'
-        assert any('push' in call and 'hugofgo-scrcpy-server-3.3.3.jar' in call[-1] for call in runner.calls)
-        forwards = [call for call in runner.calls if 'forward' in call and '--remove' not in call]
-        assert len(forwards) == 2 and all(call[-1] == f'localabstract:scrcpy_{session.scid}' for call in forwards)
-        session.ensure_alive()
-    finally:
-        session.close()
-    assert process.returncode == 0 and all(sock.closed for sock in sockets)
-    assert sum('--remove' in call for call in runner.calls) == 2
+    with tempfile.TemporaryDirectory() as directory:
+        adb = Path(directory) / 'adb'
+        adb.write_bytes(b'')
+        config = make_config(serial='emulator-5554', channel='scrcpy', width=1280, height=720,
+                             adb_path=str(adb))
+        with mock.patch('executor.device.scrcpy_runtime.secrets.randbelow', return_value=0xffffffff):
+            session = ScrcpySession(config, runner=runner, popen=popen, socket_factory=connect,
+                                    relay_factory=Relay)
+        try:
+            assert 0 <= int(session.scid, 16) <= 0x7fffffff, 'scid 必须能被 scrcpy 的有符号 Integer.parseInt 解析'
+            assert (session.metrics.width, session.metrics.height, session.metrics.density) == (1280, 720, 320)
+            assert session.video_url == 'tcp://127.0.0.1:32000'
+            assert process.args[1:3] == ['-s', 'emulator-5554']
+            command = ' '.join(process.args)
+            assert 'com.genymobile.scrcpy.Server 3.3.3' in command
+            assert 'control=true' in command and 'send_frame_meta=false' in command and 'audio=false' in command
+            assert f'scid={session.scid}' in command, '每个会话使用独立 socket，避免残留服务端占用 scrcpy 名称'
+            assert len(sockets) == 3 and sockets[0].dummy == b'' and sockets[1].dummy == b'\x00', \
+                'ADB 提前接受但服务端未就绪时，EOF 视频连接必须在启动期限内重建'
+            assert sockets[1].reads == 1, '视频 socket 的首个 dummy 字节不得进入 H.264 流'
+            assert any('push' in call and 'hugofgo-scrcpy-server-3.3.3.jar' in call[-1] for call in runner.calls)
+            forwards = [call for call in runner.calls if 'forward' in call and '--remove' not in call]
+            assert len(forwards) == 2 and all(call[-1] == f'localabstract:scrcpy_{session.scid}' for call in forwards)
+            session.ensure_alive()
+        finally:
+            session.close()
+        assert process.returncode == 0 and all(sock.closed for sock in sockets)
+        assert sum('--remove' in call for call in runner.calls) == 2
 
 
 def check_frame_format() -> None:
