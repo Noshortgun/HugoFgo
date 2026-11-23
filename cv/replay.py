@@ -1981,6 +1981,20 @@ def check_manual_key_frames():
         add_report('perception:manual-team-job-match', path, expected, actual, 'observe',
                    '从者、助战礼装与御主礼装', actual == expected)
 
+        from executor.perception.identity import CommandTemplate
+        import numpy as np
+        perception.bind_formation(plan.formation)
+        with mock.patch.object(perception._identities, '_load_team', return_value=[
+                CommandTemplate(705000, (), np.ones((2, 128), dtype=np.uint8))]):
+            with mock.patch.object(perception._identities, '_feature_matcher',
+                                   mock.Mock(knnMatch=mock.Mock(return_value=[[]]))):
+                path, observation, _cached = observe('manual-team-04.png')
+        actual = (observation.field('team_servants').status.value,
+                  observation.field('team_support_ce').status.value)
+        expected = ('uncertain', 'uncertain')
+        add_report('perception:team-empty-descriptor-match', path, expected, actual, 'observe',
+                   '空匹配组返回不确定而不是异常', actual == expected)
+
         path, observation, _cached = observe('manual-support-berserker-02.png')
         actual = observation.field('support_class').value
         add_report('perception:manual-support-class', path, 'berserker', actual, 'observe',

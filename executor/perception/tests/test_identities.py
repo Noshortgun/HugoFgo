@@ -11,7 +11,7 @@ import numpy as np
 
 from executor.device.base import Frame
 from executor.perception import BasePage, Perception
-from executor.perception.identity import default_identity_root
+from executor.perception.identity import CommandTemplate, default_identity_root
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
 from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
@@ -139,6 +139,22 @@ class IdentityTest(unittest.TestCase):
                          [observation.control(f'卡{index}').card.affinity for index in range(1, 6)])
         self.assertEqual(['resist'] * 5,
                          [resisted.control(f'卡{index}').card.affinity for index in range(1, 6)])
+
+    def test_empty_team_match_results_are_uncertain_not_an_exception(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                              ce='迦勒底午茶时光', ce_id=9403520),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+        with (mock.patch.object(self.perception._identities, '_load_team', return_value=[
+                  CommandTemplate(705000, (), np.ones((2, 128), dtype=np.uint8))]),
+              mock.patch.object(self.perception._identities, '_feature_matcher',
+                                mock.Mock(knnMatch=mock.Mock(return_value=[[]])))):
+            observation = self.perception.read(load_frame('captures/2026-11-20/key/team-confirm.png'))
+
+        self.assertEqual('uncertain', observation.field('team_servants').status.value)
+        self.assertEqual('uncertain', observation.field('team_support_ce').status.value)
 
     def test_obscured_support_card_uses_unique_support_slot(self) -> None:
         self.perception.bind_formation((

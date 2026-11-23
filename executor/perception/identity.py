@@ -216,8 +216,8 @@ class IdentityMatcher:
         best: dict[int, int] = {}
         for template in self._command_templates or ():
             matches = self._feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
-            good = [first for first, second in matches
-                    if first.distance < cn.COMMAND_SIFT_RATIO * second.distance]
+            good = [pair[0] for pair in matches if len(pair) == 2
+                    and pair[0].distance < cn.COMMAND_SIFT_RATIO * pair[1].distance]
             if len(good) < 4:
                 continue
             source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
@@ -359,7 +359,8 @@ class IdentityMatcher:
         ratio = 0.8 if kind == 'mystic' else 0.75
         for template in templates:
             matches = self._feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
-            good = [first for first, second in matches if first.distance < ratio * second.distance]
+            good = [pair[0] for pair in matches if len(pair) == 2
+                    and pair[0].distance < ratio * pair[1].distance]
             if len(good) < 4:
                 continue
             source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
