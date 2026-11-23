@@ -454,6 +454,16 @@ def check_strategy_servant_priority():
                expected, actual, 'select', f'source={selection.source}; reason={selection.reason}',
                actual == expected and selection.source == 'global', simulated_ocr=True)
 
+    reversed_hand = replace(observation, controls=tuple(
+        replace(control, card=replace(control.card, servant_slot=0))
+        for control in reversed(observation.controls)))
+    sequential = select_cards(reversed_hand, strategy, plan, 1)
+    actual = [control.name for control in sequential.controls]
+    expected = ['卡1', '卡2', '卡3']
+    add_report('strategy:equal-cards-screen-x', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '完全并列按屏幕横坐标，不按输入下标',
+               actual == expected, simulated_ocr=True)
+
 
 def check_strategy_color_priority():
     from executor.core.strategy import select_cards
@@ -1880,6 +1890,17 @@ def check_support_refresh_confirmation_timeout():
                'transient empty rows wait; matching Louhi selected', f'{result.reason}; {controls}',
                'tap', 'second refresh returned candidates after a transient frame', ok, simulated_ocr=True)
 
+    empty = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),))
+    result, device, events = run_core_scenario(
+        [wrong] * 4 + [empty] * 4 + [unknown] * 2,
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = result.reason == 'unknown_timeout' and '列表更新' not in controls
+    add_report('executor:support-empty-scroll-is-not-bottom', SUPPORT_IMAGE,
+               'empty scrolled list waits; no refresh', f'{result.reason}; {controls}',
+               'wait', f'actions={device.actions}', ok, simulated_ocr=True)
+
 
 def check_manual_key_frames():
     from executor.device import Frame
@@ -1888,7 +1909,8 @@ def check_manual_key_frames():
 
     with TemporaryDirectory() as directory:
         for name in ('manual-full-loop', 'manual-team-mystic-mismatch',
-                     'manual-team-servant-mismatch', 'manual-team-support-ce-mismatch'):
+                     'manual-team-servant-mismatch', 'manual-team-support-ce-mismatch',
+                     'support-unknown-rows-bottom'):
             case = get_case(name)
             try:
                 report = run_case(case, Path(directory))

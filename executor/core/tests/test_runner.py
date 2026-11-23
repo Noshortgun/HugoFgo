@@ -2407,6 +2407,25 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(('卡1', '卡2', '卡3'), tuple(control.name for control in selection.controls))
 
+    def test_unknown_support_rows_still_count_as_scroll_content(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        unknown_rows = observe(BasePage.SUPPORT,
+                               Control('助战卡片第1行', ControlKind.ROW, (40, 150, 1216, 350), True),
+                               Control('助战卡片第2行', ControlKind.ROW, (40, 350, 1216, 550), True),
+                               button('列表更新', (888, 98, 972, 162)))
+        observations = [unknown_rows] * 6 + [observe(BasePage.UNKNOWN)] * 2
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.0]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertIn('列表更新', [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_empty_scrolled_support_page_never_counts_as_bottom(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,

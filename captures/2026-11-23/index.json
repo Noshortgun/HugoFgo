@@ -602,6 +602,14 @@
       "match": true
     },
     {
+      "file": "key/support-unknown-candidates.png",
+      "state": "实机故障：狂阶助战列表存在摩根等可见候选，但均非作业目标且身份未确认；这些行必须计为列表内容，不得当成空列表",
+      "expectedAction": {
+        "kind": "support_scroll_or_refresh_after_bottom",
+        "reason": "未知候选行仍参与翻找与到底判断；不得触发 support_candidates_unavailable"
+      }
+    },
+    {
       "file": "key/skill-cooldowns.png",
       "state": "第三面战斗页；从者1技能3、从者2技能3、从者3技能2已灰化冷却，从者2技能1漏用且仍可用"
     },

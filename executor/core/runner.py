@@ -520,7 +520,7 @@ class Runner:
         rows = tuple((item.name, item.box,
                       item.support.svt_id if item.support else None,
                       item.support.ce_id if item.support else None)
-                     for item in observation.controls if item.support is not None)
+                     for item in observation.controls if item.kind is ControlKind.ROW)
         if self.support_stage == 'idle':
             if self.support_search_stable(observation, rows, now):
                 if self.support_refreshes >= 2:

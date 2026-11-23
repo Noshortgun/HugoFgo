@@ -349,6 +349,22 @@ CASES = (
         completed_runs=0,
     ),
     ReplayCase(
+        name='support-unknown-rows-bottom',
+        frames=(
+            *(('captures/2026-11-23/key/support-unknown-candidates.png',) * 6),
+            FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
+        actions=('助战列表向下', '列表更新', '是'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
         name='support-refresh-cooldown',
         frames=(
             FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
