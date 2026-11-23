@@ -48,5 +48,6 @@ assert.deepEqual(
   '没有 Atlas 资产时，加载后再保存也必须保留 npId',
 );
 assert.deepEqual(saved.extraField, { preserved: true }, '再次保存必须保留原作业的额外字段');
+assert.deepEqual(saved.strategy.strategyOrder, ['servant', 'cards', 'crit'], '旧作业往返保存不得新增显式克制判据');
 assert.equal(saved.strategyByWave, undefined, '清空每面策略后不得从原作业复活旧值');
 console.log('作业加载与保存往返自检通过');
