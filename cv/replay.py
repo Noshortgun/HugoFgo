@@ -1887,7 +1887,8 @@ def check_manual_key_frames():
     from executor.replay import ReplayFailure, get_case, manual_job_plan, run_case
 
     with TemporaryDirectory() as directory:
-        for name in ('manual-full-loop', 'manual-team-mystic-mismatch'):
+        for name in ('manual-full-loop', 'manual-team-mystic-mismatch',
+                     'manual-team-servant-mismatch', 'manual-team-support-ce-mismatch'):
             case = get_case(name)
             try:
                 report = run_case(case, Path(directory))

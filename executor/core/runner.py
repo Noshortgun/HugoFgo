@@ -536,7 +536,14 @@ class Runner:
                 self.support_scrolls = 1
                 self.support_swipe(observation, now, down=True)
         elif self.support_stage == 'scroll':
-            if rows == self.support_previous_rows or not rows or self.support_scrolls >= 10:
+            if not rows:
+                self.support_search_stable(observation, rows, now)
+                if (self.support_search_since is not None
+                        and now - self.support_search_since >= self.options.action_timeout):
+                    self.emit('failed', now, reason='support_candidates_unavailable')
+                    return self.result(RunStatus.STOPPED, 'support_candidates_unavailable')
+                return None
+            if rows == self.support_previous_rows:
                 if self.tap_stable(observation, '列表更新', now):
                     self.support_stage = 'refresh_confirm'
                     self.reset_support_search()

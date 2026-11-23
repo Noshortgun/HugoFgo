@@ -96,7 +96,7 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
             elif criterion == 'crit':
                 values.append(-(card.crit_rate or 0))
         values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
-        return (*values, index)
+        return (*values, control.center[0], control.center[1])
 
     positioned: list[Control | None] = [None, None, None]
     automatic: list[Control] = []

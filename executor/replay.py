@@ -662,6 +662,24 @@ CASES = (
         event_types=('state_changed', 'failed'),
         completed_runs=0,
     ),
+    ReplayCase(
+        name='manual-team-servant-mismatch',
+        frames=(MANUAL_LOOP + 'manual-team-04.png', MANUAL_LOOP + 'manual-team-04.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: replace(manual_job_plan(), formation=(
+            *manual_job_plan().formation[:2], replace(manual_job_plan().formation[2], svt_id=500800))),
+        actions=(), status=RunStatus.STOPPED, reason='team_mismatch', states=('team',),
+        event_types=('state_changed', 'failed'), completed_runs=0,
+    ),
+    ReplayCase(
+        name='manual-team-support-ce-mismatch',
+        frames=(MANUAL_LOOP + 'manual-team-04.png', MANUAL_LOOP + 'manual-team-04.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: replace(manual_job_plan(), formation=(
+            replace(manual_job_plan().formation[0], ce_id=9400480), *manual_job_plan().formation[1:])),
+        actions=(), status=RunStatus.STOPPED, reason='team_mismatch', states=('team',),
+        event_types=('state_changed', 'failed'), completed_runs=0,
+    ),
 )
 
 

@@ -2399,6 +2399,35 @@ class RunnerTest(unittest.TestCase):
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(4, len(device.actions))
 
+    def test_equal_cards_use_screen_x_not_candidate_input_order(self) -> None:
+        controls = tuple(command_card(index, 0) for index in (5, 4, 3, 2, 1))
+        observation = observe(BasePage.CARD, *controls)
+
+        selection = select_cards(observation, FallbackStrategy(), single_wave_plan(), 1)
+
+        self.assertEqual(('卡1', '卡2', '卡3'), tuple(control.name for control in selection.controls))
+
+    def test_empty_scrolled_support_page_never_counts_as_bottom(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        empty = observe(BasePage.SUPPORT, button('列表更新', (888, 98, 972, 162)))
+        observations = [wrong] * 4 + [empty] * 4 + [observe(BasePage.UNKNOWN)] * 2
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertNotIn('列表更新', [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_verify_mode_stops_when_required_card_is_not_dealt(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
