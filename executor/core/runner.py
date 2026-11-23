@@ -264,6 +264,7 @@ class Runner:
         self.attack_submitted_at: float | None = None
         self.last_input_finished_at: float | None = None
         self.np_reservation_since: float | None = None
+        self.np_slots_previous: frozenset[str] | None = None
         self.card_confirmation_since: float | None = None
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
@@ -792,7 +793,23 @@ class Runner:
             return None
         return controls, selected_count + 1
 
+    def stable_np_cards(self, observation: Observation) -> Observation:
+        present = frozenset(control.reason.split(':', 1)[-1] for control in observation.controls
+                            if control.reason.startswith('np_slot:'))
+        if len(present) < 2:
+            self.np_slots_previous = present
+            return observation
+        stable = present & self.np_slots_previous if self.np_slots_previous is not None else frozenset()
+        self.np_slots_previous = present
+        if stable == present:
+            return observation
+        return replace(observation, controls=tuple(
+            control for control in observation.controls
+            if not control.reason.startswith('np_slot:')
+            or control.reason.split(':', 1)[-1] in stable))
+
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
+        observation = self.stable_np_cards(observation)
         observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else

@@ -1874,6 +1874,30 @@ def check_final_frame_evidence():
                ok, simulated_ocr=True)
 
 
+def check_transient_second_np_rejected():
+    from executor.domain import ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    turn = TurnPlan(np_positions={1: 2})
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    normal = tuple(Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                           card=CommandCardIdentity(index % 3, 'arts', crit_rate=10, affinity='neutral'))
+                   for index in range(1, 6))
+    first_np = Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A')
+    false_second_np = Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
+    effect = Observation(base_page=BasePage.CARD, controls=(*normal, first_np, false_second_np))
+    settled = Observation(base_page=BasePage.CARD, controls=(*normal, first_np))
+    result, device, events = run_core_scenario(
+        [effect, settled, settled, settled], [0.0, 0.5, 1.0, 1.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    add_report('executor:transient-second-np-not-clicked', ROOT / 'captures/2026-11-23/key/live-card-wave3-effect.png',
+               '不点击特效造成的宝具卡2', f'{result.reason}; actions={controls}', 'stop',
+               'multi-NP regions require consecutive evidence',
+               not any(control.startswith('宝具卡') for control in controls), simulated_ocr=True)
+
+
 def check_support_refresh_confirmation_timeout():
     from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
@@ -2075,6 +2099,7 @@ def run(output: Path, name_filter: str | None = None):
     check_executor_core()
     check_manual_key_frames()
     check_command_card_batch()
+    check_transient_second_np_rejected()
     check_support_refresh_confirmation_timeout()
     check_final_frame_evidence()
     check_strategy_servant_priority()

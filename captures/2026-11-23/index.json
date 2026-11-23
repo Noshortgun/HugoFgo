@@ -631,6 +631,11 @@
       "file": "key/live-battle-w2-turn2.png",
       "state": "scrcpy 实机第 2 面第 2 回合；面数可确认但旧回合模板得分不足，用于回合 2 抗锯齿变体",
       "expectedFields": {"wave": 2, "turn": 2}
+    },
+    {
+      "file": "key/live-card-wave3-effect.png",
+      "state": "scrcpy 实机第 3 面技能特效覆盖选卡页；宝具卡2为瞬时误检，用于连续帧证据回归",
+      "expectedObservation": {"npSlotA": true, "npSlotB": false}
     }
   ]
 }

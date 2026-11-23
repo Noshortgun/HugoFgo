@@ -1155,6 +1155,28 @@ class RunnerTest(unittest.TestCase):
                    if event.type == 'warning' and event.data.get('reason') == 'np_reservation_waiting']
         self.assertEqual(1, len(waiting))
 
+    def test_transient_second_np_slot_never_gets_clicked(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 2})
+        plan = replace(base, waves=(replace(base.waves[0], turns=(turn,)),))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        normal = [command_card(index, (index - 1) % 3) for index in range(1, 6)]
+        first_np = Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A')
+        false_second_np = Control('宝具卡2', ControlKind.CARD, (545, 85, 725, 315), True, 'np_slot:B')
+        effect = observe(BasePage.CARD, *normal, first_np, false_second_np)
+        settled = observe(BasePage.CARD, *normal, first_np)
+        observations = [battle, battle, effect, settled, settled, settled, settled, settled,
+                        observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)]
+        times = [0.0, 0.5, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.4, 32.5]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        actions = [event.data['control'] for event in events.events if event.type == 'action']
+        self.assertFalse(any(control.startswith('宝具卡') for control in actions))
+
     def test_card_batch_waits_for_complete_five_card_hand(self) -> None:
         base = single_wave_plan()
         turn = replace(base.waves[0].turns[0], attack=None, np_positions={1: 1})
