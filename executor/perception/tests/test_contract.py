@@ -1,4 +1,4 @@
-"""感知契约：同步快路径不碰 OCR，字段状态区分“不需要读”和“没读”。"""
+"""感知契约：同步读取不导入 OCR，字段状态区分“不需要读”和“没读”。"""
 from __future__ import annotations
 
 import unittest
@@ -6,36 +6,27 @@ from unittest import mock
 
 from executor.device.base import Frame, FrameFormat
 from executor.perception import BasePage, FieldStatus, evidence
-from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
+from executor.perception.tests.fixtures import isolated_perception, load_frame, reject_ocr_imports
 from executor.perception.observation import CommandCardIdentity, Control, ControlKind, SupportCandidate
-
-
-class RecordingReader:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self, image):
-        self.calls += 1
-        raise AssertionError('同步 read() 不允许调用 OCR')
 
 
 class ContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.reader = RecordingReader()
-        cls.perception = isolated_perception(cls.addClassCleanup, ocr_reader=cls.reader)
+        cls.perception = isolated_perception(cls.addClassCleanup)
 
-    def test_read_never_calls_ocr(self) -> None:
-        for relative in (
-            'captures/2026-11-20/key/battle-wave1.png',
-            'captures/2026-11-20/key/card-select.png',
-            'captures/2026-11-20/key/result.png',
-            'captures/2026-11-20/key/12-battle-start.png',
-        ):
-            with self.subTest(relative=relative):
-                self.perception.read(load_frame(relative))
+    def test_read_never_imports_ocr(self) -> None:
+        with reject_ocr_imports() as imports:
+            for relative in (
+                'captures/2026-11-20/key/battle-wave1.png',
+                'captures/2026-11-20/key/card-select.png',
+                'captures/2026-11-20/key/result.png',
+                'captures/2026-11-20/key/12-battle-start.png',
+            ):
+                with self.subTest(relative=relative):
+                    self.perception.read(load_frame(relative))
 
-        self.assertEqual(0, self.reader.calls)
+        self.assertEqual([], imports)
 
     def test_field_status_separates_not_applicable_from_not_read(self) -> None:
         result = self.perception.read(load_frame('captures/2026-11-20/key/result.png'))

@@ -23,7 +23,7 @@ NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
 COMMAND_CARD_INTERVAL_SECONDS = 0.2
-JOB_ACTION_INTERVAL_SECONDS = 1.0
+JOB_ACTION_INTERVAL_SECONDS = 1.5
 SUPPORT_CLASS_TAB_POINTS = {
     'saber': (161, 128), 'archer': (227, 128), 'lancer': (295, 128),
     'rider': (362, 128), 'caster': (430, 128), 'assassin': (497, 128), 'berserker': (565, 128),
@@ -264,6 +264,7 @@ class Runner:
         self.attack_submitted_at: float | None = None
         self.last_input_finished_at: float | None = None
         self.np_reservation_since: float | None = None
+        self.np_slots_previous: frozenset[str] | None = None
         self.card_confirmation_since: float | None = None
         self.active_slots = [0, 1, 2]
         self.confirming_job_action = False
@@ -280,6 +281,8 @@ class Runner:
         self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
+        self.last_skill_at: float | None = None
+        self.team_since: float | None = None
         self.support_stage = 'idle'
         self.support_class_selected = False
         self.support_class_filter_pending = False
@@ -306,7 +309,8 @@ class Runner:
             observe(frame, observation)
 
     def result(self, status: RunStatus, reason: str) -> RunResult:
-        return RunResult(status, reason, self.progress)
+        stats = getattr(self.perception, 'stats', None)
+        return RunResult(status, reason, self.progress, perception_stats=stats() if stats is not None else None)
 
     def reset_stability(self) -> None:
         self.stable_signature = None
@@ -483,7 +487,11 @@ class Runner:
             role = (requirement.role or '').strip().lower().replace(' ', '').replace('-', '') \
                 if requirement is not None else ''
             point = SUPPORT_CLASS_TAB_POINTS.get(role)
-            if requirement is None:
+            current_class = observation.field('support_class')
+            if current_class is not None and current_class.usable and current_class.value == role:
+                self.support_class_selected = True
+                self.support_stage = 'top'
+            elif requirement is None:
                 self.support_class_selected = True
             elif point is None:
                 self.emit('failed', now, reason='support_role_unavailable', role=requirement.role)
@@ -493,6 +501,7 @@ class Runner:
                 self.tap_point(observation, now, f'职阶筛选:{role}', x, y, 'support_class_filter')
                 self.support_class_selected = True
                 self.support_class_filter_pending = True
+                self.support_stage = 'top'
                 self.reset_support_search()
                 return None
         control = next((item for item in observation.controls
@@ -514,7 +523,7 @@ class Runner:
         rows = tuple((item.name, item.box,
                       item.support.svt_id if item.support else None,
                       item.support.ce_id if item.support else None)
-                     for item in observation.controls if item.support is not None)
+                     for item in observation.controls if item.kind is ControlKind.ROW)
         if self.support_stage == 'idle':
             if self.support_search_stable(observation, rows, now):
                 if self.support_refreshes >= 2:
@@ -530,7 +539,14 @@ class Runner:
                 self.support_scrolls = 1
                 self.support_swipe(observation, now, down=True)
         elif self.support_stage == 'scroll':
-            if rows == self.support_previous_rows or not rows or self.support_scrolls >= 10:
+            if not rows:
+                self.support_search_stable(observation, rows, now)
+                if (self.support_search_since is not None
+                        and now - self.support_search_since >= self.options.action_timeout):
+                    self.emit('failed', now, reason='support_candidates_unavailable')
+                    return self.result(RunStatus.STOPPED, 'support_candidates_unavailable')
+                return None
+            if rows == self.support_previous_rows:
                 if self.tap_stable(observation, '列表更新', now):
                     self.support_stage = 'refresh_confirm'
                     self.reset_support_search()
@@ -541,11 +557,32 @@ class Runner:
                 self.support_swipe(observation, now, down=True)
         return None
 
-    def handle_team(self, observation: Observation, now: float) -> None:
-        if self.tap_stable(observation, '开始任务', now):
-            self.wait_for_page(BasePage.BATTLE, now)
-        elif self.fallback_tap(observation, now, '开始任务', 1190, 655, 'team_fallback'):
-            self.wait_for_page(BasePage.BATTLE, now)
+    def handle_team(self, observation: Observation, now: float) -> RunResult | None:
+        members = {member.slot: member for member in self.plan.formation}
+        expected_servants = tuple(members[slot].svt_id for slot in self.active_slots[:3])
+        support = next((member for member in self.plan.formation if member.support), None)
+        servants = observation.field('team_servants')
+        support_ce = observation.field('team_support_ce')
+        mystic = observation.field('team_mystic')
+        support_valid = (support is None or support.ce_id is None
+                         or (support_ce is not None and support_ce.usable
+                             and support_ce.value == support.ce_id))
+        valid = (servants is not None and servants.usable and tuple(servants.value) == expected_servants
+                 and support_valid
+                 and mystic is not None and mystic.usable and mystic.value == self.plan.mystic_id)
+        if valid:
+            self.team_since = None
+            if self.tap_stable(observation, '开始任务', now):
+                self.wait_for_page(BasePage.BATTLE, now)
+            elif self.fallback_tap(observation, now, '开始任务', 1190, 655, 'team_fallback'):
+                self.wait_for_page(BasePage.BATTLE, now)
+            return None
+        if self.team_since is None:
+            self.team_since = now
+        elif now - self.team_since >= self.options.page_timeout:
+            self.emit('failed', now, reason='team_mismatch')
+            return self.result(RunStatus.STOPPED, 'team_mismatch')
+        return None
 
     def wait_for_overlay(self, now: float, overlay: Overlay,
                          page: BasePage = BasePage.BATTLE) -> None:
@@ -618,6 +655,12 @@ class Runner:
             self.wait_for_job_action(now)
         return None
 
+    def wait_skill_interval(self, now: float) -> None:
+        if self.last_skill_at is not None:
+            remaining = JOB_ACTION_INTERVAL_SECONDS - (now - self.last_skill_at)
+            if remaining > 0:
+                time.sleep(remaining)
+
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
             if self.tap_action(observation, '攻击', now):
@@ -666,6 +709,7 @@ class Runner:
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
             if self.tap_action(observation, name, now):
+                self.last_skill_at = now
                 if action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
                     self.target_selection_since = now
@@ -683,7 +727,7 @@ class Runner:
                         self.pending_stage = 'battle_ready'
                         self.pending_skill_skip = True
                 else:
-                    time.sleep(JOB_ACTION_INTERVAL_SECONDS)
+                    self.wait_skill_interval(now)
                     self.progress.action_index += 1
             return None
         if self.tap_action(observation, '攻击', now):
@@ -757,7 +801,23 @@ class Runner:
             return None
         return controls, selected_count + 1
 
+    def stable_np_cards(self, observation: Observation) -> Observation:
+        present = frozenset(control.reason.split(':', 1)[-1] for control in observation.controls
+                            if control.reason.startswith('np_slot:'))
+        if len(present) < 2:
+            self.np_slots_previous = present
+            return observation
+        stable = present & self.np_slots_previous if self.np_slots_previous is not None else frozenset()
+        self.np_slots_previous = present
+        if stable == present:
+            return observation
+        return replace(observation, controls=tuple(
+            control for control in observation.controls
+            if not control.reason.startswith('np_slot:')
+            or control.reason.split(':', 1)[-1] in stable))
+
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
+        observation = self.stable_np_cards(observation)
         observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
@@ -1016,6 +1076,11 @@ class Runner:
                 return self.result(RunStatus.FAILED, 'device_error')
             now = frame.captured_at
             page = observation.base_page
+            if page is BasePage.CARD and any(control.card is not None and not control.card.noble_phantasm
+                                              and control.card.crit_rate is None
+                                              for control in observation.controls):
+                observation = self.perception.read_fields(frame, ('crit',), timeout=self.options.page_timeout)
+                self.record_observation(frame, observation)
             if page is not BasePage.AP_RECOVERY:
                 self.recovery_scrolled = False
                 self.recovery_scroll_since = None
@@ -1306,7 +1371,7 @@ class Runner:
                         self.starting_next_run = False
                         self.result_seen = False
                     if self.optional_target:
-                        time.sleep(JOB_ACTION_INTERVAL_SECONDS)
+                        self.wait_skill_interval(now)
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False
@@ -1339,7 +1404,9 @@ class Runner:
                 if result is not None:
                     return result
             elif page is BasePage.TEAM:
-                self.handle_team(observation, now)
+                result = self.handle_team(observation, now)
+                if result is not None:
+                    return result
             elif self.spell_action is not None:
                 result = self.handle_spell(observation, now)
                 if result is not None:
@@ -1407,6 +1474,9 @@ def run(plan: ExecutionPlan, device: Device, perception: FramePerception, events
         bind_formation = getattr(perception, 'bind_formation', None)
         if bind_formation is not None:
             bind_formation(plan.formation)
+        bind_mystic = getattr(perception, 'bind_mystic', None)
+        if bind_mystic is not None:
+            bind_mystic(plan.mystic_id)
         result = Runner(plan, device, perception, evidence or events, run_options, control).run()
         return evidence.finish(result) if evidence is not None else result
     finally:

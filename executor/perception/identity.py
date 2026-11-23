@@ -1,4 +1,4 @@
-"""从者与概念礼装的区域图库匹配；不调用 OCR 或网络。"""
+"""从者与概念礼装的区域图库匹配；不访问网络。"""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from executor.perception.observation import CommandCardIdentity, SupportCandidate
+from executor.perception.observation import CommandCardIdentity, Field, FieldStatus, SupportCandidate
 from executor.perception.regions import cn
 
 
@@ -35,6 +35,7 @@ def default_identity_root() -> Path:
 class IdentityMatcher:
     _catalog_cache: dict[tuple[str, str, frozenset[int] | None], list[IdentityTemplate]] = {}
     _command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
+    _team_cache: dict[tuple[str, str, frozenset[int] | None], list[CommandTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or default_identity_root()
@@ -48,7 +49,10 @@ class IdentityMatcher:
         self._required_face_ids: frozenset[int] | None = None
         self._required_ce_ids: frozenset[int] | None = None
         self._required_command_ids: frozenset[int] | None = None
+        self._required_mystic_id: str | None = None
         self._sift = cv2.SIFT_create(nfeatures=cn.COMMAND_SIFT_FEATURES)
+        self._team_sift = cv2.SIFT_create(nfeatures=1000)
+        self._mystic_sift = cv2.SIFT_create(nfeatures=1000, contrastThreshold=0.01)
         self._feature_matcher = cv2.BFMatcher()
 
     def bind_formation(self, formation) -> None:
@@ -60,7 +64,7 @@ class IdentityMatcher:
             key = (member.svt_id, member.support)
             slots[key] = member.slot if key not in slots else -1
         self._formation_slots = slots
-        self._required_face_ids = frozenset(member.svt_id for member in support
+        self._required_face_ids = frozenset(member.svt_id for member in formation
                                             if member.svt_id is not None)
         self._required_ce_ids = frozenset(member.ce_id for member in support
                                           if member.ce_id is not None)
@@ -69,6 +73,9 @@ class IdentityMatcher:
         self._face_templates = None
         self._ce_templates = None
         self._command_templates = None
+
+    def bind_mystic(self, mystic_id: str) -> None:
+        self._required_mystic_id = mystic_id
 
     def _metadata(self, name: str) -> dict[int, dict]:
         path = self._root / name
@@ -209,8 +216,8 @@ class IdentityMatcher:
         best: dict[int, int] = {}
         for template in self._command_templates or ():
             matches = self._feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
-            good = [first for first, second in matches
-                    if first.distance < cn.COMMAND_SIFT_RATIO * second.distance]
+            good = [pair[0] for pair in matches if len(pair) == 2
+                    and pair[0].distance < cn.COMMAND_SIFT_RATIO * pair[1].distance]
             if len(good) < 4:
                 continue
             source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
@@ -254,9 +261,24 @@ class IdentityMatcher:
             return None
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x1, y1, x2, _y2 = box
+        support_score = 0.0
+        if self._support_tag is not None:
+            top, left, bottom, right = cn.COMMAND_SUPPORT_QUERY_OFFSETS
+            tag_region = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
+            result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
+            support_score = float(np.nan_to_num(result.max(), nan=0.0))
+        support = support_score >= cn.COMMAND_SUPPORT_THRESHOLD
+
         top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
         query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
         servant_id = self._command_servant(query)
+        fallback_slot = None
+        if servant_id is None and support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
+            support_slots = [(entity_id, slot) for (entity_id, is_support), slot
+                             in self._formation_slots.items() if is_support and slot >= 0]
+            if len(support_slots) == 1:
+                servant_id, fallback_slot = support_slots[0]
+                support = True
         if servant_id is None:
             return None
 
@@ -274,12 +296,99 @@ class IdentityMatcher:
         if counts[card_type] < cn.COMMAND_TYPE_MIN_PIXELS:
             return None
 
-        support = False
-        if self._support_tag is not None:
-            top, left, bottom, right = cn.COMMAND_SUPPORT_QUERY_OFFSETS
-            tag_region = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
-            result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
-            support = float(np.nan_to_num(result.max(), nan=0.0)) >= cn.COMMAND_SUPPORT_THRESHOLD
-        return CommandCardIdentity(servant_slot=self._formation_slots.get((servant_id, support), -1),
+        slot = fallback_slot if fallback_slot is not None else self._formation_slots.get((servant_id, support), -1)
+        return CommandCardIdentity(servant_slot=slot,
                                    card_type=card_type, svt_id=servant_id, support=support,
                                    affinity=self._command_affinity(image, box))
+
+    def _load_team(self, kind: str) -> list[CommandTemplate]:
+        if kind == 'mystic':
+            numeric = {'default': 1, 'order-change': 20}.get(self._required_mystic_id or '')
+            if numeric is None and (self._required_mystic_id or '').startswith('atlas-'):
+                numeric = int((self._required_mystic_id or '').removeprefix('atlas-'))
+            required = frozenset({numeric}) if numeric is not None else frozenset()
+            directories = ('mystic/items',)
+        else:
+            required = self._required_face_ids if kind == 'face' else self._required_ce_ids
+            directories = ('faces',) if kind == 'face' else ('ce',)
+        cache_key = (str(self._root), kind, required)
+        if cache_key in self._team_cache:
+            return self._team_cache[cache_key]
+        paths: dict[str, tuple[int, Path]] = {}
+        for directory in directories:
+            sources = (cn.TEMPLATE_DIR / 'identities' / directory,
+                       self._root / 'assets/atlas' / directory)
+            for source in sources:
+                if not source.exists():
+                    continue
+                for path in source.glob('*.png'):
+                    try:
+                        entity_id = int(path.stem.split('-', 1)[0] if kind != 'mystic'
+                                        else path.stem.split('-', 1)[1])
+                    except (ValueError, IndexError):
+                        continue
+                    if required is not None and entity_id not in required:
+                        continue
+                    paths[str(path)] = (entity_id, path)
+        templates = []
+        for entity_id, path in paths.values():
+            data = np.fromfile(str(path), dtype=np.uint8)
+            asset = cv2.imdecode(data, cv2.IMREAD_COLOR) if data.size else None
+            if asset is None:
+                continue
+            sift = self._mystic_sift if kind == 'mystic' else self._team_sift
+            variants = (0.6, 0.7) if kind == 'mystic' else (None,)
+            for scale in variants:
+                scaled = asset if scale is None else cv2.resize(asset, None, fx=scale, fy=scale,
+                                                               interpolation=cv2.INTER_AREA)
+                gray = cv2.cvtColor(scaled, cv2.COLOR_BGR2GRAY)
+                keypoints, descriptors = sift.detectAndCompute(gray, None)
+                if descriptors is not None:
+                    templates.append(CommandTemplate(entity_id, tuple(keypoints), descriptors))
+        self._team_cache[cache_key] = templates
+        return templates
+
+    def _team_match(self, query: np.ndarray, templates: list[CommandTemplate], kind: str) -> int | None:
+        sift = self._mystic_sift if kind == 'mystic' else self._team_sift
+        if kind == 'mystic':
+            query = cv2.resize(query, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        query_keypoints, query_descriptors = sift.detectAndCompute(query, None)
+        if query_descriptors is None:
+            return None
+        best: dict[int, int] = {}
+        ratio = 0.8 if kind == 'mystic' else 0.75
+        for template in templates:
+            matches = self._feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
+            good = [pair[0] for pair in matches if len(pair) == 2
+                    and pair[0].distance < ratio * pair[1].distance]
+            if len(good) < 4:
+                continue
+            source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
+            target = np.float32([query_keypoints[match.trainIdx].pt for match in good]).reshape(-1, 1, 2)
+            _homography, mask = cv2.findHomography(source, target, cv2.RANSAC, 5)
+            if mask is not None:
+                inliers = int(mask.sum())
+                best[template.entity_id] = max(inliers, best.get(template.entity_id, 0))
+        ranked = sorted(best.items(), key=lambda item: item[1], reverse=True)
+        minimum, margin = (4, 1) if kind == 'mystic' else (10, 5)
+        if not ranked or ranked[0][1] < minimum:
+            return None
+        if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < margin:
+            return None
+        return ranked[0][0]
+
+    def team(self, image: np.ndarray) -> dict[str, Field]:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        faces = self._load_team('face')
+        servants = [self._team_match(gray[120:350, x1:x2], faces, 'face')
+                    for x1, x2 in ((20, 240), (190, 390), (390, 590))]
+        ce = self._team_match(gray[440:520, 20:240], self._load_team('ce'), 'ce')
+        mystic = self._team_match(gray[630:710, 10:120], self._load_team('mystic'), 'mystic')
+        return {
+            'team_servants': (Field(FieldStatus.CONFIRMED, tuple(servants))
+                              if all(item is not None for item in servants) else Field(FieldStatus.UNCERTAIN)),
+            'team_support_ce': (Field(FieldStatus.CONFIRMED, ce)
+                                if ce is not None else Field(FieldStatus.UNCERTAIN)),
+            'team_mystic': (Field(FieldStatus.CONFIRMED, self._required_mystic_id)
+                            if mystic is not None else Field(FieldStatus.UNCERTAIN)),
+        }

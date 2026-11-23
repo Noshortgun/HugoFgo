@@ -50,3 +50,4 @@ class RunResult:
     reason: str
     progress: RunProgress
     evidence_dir: str | None = None
+    perception_stats: dict | None = None

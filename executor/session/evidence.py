@@ -119,6 +119,7 @@ class RunEvidence:
                 ],
             },
             'device': device,
+            'perception': result.perception_stats,
             'started_at': self.started_at,
             'finished_at': time.time(),
             'observation': str(observation_path) if observation_path is not None else None,

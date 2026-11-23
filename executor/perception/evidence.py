@@ -1,4 +1,4 @@
-"""同步快路径的图像证据：帧解码、帧哈希与区域化模板匹配，不调用 OCR。"""
+"""同步图像证据：帧解码、帧哈希与区域化模板匹配。"""
 from __future__ import annotations
 
 import hashlib
@@ -81,7 +81,7 @@ def decode_frame(frame: Frame) -> np.ndarray:
 
 
 def frame_hash(frame: Frame) -> str:
-    """帧内容的稳定哈希；后台 OCR 的请求与结果用它绑定具体画面。"""
+    """帧内容的稳定哈希；字段结果与缓存都用它绑定具体画面。"""
     digest = hashlib.blake2b(frame.image, digest_size=8)
     digest.update(b'|')
     digest.update(f'{frame.width}x{frame.height}|{frame.format.value}'.encode('ascii'))

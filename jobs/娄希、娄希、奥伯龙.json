@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "娄希、娄希、奥伯龙",
-  "mysticId": "default",
+  "mysticId": "atlas-260",
   "enemyCount": 3,
   "formation": [
     {
@@ -190,9 +190,16 @@
             },
             {
               "kind": "master",
-              "title": "魔术礼装·迦勒底 · 2 技能",
+              "title": "新春装束 · 1 技能",
+              "detail": "己方全体",
+              "icon": "skill_00302",
+              "skill": 0
+            },
+            {
+              "kind": "master",
+              "title": "新春装束 · 2 技能",
               "detail": "目标：娄希",
-              "icon": "mc_00300",
+              "icon": "skill_00313",
               "skill": 1,
               "playerTargetSlot": 1
             },

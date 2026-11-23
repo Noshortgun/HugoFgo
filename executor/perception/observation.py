@@ -76,7 +76,6 @@ class FieldStatus(str, Enum):
 
     NOT_APPLICABLE = 'not_applicable'
     NOT_READ = 'not_read'
-    PENDING = 'pending'
     UNCERTAIN = 'uncertain'
     CONFIRMED = 'confirmed'
 
@@ -141,7 +140,7 @@ class Field:
 
 @dataclass(frozen=True)
 class Observation:
-    """一次画面读取的快照。构造后不可修改；后台 OCR 只产出新快照。"""
+    """一次画面读取的快照。构造后不可修改，字段结果只属于该帧。"""
 
     base_page: BasePage = BasePage.UNKNOWN
     variants: frozenset[Variant] = frozenset()
