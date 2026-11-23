@@ -56,7 +56,6 @@ npm run tauri dev
 npm run build
 npm run verify
 npm run replay
-cv/.venv/Scripts/python.exe scripts/live_monitor.py --port 8766   # 实机验证监控
 ```
 
 完整测试、CI 和实机验收命令见 [测试与验收](testing.md)。
