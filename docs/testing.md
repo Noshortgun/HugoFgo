@@ -34,6 +34,8 @@ npm run verify
 npm run build
 python -m unittest discover -s executor -t . -v
 python -m executor.device --self-test
+python scripts/battle_performance.py <运行目录> [...] [--output 报告.json] [--enforce-thresholds]
+npm run scrcpy:verify
 node scripts/check-references.mjs
 npm run fixtures:check
 npm run replay
@@ -45,6 +47,10 @@ Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scr
 `npm run replay` 是统一回放入口，会先检查 Python 与 OpenCV、NumPy、RapidOCR 是否可导入。报告写入 `logs/replay/latest.json`，失败时包含用例、预期、实际结果和相关截图路径。`python -m executor.replay` 默认运行新执行器的真实截图场景，可用 `--only <名称>` 选择；`python -m executor.replay --filter <文本>` 转发到 `cv/replay.py` 统一用例集。
 
 `npm run issues:check` 还需要 GitHub CLI 登录和网络，用于检查本地票据源与 GitHub 是否漂移。
+
+`battle_performance.py` 同时兼容旧逐卡日志和新批量日志：选卡间隔统计同回合相邻三卡提交（含宝具卡），攻击到首卡统计攻击输入到本次首张选卡输入；不统计选卡后的攻击动画或结算。中位数门槛为 450 ms、1000 ms，只有存在样本且两者都达标时 `timing_thresholds_pass` 才为真。初始批次若发生恢复或未确认，不计入无恢复成功数，报告保留逐批次结果。`--enforce-thresholds` 只把这两个时间门槛转为退出码，不代表完整实机验收或默认通道资格。
+
+`python scripts/live_action_audit.py <运行目录> <作业.json>` 使用与执行器相同的作业编译和卡请求展开结果，逐场逐面逐回合核对控件、固定普通卡身份/顺序与宝具槽位/卡位；旧日志若没有选卡身份字段，会因证据不足而不能通过固定卡序审计。
 
 ### 有边界的冒烟与感知就绪检查
 

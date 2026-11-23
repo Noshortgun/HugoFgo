@@ -1185,6 +1185,19 @@
         "取消"
       ],
       "basis": "annotated"
+    },
+    {
+      "file": "captures/2026-11-23/key/skill-cooldowns.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [],
+      "actionable": true,
+      "actionableControls": [
+        "从者2技能1",
+        "从者2技能2",
+        "从者3技能3"
+      ],
+      "basis": "annotated"
     }
   ]
 }

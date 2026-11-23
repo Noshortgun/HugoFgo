@@ -42,11 +42,29 @@ impl Default for RecoveryPolicy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DeviceChannel {
+    Adb,
+    Scrcpy,
+}
+
+impl DeviceChannel {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Adb => "adb",
+            Self::Scrcpy => "scrcpy",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct RunSettings {
     pub(crate) battles: u32,
     pub(crate) recovery: RecoveryPolicy,
+    pub(crate) device_channel: DeviceChannel,
+    pub(crate) allow_adb_fallback: bool,
 }
 
 impl Default for RunSettings {
@@ -54,6 +72,8 @@ impl Default for RunSettings {
         Self {
             battles: 1,
             recovery: RecoveryPolicy::default(),
+            device_channel: DeviceChannel::Adb,
+            allow_adb_fallback: false,
         }
     }
 }
@@ -104,5 +124,7 @@ mod tests {
         assert_eq!(1, settings.battles);
         assert_eq!(vec![RecoveryItem::Bronze], settings.recovery.allowed);
         assert!(!settings.recovery.drain_after_turns);
+        assert_eq!(settings.device_channel.as_str(), "adb");
+        assert!(!settings.allow_adb_fallback);
     }
 }

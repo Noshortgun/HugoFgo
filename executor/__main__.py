@@ -10,7 +10,7 @@ from pathlib import Path
 
 from executor.core import RunOptions, RunStatus, run
 from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
-from executor.device import DeviceConfig, FakeDevice, open_device
+from executor.device import DeviceConfig, DeviceError, FakeDevice, open_device
 from executor.domain import compile_job
 from executor.perception import Perception
 from executor.session import JsonlEventSink, RunControl, RunEvent
@@ -115,7 +115,10 @@ def parser() -> argparse.ArgumentParser:
                         help='AP 恢复白名单；显式给出空列表表示禁止使用')
     result.add_argument('--drain-after-turns', action='store_true', help='场数完成后清空剩余 AP')
     result.add_argument('--adb', help='adb 路径')
-    result.add_argument('--channel', default='adb', help='设备通道，默认 adb')
+    result.add_argument('--channel', default='adb', help='设备通道，默认 adb；scrcpy 必须显式选择')
+    result.add_argument('--allow-adb-fallback', action='store_true',
+                        help='用户已预先确认：仅 scrcpy 启动失败时可见回退 ADB；运行中断绝不回退')
+    result.add_argument('--scrcpy-server', help='固定 scrcpy 服务端路径；其同目录 manifest.json 会校验版本与 SHA-256')
     result.add_argument('--fake', action='store_true', help='假运行：只记录动作，不接触设备')
     result.add_argument('--fake-interval', type=float, default=0.15, help=argparse.SUPPRESS)
     return result
@@ -129,12 +132,12 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = Path(args.run_dir) if args.run_dir else Path('logs/farm') / datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     run_dir.mkdir(parents=True, exist_ok=True)
     history = RunHistoryRecorder(run_dir, job_name=Path(args.job).stem, job_file=args.job,
-                                 serial=args.serial, region=args.region)
+                                 serial=args.serial, region=args.region, channel=args.channel)
     events = TeeEventSink(StdoutEventSink(), history)
     control = RunControl()
     threading.Thread(target=listen_for_stop, args=(control,), daemon=True).start()
-    emit(events, 'run_started', serial=args.serial, region=args.region, job=str(Path(args.job).resolve()),
-         run_dir=str(run_dir.resolve()), fake=args.fake)
+    emit(events, 'run_started', serial=args.serial, region=args.region, channel=args.channel,
+         job=str(Path(args.job).resolve()), run_dir=str(run_dir.resolve()), fake=args.fake)
 
     try:
         job_text = Path(args.job).read_text(encoding='utf-8')
@@ -158,13 +161,26 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError('假运行间隔不能为负数')
         if args.fake:
             return run_fake(compiled.plan, settings, run_dir, args.fake_interval, control, events)
-        device = open_device(DeviceConfig(serial=args.serial, region=args.region,
-                                         adb_path=args.adb, channel=args.channel))
+        device_config = DeviceConfig(serial=args.serial, region=args.region, adb_path=args.adb,
+                                     channel=args.channel, scrcpy_server_path=args.scrcpy_server)
+        try:
+            device = open_device(device_config)
+        except DeviceError as error:
+            if device_config.channel.value != 'scrcpy' or not args.allow_adb_fallback:
+                raise
+            emit(events, 'warning', reason='scrcpy_start_failed', message=str(error), channel='scrcpy')
+            emit(events, 'channel_changed', **{'from': 'scrcpy'}, to='adb',
+                 message=f'scrcpy 启动失败，按用户已确认的回退策略改用 ADB：{error}')
+            device = open_device(DeviceConfig(serial=args.serial, region=args.region, adb_path=args.adb,
+                                              channel='adb'))
         perception = Perception()
         try:
             result = run(compiled.plan, device, perception, events, options=settings, control=control)
         finally:
             perception.close()
+            close = getattr(device, 'close', None)
+            if close is not None:
+                close()
         return 0 if result.status is RunStatus.COMPLETED else 1
     except Exception as error:
         emit(events, 'failed', reason='process_error', message=str(error), evidence_dir=str(run_dir))

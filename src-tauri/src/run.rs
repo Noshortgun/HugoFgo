@@ -47,6 +47,8 @@ pub(crate) struct RunState {
     pub recovery_used: BTreeMap<String, u32>,
     pub log_dir: String,
     pub error: String,
+    pub notice: String,
+    pub channel: String,
     pub exit_code: Option<i32>,
 }
 
@@ -68,6 +70,8 @@ impl Default for RunState {
             recovery_used: BTreeMap::new(),
             log_dir: String::new(),
             error: String::new(),
+            notice: String::new(),
+            channel: "adb".to_string(),
             exit_code: None,
         }
     }
@@ -206,6 +210,11 @@ fn executor_args(
     if settings.recovery.drain_after_turns {
         args.push("--drain-after-turns".to_string());
     }
+    args.push("--channel".to_string());
+    args.push(settings.device_channel.as_str().to_string());
+    if settings.allow_adb_fallback && settings.device_channel == crate::settings::DeviceChannel::Scrcpy {
+        args.push("--allow-adb-fallback".to_string());
+    }
     if fake {
         args.push("--fake".to_string());
     }
@@ -246,6 +255,16 @@ impl RunManager {
             state.log_dir = directory;
         }
         match event.kind.as_str() {
+            "run_started" => {
+                state.channel = value_text(&event.data, "channel").unwrap_or(state.channel.clone());
+            }
+            "channel_changed" => {
+                state.channel = value_text(&event.data, "to").unwrap_or(state.channel.clone());
+                state.notice = value_text(&event.data, "message").unwrap_or(state.notice.clone());
+            }
+            "warning" => {
+                state.notice = value_text(&event.data, "message").unwrap_or(state.notice.clone());
+            }
             "state_changed" => {
                 state.screen = value_text(&event.data, "state").unwrap_or_default();
             }
@@ -370,6 +389,7 @@ impl RunManager {
             .current_dir(&root)
             .env("HUGOFGO_DATA_ROOT", data_root)
             .env("HUGOFGO_REGION", &region)
+            .env("HUGOFGO_SCRCPY_RESOURCE_DIR", root.join("resources").join("scrcpy"))
             .env("PYTHONUTF8", "1")
             .env("PYTHONIOENCODING", "utf-8")
             .env("PYTHONDONTWRITEBYTECODE", "1")
@@ -390,6 +410,7 @@ impl RunManager {
             job_path: job.to_string_lossy().to_string(),
             started_at_ms: now_ms(),
             status: RunPhase::Running,
+            channel: settings.device_channel.as_str().to_string(),
             log_dir: run_dir.to_string_lossy().to_string(),
             ..RunState::default()
         };
@@ -663,6 +684,7 @@ mod tests {
                 allowed: vec![],
                 drain_after_turns: true,
             },
+            ..RunSettings::default()
         };
         let args = executor_args(
             Path::new("jobs/test.json"),
@@ -677,6 +699,8 @@ mod tests {
         assert!(!args.iter().any(|arg| arg == "bronze"));
         assert!(args.contains(&"--drain-after-turns".to_string()));
         assert!(!args.contains(&"--fake".to_string()));
+        assert!(args.windows(2).any(|pair| pair == ["--channel", "adb"]));
+        assert!(!args.contains(&"--allow-adb-fallback".to_string()));
     }
 
     #[test]
@@ -687,6 +711,7 @@ mod tests {
                 allowed: vec![RecoveryItem::Copper, RecoveryItem::Gold],
                 drain_after_turns: false,
             },
+            ..RunSettings::default()
         };
         let args = executor_args(
             Path::new("job.json"),
@@ -699,5 +724,31 @@ mod tests {
         assert!(args.windows(2).any(|pair| pair == ["--recovery", "copper"]));
         assert!(args.contains(&"gold".to_string()));
         assert!(args.contains(&"--fake".to_string()));
+    }
+
+    #[test]
+    fn channel_fallback_remains_visible_in_run_state() {
+        let manager = RunManager::default();
+        manager.inner.lock().unwrap().state.run_id = "run-1".to_string();
+        manager.apply_event(&RunEvent::new("run-1", "run_started", 1.0,
+                                           json!({"channel": "scrcpy"})));
+        manager.apply_event(&RunEvent::new("run-1", "channel_changed", 2.0,
+                                           json!({"from": "scrcpy", "to": "adb", "message": "用户已确认回退"})));
+        let state = manager.snapshot().unwrap();
+        assert_eq!(state.channel, "adb");
+        assert_eq!(state.notice, "用户已确认回退");
+    }
+
+    #[test]
+    fn launch_args_pass_explicit_scrcpy_and_confirmed_fallback() {
+        let settings = RunSettings {
+            device_channel: crate::settings::DeviceChannel::Scrcpy,
+            allow_adb_fallback: true,
+            ..RunSettings::default()
+        };
+        let args = executor_args(Path::new("job.json"), "emulator-5554", "CN", Path::new("run"),
+                                 &settings, false);
+        assert!(args.windows(2).any(|pair| pair == ["--channel", "scrcpy"]));
+        assert!(args.contains(&"--allow-adb-fallback".to_string()));
     }
 }

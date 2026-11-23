@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import struct
 import subprocess
@@ -350,7 +351,7 @@ def check_discovery() -> None:
     assert gateway.devices is devices, '设备发现只保留一个实现，并从包入口导出'
     assert set(gateway.__all__) == {
         'AdbDevice', 'Device', 'DeviceChannel', 'DeviceConfig', 'DeviceError', 'DeviceMetrics',
-        'FakeDevice', 'Frame', 'FrameFormat', 'LdplayerWindowDevice', 'Region', 'devices', 'open_device',
+        'FakeDevice', 'Frame', 'FrameFormat', 'LdplayerWindowDevice', 'Region', 'ScrcpyDevice', 'devices', 'open_device',
     }, '包入口只暴露设备网关的稳定接口'
     assert len(gateway.__all__) == len(set(gateway.__all__)), '__all__ 不应有重复项'
     assert not hasattr(gateway, 'to_device_point'), '坐标换算属于适配器内部实现，不应从包入口暴露'
@@ -603,8 +604,308 @@ def check_channel() -> None:
 
     assert make_config(serial='x').channel is DeviceChannel.ADB, '默认通道必须仍是 adb'
     assert make_config(serial='x', channel='ldplayer-window').channel is DeviceChannel.LDPLAYER_WINDOW
+    assert make_config(serial='x', channel='scrcpy').channel is DeviceChannel.SCRCPY
+    assert make_config(serial='x', channel='SCRCPY').channel is DeviceChannel.SCRCPY
     assert make_config(serial='x', channel='ADB').channel is DeviceChannel.ADB
     expect_error(lambda: make_config(serial='x', channel='mumu'), 'mumu', error_type=DeviceError)
+
+
+def check_scrcpy_frames_and_input() -> None:
+    import queue
+    import struct
+    import numpy as np
+    from executor.device.scrcpy import ScrcpyDevice
+
+    class Capture:
+        def __init__(self):
+            import threading
+            self.frames = queue.Queue()
+            self.released = False
+            self.read_count = 0
+            self.second_read = threading.Event()
+
+        def read(self):
+            try:
+                frame = self.frames.get(timeout=0.1)
+                self.read_count += 1
+                if self.read_count == 2:
+                    self.second_read.set()
+                return True, frame
+            except queue.Empty:
+                return (False, None) if self.released else self.read()
+
+        def release(self):
+            self.released = True
+
+    class Control:
+        def __init__(self):
+            self.packets = []
+            self.closed = False
+
+        def sendall(self, data):
+            self.packets.append(bytes(data))
+
+        def close(self):
+            self.closed = True
+
+    class Session:
+        def __init__(self):
+            self.control = Control()
+            self.video_url = 'tcp://127.0.0.1:1'
+            self.closed = False
+
+        def ensure_alive(self):
+            return None
+
+        def close(self):
+            self.closed = True
+
+    capture = Capture()
+    session = Session()
+    config = make_config(serial='emulator-5554', channel='scrcpy', width=1920, height=1080)
+    device = ScrcpyDevice(config, session_factory=lambda _: session, capture_factory=lambda _: capture,
+                          frame_timeout=0.2, max_frame_age=1.0)
+    try:
+        assert isinstance(device, Device)
+        capture.frames.put(np.zeros((1080, 1920, 3), dtype=np.uint8))
+        capture.frames.put(np.full((1080, 1920, 3), 17, dtype=np.uint8))
+        assert capture.second_read.wait(1), '视频源应先连续解码两帧'
+        frame = device.frame()
+        assert frame.format is FrameFormat.BGR24 and frame.frame_id == 2, '只向感知交付持续流中的最新帧'
+        assert frame.session_id == device.session_id and frame.captured_at > 0
+        assert (frame.width, frame.height) == (1920, 1080)
+        expect_error(device.frame, '新帧', '超时', error_type=DeviceError)
+
+        device.tap(640, 360)
+        assert len(session.control.packets) == 5, '40ms 点击应包含 DOWN、三次静止 MOVE 和 UP'
+        tap = [struct.unpack('>BBQiiHHHII', packet) for packet in session.control.packets]
+        assert [packet[1] for packet in tap] == [0, 2, 2, 2, 1]
+        down = tap[0]
+        up = tap[-1]
+        assert down == (2, 0, 0, 960, 540, 1920, 1080, 0xFFFF, 0, 0)
+        assert up == (2, 1, 0, 960, 540, 1920, 1080, 0, 0, 0)
+        assert all(packet[3:7] == (960, 540, 1920, 1080) for packet in tap)
+
+        before = len(session.control.packets)
+        device.swipe(100, 200, 300, 400, duration_ms=32)
+        swipe = [struct.unpack('>BBQiiHHHII', packet) for packet in session.control.packets[before:]]
+        assert [packet[1] for packet in swipe] == [0, 2, 2, 1], '滑动每 16ms 至少采样一次移动'
+        assert (swipe[0][3], swipe[0][4]) == (150, 300)
+        assert (swipe[1][3], swipe[1][4]) == (300, 450)
+        assert (swipe[-1][3], swipe[-1][4]) == (450, 600)
+        assert all(packet[0] == 2 and packet[2] == 0 for packet in swipe), '必须使用触摸消息与同一 finger ID'
+        assert all(packet[5:7] == (1920, 1080) for packet in swipe)
+    finally:
+        device.close()
+    assert capture.released and session.closed and session.control.closed
+
+
+def check_scrcpy_failures() -> None:
+    from executor.device.scrcpy import ScrcpyDevice
+
+    config = make_config(serial='emu', channel='scrcpy', width=1280, height=720)
+    expect_error(lambda: ScrcpyDevice(config, session_factory=lambda _: (_ for _ in ()).throw(DeviceError('adb boom'))),
+                 'scrcpy 启动失败', 'adb boom', error_type=DeviceError)
+
+    class BrokenCapture:
+        def read(self):
+            return False, None
+
+        def release(self):
+            pass
+
+    class BrokenControl:
+        def __init__(self):
+            self.calls = 0
+
+        def sendall(self, data):
+            self.calls += 1
+            raise OSError('socket closed')
+
+        def close(self):
+            pass
+
+    class Session:
+        video_url = 'fake:video'
+
+        def __init__(self, control=None):
+            self.control = control or BrokenControl()
+            self.closed = False
+
+        def ensure_alive(self):
+            return None
+
+        def close(self):
+            self.closed = True
+
+    session = Session()
+    expect_error(lambda: ScrcpyDevice(config, session_factory=lambda _: session,
+                                      capture_factory=lambda _: (_ for _ in ()).throw(DeviceError('decoder missing'))),
+                 'scrcpy 启动失败', 'decoder missing', error_type=DeviceError)
+    assert session.closed, '解码器启动失败必须关闭已建立的服务端与控制会话'
+
+    control = BrokenControl()
+    device = ScrcpyDevice(config, session_factory=lambda _: Session(control),
+                          capture_factory=lambda _: BrokenCapture(), frame_timeout=0.1)
+    try:
+        expect_error(device.frame, '视频流中断', '旧帧', error_type=DeviceError)
+        calls = control.calls
+        expect_error(lambda: device.tap(1, 1), '视频流中断', error_type=DeviceError)
+        assert control.calls == calls, '视频中断后禁止继续输入'
+    finally:
+        device.close()
+
+    class WaitingCapture:
+        def read(self):
+            time.sleep(1)
+            return False, None
+
+        def release(self):
+            pass
+
+    device = ScrcpyDevice(config, session_factory=lambda _: Session(),
+                          capture_factory=lambda _: WaitingCapture(), frame_timeout=0.1)
+    try:
+        expect_error(lambda: device.tap(1, 1), '控制通道中断', 'socket closed', error_type=DeviceError)
+        expect_error(device.frame, '控制通道中断', error_type=DeviceError)
+    finally:
+        device.close()
+
+
+def check_scrcpy_resources() -> None:
+    from executor.device.scrcpy_resources import verify_scrcpy_server
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        manifest = root / 'manifest.json'
+        manifest.write_text(json.dumps({'version': '3.3.3', 'server_file': 'scrcpy-server.jar',
+                                        'sha256': 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}),
+                            encoding='utf-8')
+        expect_error(lambda: verify_scrcpy_server(root), 'scrcpy 服务端缺失', 'scrcpy-server.jar',
+                     error_type=DeviceError)
+        server = root / 'scrcpy-server.jar'
+        server.write_bytes(b'abc')
+        assert verify_scrcpy_server(root) == server
+        manifest.write_text(json.dumps({'version': '3.3.2', 'server_file': 'scrcpy-server.jar',
+                                        'sha256': 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}),
+                            encoding='utf-8')
+        expect_error(lambda: verify_scrcpy_server(root), '固定版本 3.3.3', '3.3.2', error_type=DeviceError)
+        manifest.write_text(json.dumps({'version': '3.3.3', 'server_file': 'scrcpy-server.jar',
+                                        'sha256': 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'}),
+                            encoding='utf-8')
+        server.write_bytes(b'tampered')
+        expect_error(lambda: verify_scrcpy_server(root), 'SHA-256', '不匹配', error_type=DeviceError)
+        manifest.write_text('{broken', encoding='utf-8')
+        expect_error(lambda: verify_scrcpy_server(root), '清单', error_type=DeviceError)
+
+    bundled = verify_scrcpy_server()
+    assert bundled.name == 'scrcpy-server.jar' and bundled.stat().st_size == 90164
+
+
+def check_scrcpy_session() -> None:
+    from executor.device.scrcpy_runtime import ScrcpySession
+
+    class Runner:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, argv, **kwargs):
+            self.calls.append(list(argv))
+            if 'get-state' in argv:
+                return subprocess.CompletedProcess(argv, 0, b'device\n', b'')
+            if 'density' in argv:
+                return subprocess.CompletedProcess(argv, 0, b'Physical density: 320\n', b'')
+            if 'push' in argv:
+                return subprocess.CompletedProcess(argv, 0, b'1 file pushed\n', b'')
+            if 'forward' in argv and '--remove' not in argv:
+                port = b'31001\n' if sum('forward' in call for call in self.calls) == 1 else b'31002\n'
+                return subprocess.CompletedProcess(argv, 0, port, b'')
+            return subprocess.CompletedProcess(argv, 0, b'', b'')
+
+    class Socket:
+        def __init__(self, dummy=b'\x00'):
+            self.closed = False
+            self.reads = 0
+            self.dummy = dummy
+
+        def recv(self, size):
+            self.reads += 1
+            return self.dummy if self.reads == 1 else b''
+
+        def settimeout(self, value):
+            pass
+
+        def close(self):
+            self.closed = True
+
+        def sendall(self, data):
+            pass
+
+    class Process:
+        def __init__(self):
+            self.args = None
+            self.returncode = None
+            self.stdout = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.returncode = -1
+
+    class Relay:
+        video_url = 'tcp://127.0.0.1:32000'
+
+        def __init__(self, video):
+            self.video = video
+
+        def close(self):
+            self.video.close()
+
+    runner = Runner()
+    process = Process()
+    sockets = []
+
+    def popen(argv, **kwargs):
+        process.args = list(argv)
+        return process
+
+    def connect(address, timeout):
+        sock = Socket(b'' if not sockets else b'\x00')
+        sockets.append(sock)
+        return sock
+
+    config = make_config(serial='emulator-5554', channel='scrcpy', width=1280, height=720)
+    with mock.patch('executor.device.scrcpy_runtime.secrets.randbelow', return_value=0xffffffff):
+        session = ScrcpySession(config, runner=runner, popen=popen, socket_factory=connect,
+                                relay_factory=Relay)
+    try:
+        assert 0 <= int(session.scid, 16) <= 0x7fffffff, 'scid 必须能被 scrcpy 的有符号 Integer.parseInt 解析'
+        assert (session.metrics.width, session.metrics.height, session.metrics.density) == (1280, 720, 320)
+        assert session.video_url == 'tcp://127.0.0.1:32000'
+        assert process.args[1:3] == ['-s', 'emulator-5554']
+        command = ' '.join(process.args)
+        assert 'com.genymobile.scrcpy.Server 3.3.3' in command
+        assert 'control=true' in command and 'send_frame_meta=false' in command and 'audio=false' in command
+        assert f'scid={session.scid}' in command, '每个会话使用独立 socket，避免残留服务端占用 scrcpy 名称'
+        assert len(sockets) == 3 and sockets[0].dummy == b'' and sockets[1].dummy == b'\x00', \
+            'ADB 提前接受但服务端未就绪时，EOF 视频连接必须在启动期限内重建'
+        assert sockets[1].reads == 1, '视频 socket 的首个 dummy 字节不得进入 H.264 流'
+        assert any('push' in call and 'hugofgo-scrcpy-server-3.3.3.jar' in call[-1] for call in runner.calls)
+        forwards = [call for call in runner.calls if 'forward' in call and '--remove' not in call]
+        assert len(forwards) == 2 and all(call[-1] == f'localabstract:scrcpy_{session.scid}' for call in forwards)
+        session.ensure_alive()
+    finally:
+        session.close()
+    assert process.returncode == 0 and all(sock.closed for sock in sockets)
+    assert sum('--remove' in call for call in runner.calls) == 2
 
 
 def check_frame_format() -> None:
@@ -616,6 +917,10 @@ def check_frame_format() -> None:
                  'PNG', error_type=DeviceError)
     png_frame = Frame(image=make_png(1280, 720), width=1280, height=720, captured_at=1.0)
     assert png_frame.format is FrameFormat.PNG, 'adb 与回放帧的默认格式必须仍是 PNG'
+    streamed = Frame(image=make_png(1280, 720), width=1280, height=720, captured_at=1.0,
+                     frame_id=7, session_id='session-a')
+    assert (streamed.frame_id, streamed.session_id) == (7, 'session-a')
+    assert png_frame.frame_id is None and png_frame.session_id is None, '现有通道不需要伪造流身份'
 
 
 def check_ldplayer_window() -> None:
@@ -797,6 +1102,11 @@ def check_open_device() -> None:
         assert isinstance(device, LdplayerWindowDevice)
         assert isinstance(device, Device)
 
+    marker = object()
+    with mock.patch.object(gateway, 'ScrcpyDevice', return_value=marker) as constructor:
+        assert open_device(make_config(serial='emulator-5554', channel='scrcpy')) is marker
+        assert constructor.call_args.args[0].channel is DeviceChannel.SCRCPY
+
 
 def require_unoptimized() -> None:
     if sys.flags.optimize:
@@ -831,6 +1141,10 @@ CHECKS = [
     ('fake 动作记录', check_fake_actions),
     ('fake 帧目录', check_fake_dir),
     ('帧格式与原始像素校验', check_frame_format),
+    ('scrcpy 连续最新帧与输入', check_scrcpy_frames_and_input),
+    ('scrcpy 启动、取帧、输入与中断失败', check_scrcpy_failures),
+    ('scrcpy 固定服务端资源校验', check_scrcpy_resources),
+    ('scrcpy 同设备双通道会话与清理', check_scrcpy_session),
     ('LDPlayer 窗口定位', check_ldplayer_window),
     ('LDPlayer 原始帧与资源释放', check_ldplayer_frames),
     ('LDPlayer 采集失败与原因', check_ldplayer_errors),
@@ -930,6 +1244,9 @@ def capture_command(*, serial: str | None, channel: str, adb_path: str | None, r
     stats = getattr(device, 'stats', None)
     if callable(stats):
         print(f'通道统计：{stats_summary(stats())}')
+    close = getattr(device, 'close', None)
+    if close is not None:
+        close()
     return 0 if not failures else 1
 
 
