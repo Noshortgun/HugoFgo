@@ -23,7 +23,7 @@ NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
 COMMAND_CARD_INTERVAL_SECONDS = 0.2
-JOB_ACTION_INTERVAL_SECONDS = 1.0
+JOB_ACTION_INTERVAL_SECONDS = 1.5
 SUPPORT_CLASS_TAB_POINTS = {
     'saber': (161, 128), 'archer': (227, 128), 'lancer': (295, 128),
     'rider': (362, 128), 'caster': (430, 128), 'assassin': (497, 128), 'berserker': (565, 128),
@@ -281,6 +281,7 @@ class Runner:
         self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
+        self.last_skill_at: float | None = None
         self.team_since: float | None = None
         self.support_stage = 'idle'
         self.support_class_selected = False
@@ -654,6 +655,12 @@ class Runner:
             self.wait_for_job_action(now)
         return None
 
+    def wait_skill_interval(self, now: float) -> None:
+        if self.last_skill_at is not None:
+            remaining = JOB_ACTION_INTERVAL_SECONDS - (now - self.last_skill_at)
+            if remaining > 0:
+                time.sleep(remaining)
+
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
             if self.tap_action(observation, '攻击', now):
@@ -702,6 +709,7 @@ class Runner:
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
             if self.tap_action(observation, name, now):
+                self.last_skill_at = now
                 if action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
                     self.target_selection_since = now
@@ -719,7 +727,7 @@ class Runner:
                         self.pending_stage = 'battle_ready'
                         self.pending_skill_skip = True
                 else:
-                    time.sleep(JOB_ACTION_INTERVAL_SECONDS)
+                    self.wait_skill_interval(now)
                     self.progress.action_index += 1
             return None
         if self.tap_action(observation, '攻击', now):
@@ -1363,7 +1371,7 @@ class Runner:
                         self.starting_next_run = False
                         self.result_seen = False
                     if self.optional_target:
-                        time.sleep(JOB_ACTION_INTERVAL_SECONDS)
+                        self.wait_skill_interval(now)
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False

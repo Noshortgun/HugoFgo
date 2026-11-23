@@ -370,6 +370,22 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(any(event.type == 'warning' and event.data.get('reason') == 'action_recovery'
                              for event in events.events))
 
+    def test_consecutive_skills_wait_one_and_a_half_seconds(self) -> None:
+        first = ActionPlan(kind='skill', title='三技能', detail='', icon='', member_slot=1, skill=2)
+        second = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=1, skill=0)
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者2技能3', ControlKind.SKILL, (539, 548, 600, 610), True),
+                         Control('从者2技能1', ControlKind.SKILL, (365, 548, 426, 610), True))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([battle, battle, battle, wrong_cards], [0.0, 0.5, 0.6, 0.7])
+
+        with mock.patch('executor.core.runner.time.sleep', return_value=None) as sleep:
+            result = core_run(single_wave_plan((first, second)), device, perception,
+                              MemoryEventSink(), options=RunOptions(write_evidence=False))
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(2, sleep.call_args_list.count(mock.call(1.5)))
+
     def test_servant_skill_is_confirmed_before_attack(self) -> None:
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
         battle = observe(BasePage.BATTLE, button('攻击'),
@@ -428,7 +444,7 @@ class RunnerTest(unittest.TestCase):
                               options=RunOptions(write_evidence=False))
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertIn(mock.call(1.0), sleep.call_args_list)
+        self.assertIn(mock.call(0.5), sleep.call_args_list)
 
     def test_self_target_skill_still_selects_target_when_game_asks(self) -> None:
         skill = ActionPlan(kind='skill', title='自身技能', detail='', icon='',
