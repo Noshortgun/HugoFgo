@@ -81,7 +81,7 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
     selected_normal = []
 
     def key(indexed: tuple[int, Control]) -> tuple:
-        index, control = indexed
+        _index, control = indexed
         card = control.card
         values = []
         for criterion in effective.strategy_order:
@@ -95,7 +95,10 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
                 values.append((preference, color_ranks.get(card.card_type, len(color_ranks))))
             elif criterion == 'crit':
                 values.append(-(card.crit_rate or 0))
-        values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
+            elif criterion == 'affinity':
+                values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
+        if 'affinity' not in effective.strategy_order:
+            values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
         return (*values, control.center[0], control.center[1])
 
     positioned: list[Control | None] = [None, None, None]

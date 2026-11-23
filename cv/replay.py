@@ -154,7 +154,7 @@ def check_perception_identities():
         if compiled.plan is None:
             raise ValueError('实机选卡回放作业无法编译')
         selection = select_cards(live, compiled.plan.strategy, compiled.plan, 1)
-        expected = (3, ('缺少暴击率，按 0 处理', '缺少克制信息，按中立处理'))
+        expected = (3, ('缺少暴击率，按 0 处理',))
         actual = (len(selection.controls), selection.warnings)
         add_report('strategy:live-missing-rank-data', live_path, expected, actual, 'select',
                    f'{selection.reason}; controls={[control.name for control in selection.controls]}',
@@ -172,6 +172,16 @@ def check_perception_identities():
         expected = [2800100, 500800, 2800100, 500800, 705000]
         add_report('perception:identity:cross-session', old_path, expected, actual, 'observe',
                    'Atlas 指令卡原图覆盖梅林等从者', actual == expected)
+
+        affinity = [old.control(f'卡{index}').card.affinity for index in range(1, 6)]
+        resisted_path = ROOT / 'captures/2026-11-19-ember/key/10-np-card-select.png'
+        resisted = perception.read(Frame(image=resisted_path.read_bytes(), width=1280,
+                                         height=720, captured_at=0.0))
+        resisted_affinity = [resisted.control(f'卡{index}').card.affinity for index in range(1, 6)]
+        expected = (['advantage', 'neutral', 'advantage', 'neutral', 'advantage'], ['resist'] * 5)
+        actual = (affinity, resisted_affinity)
+        add_report('perception:identity:affinity', resisted_path, expected, actual, 'observe',
+                   '卡面克制、抵抗与无标识中立三态', actual == expected)
     finally:
         perception.close()
         temporary.cleanup()
@@ -550,25 +560,36 @@ def check_strategy_affinity_and_degraded_data():
     from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
 
     strategy = FallbackStrategy(
-        allow_np=False, servant_order=('从者0',), servant_order_slots=(0,), cards='buster',
-        color_priority=('buster', 'arts', 'quick'), strategy_order=('servant', 'cards', 'crit'),
+        allow_np=False, servant_order=('从者0', '从者1', '从者2'), servant_order_slots=(0, 1, 2),
+        cards='buster', color_priority=('buster', 'arts', 'quick'),
+        strategy_order=('servant', 'cards', 'crit'),
     )
     plan = ExecutionPlan(
         mystic_id='default', enemy_count=3,
         waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
-        formation=(FormationSlotPlan(slot=0, name='从者0'),), strategy=strategy,
+        formation=tuple(FormationSlotPlan(slot=slot, name=f'从者{slot}') for slot in range(3)),
+        strategy=strategy,
     )
     observation = Observation(base_page=BasePage.CARD, controls=tuple(
         Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
-                card=CommandCardIdentity(0, 'buster', crit_rate=10, affinity=affinity))
-        for index, affinity in enumerate(('resist', 'neutral', 'advantage', 'advantage', 'neutral'), 1)))
+                card=CommandCardIdentity(slot, 'buster', crit_rate=10, affinity=affinity))
+        for index, (slot, affinity) in enumerate(((0, 'advantage'), (0, 'resist'), (1, 'advantage'),
+                                                 (1, 'resist'), (2, 'advantage')), 1)))
 
     selection = select_cards(observation, strategy, plan, 1)
     actual = [control.name for control in selection.controls]
-    expected = ['卡3', '卡4', '卡2']
+    expected = ['卡1', '卡2', '卡3']
     add_report('strategy:affinity-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', selection.reason, actual == expected, simulated_ocr=True)
 
+    affinity_first = select_cards(
+        observation, replace(strategy, strategy_order=('affinity', 'servant', 'cards', 'crit')), plan, 1)
+    actual = [control.name for control in affinity_first.controls]
+    expected = ['卡1', '卡3', '卡5']
+    add_report('strategy:affinity-configured-position', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', affinity_first.reason, actual == expected, simulated_ocr=True)
+
+    expected = ['卡1', '卡2', '卡3']
     uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, crit_rate=None))
     degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
                             strategy, plan, 1)
@@ -576,6 +597,14 @@ def check_strategy_affinity_and_degraded_data():
     add_report('strategy:missing-crit-degrades', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
                actual == expected and degraded.warnings == ('缺少暴击率，按 0 处理',), simulated_ocr=True)
+
+    uncertain_card = replace(observation.controls[0], card=replace(observation.controls[0].card, affinity=None))
+    degraded = select_cards(replace(observation, controls=(uncertain_card, *observation.controls[1:])),
+                            strategy, plan, 1)
+    actual = [control.name for control in degraded.controls]
+    add_report('strategy:missing-affinity-degrades', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', f'{degraded.reason}; warnings={degraded.warnings}',
+               actual == expected and degraded.warnings == ('缺少克制信息，按中立处理',), simulated_ocr=True)
 
 
 def check_strategy_np_and_short_hand():

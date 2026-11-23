@@ -87,7 +87,7 @@
         },
         "strategyOrder": {
           "type": "array",
-          "items": { "enum": ["servant", "cards", "crit"] }
+          "items": { "enum": ["servant", "cards", "crit", "affinity"] }
         }
       }
     },

@@ -97,7 +97,7 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 | `servantOrderSlots` | 普通指令卡按槽位排列的先后顺序，可区分同名从者，不包含宝具卡 |
 | `cards` | `buster / arts / quick / balanced` 选卡倾向 |
 | `colorPriority` | 卡色优先顺序 |
-| `strategyOrder` | `servant / cards / crit` 各策略的比较顺序 |
+| `strategyOrder` | `servant / cards / crit / affinity` 各策略的比较顺序；未列入的 `affinity` 保持末位兜底 |
 
 普通指令卡按卡序位置逐张选择：每个位置先按 `strategyOrder` 比较当前剩余普通卡，选定并移除一张后，再选择下一位置。已保留的宝具卡不参与普通卡排序；完全并列时选择画面中最靠左的卡。宝具固定在第二或第三卡序位置时，只占用该位置，之前的普通卡选完后，后续位置继续按同一规则选择剩余普通卡。不得改为一次性比较整组普通卡组合，也不得在选定普通卡后按屏幕位置重新排序。
 
