@@ -4,6 +4,7 @@ import json
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from executor.device import Frame
 from executor.perception import Perception
@@ -53,6 +54,16 @@ class LiveMonitorTest(unittest.TestCase):
         self.assertEqual('卡4', snapshot['decision']['data']['control'])
         self.assertEqual('卡4', snapshot['history'][-1]['decision']['data']['control'])
         self.assertEqual('执行动作', snapshot['events'][-1]['label'])
+
+    def test_monitor_annotation_failure_does_not_interrupt_execution(self) -> None:
+        with mock.patch('scripts.live_monitor.annotate', side_effect=ValueError('monitor boom')):
+            observation = self.monitored.read(self.frame)
+
+        self.assertEqual('card', observation.base_page.value)
+        snapshot = self.state.snapshot()
+        self.assertEqual('ready', snapshot['status'])
+        self.assertIn('monitor boom', snapshot['monitor_error'])
+        self.assertTrue(self.state.image.startswith(b'\xff\xd8'))
 
     def test_perception_stats_are_forwarded(self) -> None:
         self.monitored.read(self.frame)

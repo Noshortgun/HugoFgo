@@ -10,6 +10,7 @@ import json
 import sys
 import threading
 import time
+import traceback
 from collections import deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -132,6 +133,7 @@ class MonitorState:
         self.decision = None
         self.result = None
         self.error = None
+        self.monitor_error = None
         self.last_signature = None
         self.last_history_at = 0.0
         self.history_sequence = 0
@@ -148,6 +150,7 @@ class MonitorState:
             self.decision = None
             self.result = None
             self.error = None
+            self.monitor_error = None
             self.last_signature = None
             self.last_history_at = 0.0
             self.revision += 1
@@ -161,6 +164,7 @@ class MonitorState:
         with self.lock:
             self.observation = data
             self.image = image
+            self.monitor_error = None
             self.revision += 1
             if signature == self.last_signature and now - self.last_history_at < 1.0:
                 return
@@ -176,6 +180,26 @@ class MonitorState:
                 })
                 self.last_signature = signature
                 self.last_history_at = now
+
+    def update_failed(self, frame: Frame, observation, details: str) -> None:
+        try:
+            data = observation_data(observation)
+        except Exception:
+            data = self.observation
+        image = None
+        try:
+            bgr = evidence.decode_frame(frame)
+            ok, buffer = cv2.imencode('.jpg', bgr, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            image = buffer.tobytes() if ok else None
+        except Exception:
+            image = None
+        with self.lock:
+            self.monitor_error = details
+            if data is not None:
+                self.observation = data
+            if image is not None:
+                self.image = image
+            self.revision += 1
 
     def emit(self, event: RunEvent) -> None:
         row = {'type': event.type, 'label': EVENT_NAMES.get(event.type, event.type),
@@ -219,6 +243,7 @@ class MonitorState:
                 'history': history,
                 'result': self.result,
                 'error': self.error,
+                'monitor_error': self.monitor_error,
                 'serial': getattr(self, 'serial', None),
                 'job_name': getattr(self, 'job_name', None),
                 'server_time': time.time(),
@@ -235,6 +260,12 @@ class MonitorPerception:
         self.perception = perception
         self.state = state
 
+    def _record(self, frame: Frame, observation) -> None:
+        try:
+            self.state.update(frame, observation)
+        except Exception:
+            self.state.update_failed(frame, observation, traceback.format_exc())
+
     def bind_formation(self, formation) -> None:
         self.perception.bind_formation(formation)
 
@@ -243,12 +274,12 @@ class MonitorPerception:
 
     def read(self, frame: Frame):
         observation = self.perception.read(frame)
-        self.state.update(frame, observation)
+        self._record(frame, observation)
         return observation
 
     def read_fields(self, frame: Frame, names, *, timeout=None):
         observation = self.perception.read_fields(frame, names, timeout=timeout)
-        self.state.update(frame, observation)
+        self._record(frame, observation)
         return observation
 
     def stats(self):
@@ -305,8 +336,10 @@ class LiveRunner:
             result = run(self.state.plan, device, monitored, MonitorEvents(self.state),
                          options=options, control=self.control)
             self.state.finish(result)
-        except Exception as error:
-            self.state.fail(str(error))
+        except Exception:
+            details = traceback.format_exc()
+            print(details, file=sys.stderr, flush=True)
+            self.state.fail(details)
         finally:
             if perception is not None:
                 perception.close()

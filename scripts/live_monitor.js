@@ -142,6 +142,9 @@ function renderDecision(state) {
     data.batch_id !== undefined ? `批次 ${data.batch_id}` : null,
   ].filter(Boolean);
   for (const value of values) tags.append(el('span', 'tag', value));
+  if (state.monitor_error) {
+    tags.append(el('span', 'tag warn', '监控绘制异常，游戏执行继续'));
+  }
 }
 
 function renderEvents(state) {

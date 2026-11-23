@@ -621,6 +621,11 @@
       "file": "key/card-np-12-94-60.png",
       "state": "scrcpy 实机运行末帧；NP 12/94/60，用于 NP 6 模板与 2/6/9 交叉验证",
       "expectedFields": {"np": [12, 94, 60]}
+    },
+    {
+      "file": "key/live-card-support-obscured.png",
+      "state": "scrcpy 实机选卡页；助战娄希被“极星天球充循环”技能文字遮挡，助战标签仍可见，用于唯一助战槽位身份兜底",
+      "expectedObservation": {"card": 4, "svtId": 705000, "servantSlot": 0, "support": true, "cardType": "quick"}
     }
   ]
 }

@@ -261,9 +261,24 @@ class IdentityMatcher:
             return None
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x1, y1, x2, _y2 = box
+        support_score = 0.0
+        if self._support_tag is not None:
+            top, left, bottom, right = cn.COMMAND_SUPPORT_QUERY_OFFSETS
+            tag_region = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
+            result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
+            support_score = float(np.nan_to_num(result.max(), nan=0.0))
+        support = support_score >= cn.COMMAND_SUPPORT_THRESHOLD
+
         top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
         query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
         servant_id = self._command_servant(query)
+        fallback_slot = None
+        if servant_id is None and support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
+            support_slots = [(entity_id, slot) for (entity_id, is_support), slot
+                             in self._formation_slots.items() if is_support and slot >= 0]
+            if len(support_slots) == 1:
+                servant_id, fallback_slot = support_slots[0]
+                support = True
         if servant_id is None:
             return None
 
@@ -281,13 +296,8 @@ class IdentityMatcher:
         if counts[card_type] < cn.COMMAND_TYPE_MIN_PIXELS:
             return None
 
-        support = False
-        if self._support_tag is not None:
-            top, left, bottom, right = cn.COMMAND_SUPPORT_QUERY_OFFSETS
-            tag_region = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
-            result = cv2.matchTemplate(tag_region, self._support_tag, cv2.TM_CCOEFF_NORMED)
-            support = float(np.nan_to_num(result.max(), nan=0.0)) >= cn.COMMAND_SUPPORT_THRESHOLD
-        return CommandCardIdentity(servant_slot=self._formation_slots.get((servant_id, support), -1),
+        slot = fallback_slot if fallback_slot is not None else self._formation_slots.get((servant_id, support), -1)
+        return CommandCardIdentity(servant_slot=slot,
                                    card_type=card_type, svt_id=servant_id, support=support,
                                    affinity=self._command_affinity(image, box))
 

@@ -1999,6 +1999,13 @@ def check_manual_key_frames():
                    '五张普通卡暴击率与同帧缓存耗时证据',
                    actual == expected and image_fields_ok(observation, cached))
 
+        path, observation, _cached = observe('live-card-support-obscured.png')
+        card = observation.control('卡4').card
+        actual = None if card is None else (card.svt_id, card.servant_slot, card.support, card.card_type)
+        expected = (705000, 0, True, 'quick')
+        add_report('perception:live-obscured-support-card', path, expected, actual, 'observe',
+                   '技能文字遮挡时用助战标签与唯一助战槽位确认身份', actual == expected)
+
         path, observation, cached = observe('10-np-card-select.png', ('crit',),
                                            root=ROOT / 'captures/2026-11-19-ember/key')
         actual = observation.field('crit').value

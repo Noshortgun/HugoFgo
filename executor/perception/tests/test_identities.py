@@ -140,6 +140,21 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(['resist'] * 5,
                          [resisted.control(f'卡{index}').card.affinity for index in range(1, 6)])
 
+    def test_obscured_support_card_uses_unique_support_slot(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                              ce='迦勒底午茶时光', ce_id=9403520),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+        observation = self.perception.read(
+            load_frame('captures/2026-11-23/key/live-card-support-obscured.png'))
+
+        card = observation.control('卡4').card
+        self.assertIsNotNone(card)
+        self.assertEqual((705000, 0, True, 'quick'),
+                         (card.svt_id, card.servant_slot, card.support, card.card_type))
+
     def test_command_card_slot_is_not_guessed_without_formation(self) -> None:
         observation = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
 
