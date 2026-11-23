@@ -143,8 +143,8 @@ class ScrcpyDevice:
 
     @staticmethod
     def _touch(action: int, x: int, y: int, width: int, height: int) -> bytes:
-        return struct.pack('>BBqIIHHHII', 0, action, 0, x, y, width, height,
-                           0xFFFF if action != 1 else 0, 1, 0 if action == 1 else 1)
+        return struct.pack('>BBQiiHHHII', 2, action, 0, x, y, width, height,
+                           0 if action == 1 else 0xFFFF, 0, 0)
 
     def _send(self, packet: bytes) -> None:
         self._ensure_healthy()
@@ -158,7 +158,13 @@ class ScrcpyDevice:
         metrics = self.metrics()
         px, py = to_device_point(x, y, metrics.width, metrics.height)
         with self._input_lock:
+            started = time.monotonic()
             self._send(self._touch(0, px, py, metrics.width, metrics.height))
+            for step in range(1, 4):
+                remaining = started + 0.04 * step / 3 - time.monotonic()
+                if remaining > 0:
+                    time.sleep(remaining)
+                self._send(self._touch(2, px, py, metrics.width, metrics.height))
             self._send(self._touch(1, px, py, metrics.width, metrics.height))
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 350) -> None:
@@ -166,10 +172,17 @@ class ScrcpyDevice:
         start = to_device_point(x1, y1, metrics.width, metrics.height)
         end = to_device_point(x2, y2, metrics.width, metrics.height)
         with self._input_lock:
+            started = time.monotonic()
             self._send(self._touch(0, *start, metrics.width, metrics.height))
-            if duration_ms > 0:
-                time.sleep(duration_ms / 1000.0)
-            self._send(self._touch(2, *end, metrics.width, metrics.height))
+            steps = max(1, (duration_ms + 15) // 16) if duration_ms > 0 else 0
+            for step in range(1, steps + 1):
+                remaining = started + duration_ms * step / steps / 1000.0 - time.monotonic()
+                if remaining > 0:
+                    time.sleep(remaining)
+                progress = step / steps
+                point = (round(start[0] + (end[0] - start[0]) * progress),
+                         round(start[1] + (end[1] - start[1]) * progress))
+                self._send(self._touch(2, *point, metrics.width, metrics.height))
             self._send(self._touch(1, *end, metrics.width, metrics.height))
 
     def close(self) -> None:

@@ -1,0 +1,20 @@
+{
+  "device": {
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-23",
+  "source": "scrcpy 实机故障回归 logs/farm/20261123-075610-scrcpy-fixed-2runs/",
+  "keyFrames": [
+    {
+      "file": "key/skill-cooldowns.png",
+      "state": "第三面战斗页；从者1技能3、从者2技能3、从者3技能2已灰化冷却，从者2技能1漏用且仍可用"
+    },
+    {
+      "file": "key/skill1-cooldown.png",
+      "state": "补用从者2技能1后的战斗页；该技能显示剩余5，用于比较动作前后图标外观"
+    }
+  ]
+}

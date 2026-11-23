@@ -677,18 +677,23 @@ def check_scrcpy_frames_and_input() -> None:
         expect_error(device.frame, '新帧', '超时', error_type=DeviceError)
 
         device.tap(640, 360)
-        assert len(session.control.packets) == 2
-        down = struct.unpack('>BBqIIHHHII', session.control.packets[0])
-        up = struct.unpack('>BBqIIHHHII', session.control.packets[1])
-        assert down[:5] == (0, 0, 0, 960, 540) and down[5:7] == (1920, 1080)
-        assert up[:5] == (0, 1, 0, 960, 540) and up[5:7] == (1920, 1080)
+        assert len(session.control.packets) == 5, '40ms 点击应包含 DOWN、三次静止 MOVE 和 UP'
+        tap = [struct.unpack('>BBQiiHHHII', packet) for packet in session.control.packets]
+        assert [packet[1] for packet in tap] == [0, 2, 2, 2, 1]
+        down = tap[0]
+        up = tap[-1]
+        assert down == (2, 0, 0, 960, 540, 1920, 1080, 0xFFFF, 0, 0)
+        assert up == (2, 1, 0, 960, 540, 1920, 1080, 0, 0, 0)
+        assert all(packet[3:7] == (960, 540, 1920, 1080) for packet in tap)
 
         before = len(session.control.packets)
         device.swipe(100, 200, 300, 400, duration_ms=32)
-        swipe = [struct.unpack('>BBqIIHHHII', packet) for packet in session.control.packets[before:]]
-        assert [packet[1] for packet in swipe] == [0, 2, 1]
+        swipe = [struct.unpack('>BBQiiHHHII', packet) for packet in session.control.packets[before:]]
+        assert [packet[1] for packet in swipe] == [0, 2, 2, 1], '滑动每 16ms 至少采样一次移动'
         assert (swipe[0][3], swipe[0][4]) == (150, 300)
+        assert (swipe[1][3], swipe[1][4]) == (300, 450)
         assert (swipe[-1][3], swipe[-1][4]) == (450, 600)
+        assert all(packet[0] == 2 and packet[2] == 0 for packet in swipe), '必须使用触摸消息与同一 finger ID'
         assert all(packet[5:7] == (1920, 1080) for packet in swipe)
     finally:
         device.close()

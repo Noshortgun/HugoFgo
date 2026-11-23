@@ -240,10 +240,25 @@ def check_executor_core():
     controls = [event.data['control'] for event in actions]
     expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过', '战斗跳过']
     skip_times = [event.timestamp for event in actions if event.data['reason'] == 'attack_animation_skip']
+    skip_points = [(event.data['x'], event.data['y']) for event in actions
+                   if event.data['reason'] == 'attack_animation_skip']
     ok = (result.reason == 'unknown_timeout' and controls == expected and len(device.actions) == 6
-          and skip_times == [1.9, 2.9])
+          and skip_times == [1.9, 2.9] and skip_points == [(1240, 420), (1240, 420)])
     add_report('executor:attack-animation-skip-rate-limit', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; skip_times={skip_times}', ok, simulated_ocr=True)
+
+    ready_animation = replace(
+        battle, variants=frozenset({Variant.BATTLE_ANIMATION}),
+        controls=(*battle.controls, Control('战斗菜单', ControlKind.BUTTON, (1120, 140, 1230, 220), True)))
+    result, device, events = run_core_scenario(
+        [battle, card, card, card, card, card, card, ready_animation, unknown, unknown],
+        [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.0, 32.0], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3']
+    ok = result.reason == 'unknown_timeout' and controls == expected
+    add_report('executor:attack-skip-stops-when-battle-ready', LOADING_IMAGE, expected, controls,
+               'stop', '实机故障回归：攻击和菜单已恢复时不得再点跳过区，避免误开御主技能',
+               ok, simulated_ocr=True)
 
     result, device, events = run_core_scenario(
         [battle, card, card, card, card, card, card, card, card, card],
@@ -1179,30 +1194,26 @@ def check_executor_safety():
     ready = replace(battle(), controls=(*battle().controls, Control(
         '战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True)))
     result, _, events = run_core_scenario(
-        [ready, ready, ready, wrong], [0.0, 0.1, 0.2, 0.3], make_plan((skill,)))
+        [ready, ready, wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
     actions = [event for event in events.events if event.type == 'action']
     controls = [event.data['control'] for event in actions]
-    expected = ['从者1技能1', '战斗跳过', '攻击']
-    confirmed = [event for event in events.events if event.type == 'action_confirmed']
+    expected = ['从者1技能1', '攻击']
     ok = (result.reason == 'card_mismatch' and controls == expected
-          and [event.timestamp for event in actions] == [0.0, 0.1, 0.2]
+          and [event.timestamp for event in actions] == [0.0, 0.1]
           and all(event.data.get('channel_ms', -1) >= 0 and event.data.get('wait_ms', -1) >= 0
                   and event.data.get('input_finished_at', 0) > 0 for event in actions)
-          and any(event.data.get('stage') == 'battle_ready' and event.data.get('wait_ms', 0) >= 100
-                  for event in confirmed))
-    add_report('executor:skill-skips-without-animation-start', LOADING_IMAGE, expected, controls,
-               'stop', f'reason={result.reason}; times={[event.timestamp for event in actions]}',
-               ok, simulated_ocr=True)
+          and not any(event.data.get('reason') == 'skill_animation_skip' for event in actions))
+    add_report('executor:untargeted-skill-fixed-job-sequence', LOADING_IMAGE, expected, controls,
+               'stop', '固定作业直接推进，不用动画/冷却/图标变化推断技能是否生效', ok,
+               simulated_ocr=True)
 
-    result, device, events = run_core_scenario(
-        [battle(), battle(), battle(), battle()], [0.0, 0.1, 0.2, 30.2], make_plan((skill,)))
+    result, _, events = run_core_scenario(
+        [battle(), battle(), wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['从者1技能1', '战斗跳过']
-    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
-          and controls == expected and len(device.actions) == 2)
-    add_report('executor:skill-requires-attack-and-menu-recovery', LOADING_IMAGE,
-               'action_confirmation_timeout; no attack', f'{result.reason}; {controls}',
-               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:untargeted-skill-no-menu-wait', LOADING_IMAGE, expected, controls,
+               'stop', '普通技能不等待战斗菜单恢复；攻击仍必须进入选卡页', ok,
+               simulated_ocr=True)
 
     repeat = battle(overlays=(Overlay.REPEAT_DIALOG,))
     repeat = replace(repeat, controls=(*repeat.controls,
@@ -1338,15 +1349,55 @@ def check_executor_safety():
 
     with mock.patch.object(legacy, 'FakeDevice', UnresponsiveScrcpyDevice):
         result, device, events = run_core_scenario(
-            [battle(), battle(), battle()], [0.0, 0.5, 30.5], make_plan())
+            [ready, ready, ready, ready], [0.0, 0.5, 2.5, 32.5], make_plan())
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    ok = (result.reason == 'action_confirmation_timeout' and controls == ['攻击']
-          and len(device.actions) == 1
+    ok = (result.reason == 'action_confirmation_timeout' and controls == ['攻击', '攻击']
+          and len(device.actions) == 2
           and not any(event.type == 'channel_changed' for event in events.events))
     add_report('executor:scrcpy-input-success-without-screen-response', LOADING_IMAGE,
-               'action_confirmation_timeout; one input/no-channel-change',
+               'action_confirmation_timeout; one recovery/no-channel-change',
                f'{result.reason}; {controls}', 'stop',
-               '输入调用成功不代表动作生效；无新画面证据时停止', ok, simulated_ocr=True)
+               '输入无画面响应时基于新帧最多恢复一次，仍失败则停止', ok, simulated_ocr=True)
+
+    card_without_hand = Observation(base_page=BasePage.CARD)
+    result, _, events = run_core_scenario(
+        [ready, ready, ready, card_without_hand], [0.0, 0.5, 2.5, 2.6], make_plan())
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    ok = (controls == ['攻击', '攻击'] and len(recoveries) == 1
+          and recoveries[0].timestamp == 2.5 and recoveries[0].data.get('control') == '攻击')
+    add_report('executor:attack-recovers-from-fresh-battle-frame', LOADING_IMAGE,
+               'two attacks; one recovery at 2.5s', f'{controls}; {recoveries}', 'tap',
+               '实机故障回归：攻击首次未生效时以新战斗帧有限恢复', ok, simulated_ocr=True)
+
+    import struct
+    from executor.device.scrcpy import ScrcpyDevice
+    down = struct.unpack('>BBQiiHHHII', ScrcpyDevice._touch(0, 930, 130, 1280, 720))
+    up = struct.unpack('>BBQiiHHHII', ScrcpyDevice._touch(1, 930, 130, 1280, 720))
+    expected = ((2, 0, 0, 930, 130, 1280, 720, 0xFFFF, 0, 0),
+                (2, 1, 0, 930, 130, 1280, 720, 0, 0, 0))
+    ok = (down, up) == expected
+    add_report('executor:scrcpy-touch-wire-protocol', LOADING_IMAGE, expected, (down, up), 'stop',
+               '实机故障回归：类型0是按键，触摸必须使用类型2及完整32字节字段', ok,
+               simulated_ocr=True)
+
+    import threading
+    from executor.device.config import DeviceMetrics
+    sampled = object.__new__(ScrcpyDevice)
+    sampled._metrics = DeviceMetrics(serial='replay', width=1280, height=720, density=240, region='CN')
+    sampled._input_lock = threading.Lock()
+    sampled._send = mock.Mock()
+    with mock.patch('executor.device.scrcpy.time.sleep', return_value=None):
+        sampled.tap(930, 130)
+    packets = [struct.unpack('>BBQiiHHHII', call.args[0]) for call in sampled._send.call_args_list]
+    actions = [packet[1] for packet in packets]
+    points = {packet[3:7] for packet in packets}
+    ok = actions == [0, 2, 2, 2, 1] and points == {(930, 130, 1280, 720)}
+    add_report('executor:scrcpy-tap-sampled-contact', LOADING_IMAGE,
+               'DOWN/MOVE/MOVE/MOVE/UP', actions, 'tap',
+               '实机故障回归：40ms 点击期间保留静止采样，不只发送 DOWN/UP', ok,
+               simulated_ocr=True)
 
 
 # 旧原型的纯流程仅作为回归参照保留；所有设备输入都由用例 mock。

@@ -23,7 +23,7 @@ class ExecutorReplayTest(unittest.TestCase):
             '结算推进', '结算推进', '下一步',
         ], [event.data['control'] for event in report.events.events if event.type == 'action'])
         self.assertEqual([(628, 431), (1165, 672), (1136, 608), (128, 535),
-                          (384, 535), (894, 535), (1200, 360), (1130, 660), (1130, 660), (1110, 641)],
+                          (384, 535), (894, 535), (1240, 420), (1130, 660), (1130, 660), (1110, 641)],
                          [(action['x'], action['y']) for action in report.device.actions])
         self.assertIn('animation', {variant.value for observation in report.observations
                                     for variant in observation.variants})

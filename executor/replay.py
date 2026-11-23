@@ -289,7 +289,7 @@ CASES = (
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
             FULL_LOOP + 'repeat-dialog.png',
         ),
-        actions=('助战卡片第2行', '开始任务', '从者1技能1', '战斗跳过', '攻击', '卡1', '卡2', '卡4',
+        actions=('助战卡片第2行', '开始任务', '从者1技能1', '攻击', '卡1', '卡2', '卡4',
                  '战斗跳过', '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'action', 'finished'),
