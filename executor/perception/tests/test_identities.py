@@ -171,6 +171,27 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual((705000, 0, True, 'quick'),
                          (card.svt_id, card.servant_slot, card.support, card.card_type))
 
+    def test_ambiguous_support_tag_resolves_slot_even_when_sift_succeeds(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                              ce='迦勒底午茶时光', ce_id=9403520),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+        with mock.patch.object(self.perception._identities, '_command_servant',
+                               return_value=705000):
+            observation = self.perception.read(
+                load_frame('captures/2026-11-23/key/live-card-support-obscured.png'))
+
+        card = observation.control('卡4').card
+        self.assertIsNotNone(card)
+        self.assertEqual((705000, 0, True, 'quick'),
+                         (card.svt_id, card.servant_slot, card.support, card.card_type))
+        own = observation.control('卡5').card
+        self.assertIsNotNone(own)
+        self.assertEqual((705000, 1, False, 'quick'),
+                         (own.svt_id, own.servant_slot, own.support, own.card_type))
+
     def test_command_card_slot_is_not_guessed_without_formation(self) -> None:
         observation = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
 
