@@ -9,19 +9,25 @@ from executor.session.events import EventSink, RunEvent
 
 class RunHistoryRecorder(EventSink):
     def __init__(self, run_dir: str | Path, *, job_name: str, job_file: str | Path,
-                 serial: str, region: str) -> None:
+                 serial: str, region: str, channel: str = 'adb') -> None:
         self.run_dir = Path(run_dir).resolve()
         self.history_path = self.run_dir.parent.parent / 'run-history.jsonl'
         self.job_name = job_name
         self.job_file = str(Path(job_file).resolve())
         self.serial = serial
         self.region = region
+        self.channel = channel
         self.started_at_ms = int(time.time() * 1000)
         self.battles_completed = 0
         self.recovery_used: dict[str, int] = {}
         self.written = False
 
     def emit(self, event: RunEvent) -> None:
+        if event.type == 'channel_changed':
+            channel = event.data.get('to')
+            if isinstance(channel, str):
+                self.channel = channel
+            return
         if event.type == 'recovery_used':
             item = event.data.get('item')
             count = event.data.get('count')
@@ -44,6 +50,7 @@ class RunHistoryRecorder(EventSink):
             'jobFile': self.job_file,
             'serial': self.serial,
             'region': self.region,
+            'channel': self.channel,
             'startedAt': self.started_at_ms,
             'finishedAt': finished_at_ms,
             'durationMs': finished_at_ms - self.started_at_ms,

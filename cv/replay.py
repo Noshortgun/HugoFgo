@@ -206,7 +206,7 @@ def check_executor_core():
     from executor.core import RunOptions, run
     from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
     from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
-                                     FieldStatus, Observation)
+                                     FieldStatus, Observation, Overlay, Variant)
     from executor.session import MemoryEventSink
 
     fields = {
@@ -223,8 +223,10 @@ def check_executor_core():
                 card=CommandCardIdentity(index - 1, 'arts'))
         for index in range(1, 6)))
     unknown = Observation(base_page=BasePage.UNKNOWN)
-    observations = [battle, battle, card, card, card, card, card, card, unknown, unknown]
-    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 32.4]
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    observations = [battle, card, card, card, card, card, card,
+                    animation, animation, animation, unknown, unknown]
+    times = [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.0, 2.9, 3.0, 33.0]
     frames = [Frame(image=str(index).encode(), width=1280, height=720, captured_at=at)
               for index, at in enumerate(times)]
 
@@ -244,11 +246,191 @@ def check_executor_core():
     events = MemoryEventSink()
     with mock.patch('executor.core.runner.time.sleep', return_value=None):
         result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
+    actions = [event for event in events.events if event.type == 'action']
+    controls = [event.data['control'] for event in actions]
+    expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过', '战斗跳过']
+    skip_times = [event.timestamp for event in actions if event.data['reason'] == 'attack_animation_skip']
+    skip_points = [(event.data['x'], event.data['y']) for event in actions
+                   if event.data['reason'] == 'attack_animation_skip']
+    ok = (result.reason == 'unknown_timeout' and controls == expected and len(device.actions) == 6
+          and skip_times == [1.9, 2.9] and skip_points == [(1240, 420), (1240, 420)])
+    add_report('executor:attack-animation-skip-rate-limit', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; skip_times={skip_times}', ok, simulated_ocr=True)
+
+    ready_animation = replace(
+        battle, variants=frozenset({Variant.BATTLE_ANIMATION}),
+        controls=(*battle.controls, Control('战斗菜单', ControlKind.BUTTON, (1120, 140, 1230, 220), True)))
+    result, device, events = run_core_scenario(
+        [battle, card, card, card, card, card, card, ready_animation, unknown, unknown],
+        [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.0, 32.0], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3']
-    ok = result.reason == 'unknown_timeout' and controls == expected and len(device.actions) == 4
-    add_report('executor:third-card-stops-input', LOADING_IMAGE, expected, controls,
-               'stop', f'reason={result.reason}; taps={device.actions}', ok, simulated_ocr=True)
+    ok = result.reason == 'unknown_timeout' and controls == expected
+    add_report('executor:attack-skip-stops-when-battle-ready', LOADING_IMAGE, expected, controls,
+               'stop', '实机故障回归：攻击和菜单已恢复时不得再点跳过区，避免误开御主技能',
+               ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [battle, card, card, card, card, card, card, card, card, card],
+        [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.9, 31.9], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡1', '卡2', '卡3']
+    ok = (result.reason == 'action_confirmation_timeout' and controls == expected
+          and len(device.actions) == 7 and events.events[-1].data.get('recovery_attempts') == 1)
+    add_report('executor:attack-card-residual-never-skips', LOADING_IMAGE,
+               'action_confirmation_timeout; no skip', f'{result.reason}; {controls}',
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    popup = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.STORY_SKIP_CONFIRM}))
+    result, device, events = run_core_scenario(
+        [battle, card, card, card, card, card, card, popup],
+        [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3']
+    ok = (result.status.value == 'stopped' and result.reason == 'unexpected_overlay'
+          and controls == expected and len(device.actions) == 4)
+    add_report('executor:attack-unexpected-popup-never-skips', LOADING_IMAGE,
+               'unexpected_overlay; no skip', f'{result.reason}; {controls}',
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+
+def check_command_card_batch():
+    from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Variant)
+
+    battle = Observation(base_page=BasePage.BATTLE, fields={
+        'wave': Field(FieldStatus.CONFIRMED, 1),
+        'turn': Field(FieldStatus.CONFIRMED, 1),
+        'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+    }, controls=(Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+             (811, 415, 976, 655), (1066, 415, 1231, 655))
+
+    def hand(slots):
+        return Observation(base_page=BasePage.CARD, controls=tuple(
+            Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                    card=CommandCardIdentity(slot, 'arts'))
+            for index, slot in enumerate(slots, start=1)))
+
+    initial = hand((0, 1, 2, 0, 1))
+    changed = hand((2, 0, 1, 0, 1))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=tuple(
+        AttackCardPlan(slot=slot, type='arts') for slot in range(3))))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+
+    result, device, events = run_core_scenario(
+        [battle, initial, animation, unknown, unknown], [0.0, 0.1, 0.7, 0.8, 30.8], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    cards = [item for item in actions if item.get('reason') == 'command_card_batch']
+    submitted = [event.data for event in events.events if event.type == 'card_batch_submitted']
+    expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and [item['card_position'] for item in cards] == [1, 2, 3]
+          and len({item['batch_id'] for item in cards}) == 1
+          and all(item['batch_attempt'] == 0 for item in cards)
+          and cards[0].get('attack_to_first_card_ms', -1) >= 0
+          and all(item.get('interval_ms', -1) >= 0 for item in cards[1:])
+          and len(submitted) == 1 and submitted[0]['configured_interval_ms'] == 200.0)
+    add_report('executor:card-batch-one-read-and-timing', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'tap',
+               f'batch={submitted}; cards={cards}', ok, simulated_ocr=True)
+
+    np_card = Control('宝具卡A', ControlKind.CARD, (330, 100, 510, 330), True,
+                      card=CommandCardIdentity(servant_slot=0, card_type='buster', noble_phantasm=True))
+    with_np = replace(initial, controls=(np_card, *initial.controls))
+    np_action = ActionPlan(kind='attack', title='宝具', detail='', icon='', member_slot=0)
+    np_turn = replace(turn, actions=(np_action,), np_positions={0: 2})
+    np_plan = replace(plan, waves=(replace(plan.waves[0], turns=(np_turn,)),))
+    result, device, events = run_core_scenario(
+        [battle, initial, with_np, animation, unknown, unknown],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 30.4], np_plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    waiting = [event for event in events.events if event.type == 'warning'
+               and event.data.get('reason') == 'np_reservation_waiting']
+    expected = ['攻击', '卡1', '宝具卡A', '卡2', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and len(waiting) == 1)
+    add_report('executor:card-batch-required-np-evidence', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'tap',
+               f'waiting={len(waiting)}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, changed, animation, unknown, unknown],
+        [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    recovered = [item for item in actions if item.get('batch_attempt') == 1]
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '卡1', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and [item['control'] for item in recovered] == ['卡2', '卡3', '卡1']
+          and len(recoveries) == 1 and recoveries[0].data.get('control') == 'command_card_batch')
+    add_report('executor:card-batch-fresh-hand-recovery', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'tap',
+               f'recoveries={len(recoveries)}; reason={result.reason}', ok, simulated_ocr=True)
+
+    remaining = replace(initial, controls=initial.controls[1:])
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, remaining, animation, unknown, unknown],
+        [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    recovered = [item for item in actions if item.get('batch_attempt') == 1]
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and [item['card_position'] for item in recovered] == [2, 3]
+          and [item['control'] for item in recovered] == ['卡2', '卡3'])
+    add_report('executor:card-batch-partial-drop-recovers-remaining', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'tap',
+               f'recovered={recovered}; reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, remaining, remaining, remaining],
+        [0.0, 0.1, 2.2, 2.6, 3.0, 5.1], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3']
+    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
+          and [item['control'] for item in actions] == expected and len(device.actions) == 6
+          and events.events[-1].data.get('recovery_attempts') == 1)
+    add_report('executor:card-batch-partial-recovery-failure-stops', LOADING_IMAGE,
+               'action_confirmation_timeout; remaining cards submitted once',
+               f'{result.reason}; {[item["control"] for item in actions]}', 'stop',
+               f'taps={device.actions}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [battle, initial, initial, initial, initial], [0.0, 0.1, 2.2, 2.6, 5.1], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '卡1', '卡2', '卡3']
+    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
+          and [item['control'] for item in actions] == expected and len(device.actions) == 7
+          and events.events[-1].data.get('recovery_attempts') == 1)
+    add_report('executor:card-batch-recovery-limit', LOADING_IMAGE,
+               'action_confirmation_timeout; one recovery', result.reason, 'stop',
+               f'controls={[item["control"] for item in actions]}', ok, simulated_ocr=True)
+
+    obscured = replace(initial, controls=tuple(replace(item, card=None) for item in initial.controls))
+    next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
+    wrong = hand((4, 4, 4, 4, 4))
+    result, device, events = run_core_scenario(
+        [battle, initial, obscured, next_battle, wrong], [0.0, 0.1, 2.6, 2.7, 2.8], plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    expected = ['攻击', '卡1', '卡2', '卡3', '攻击']
+    confirmed_index = next((index for index, event in enumerate(events.events)
+                            if event.type == 'action_confirmed'
+                            and event.data.get('stage') == 'attack_end'), -1)
+    last_action_index = max((index for index, event in enumerate(events.events)
+                             if event.type == 'action'), default=-1)
+    ok = (result.reason == 'fallback_cards_unavailable'
+          and [item['control'] for item in actions] == expected and result.progress.turn == 2
+          and 0 <= confirmed_index < last_action_index)
+    add_report('executor:card-batch-recovery-wait-confirms-exit', LOADING_IMAGE, expected,
+               [item['control'] for item in actions], 'stop',
+               f'reason={result.reason}; turn={result.progress.turn}', ok, simulated_ocr=True)
 
 
 def check_strategy_servant_priority():
@@ -589,14 +771,13 @@ def check_strategy_executor():
     obscured = Observation(base_page=BasePage.CARD, controls=(
         *(replace(item, card=None) for item in effect_only.controls), isolated_middle.controls[0]))
     result, _, events = run_core_scenario(
-        [battle(), battle(), isolated_middle, isolated_middle, obscured,
-         isolated_middle, isolated_middle, isolated_middle, isolated_middle, unknown, unknown],
-        [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9, 2.4, 2.5, 32.5], plan)
+        [battle(), battle(), obscured, isolated_middle, unknown, unknown],
+        [0.0, 0.5, 0.6, 0.7, 0.8, 30.8], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['攻击', '宝具卡1', '卡1', '卡2']
-    waited = any(event.type == 'warning' and event.data.get('reason') == 'card_confirmation_waiting'
+    waited = any(event.type == 'warning' and event.data.get('reason') == 'card_batch_waiting'
                  for event in events.events)
-    add_report('strategy:executor-card-confirmation-waits',
+    add_report('strategy:executor-card-batch-waits-for-complete-hand',
                ROOT / 'captures/2026-11-20/key/card-np-selected.png',
                expected, controls, 'tap', f'reason={result.reason}; waited={waited}',
                result.reason == 'unknown_timeout' and waited and controls == expected
@@ -616,7 +797,7 @@ def check_strategy_executor():
         [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0,
          3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9], make_plan(planned))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
+    expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击', '卡1', '卡2', '卡3']
     add_report('strategy:executor-unplanned-turn', LOADING_IMAGE, expected, controls,
                'tap', f'reason={result.reason}; turn={result.progress.turn}',
                result.reason == 'unknown_timeout' and result.progress.turn == 2 and controls == expected,
@@ -635,7 +816,7 @@ def check_strategy_executor():
         [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0,
          3.1, 3.6, 3.7, 4.2, 4.3, 4.8, 4.9, 34.9], forward_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['攻击', '卡1', '卡2', '卡3', '攻击', '卡1', '卡2', '卡3']
+    expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击', '卡1', '卡2', '卡3']
     progress = (result.progress.wave, result.progress.turn)
     add_report('strategy:executor-forward-wave-planned-turn', LOADING_IMAGE, expected, controls,
                'tap', f'reason={result.reason}; progress={progress}',
@@ -644,7 +825,7 @@ def check_strategy_executor():
 
     short = Observation(base_page=BasePage.CARD, controls=(command(1, 0), command(2, 1)))
     result, device, events = run_core_scenario(
-        [battle(), battle(), short], [0.0, 0.5, 0.6],
+        [battle(), battle(), short, short], [0.0, 0.5, 0.6, 30.6],
         make_plan(TurnPlan(attack=AttackPlan(mode='strategy', cards=()))))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = (result.reason == 'fallback_cards_unavailable' and controls == ['攻击']
@@ -666,6 +847,7 @@ def check_executor_self_target():
               'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
     battle = Observation(base_page=BasePage.BATTLE, fields=fields, controls=(
         Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+        Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
         Control('从者2技能3', ControlKind.SKILL, (539, 548, 600, 610), True),
     ))
     animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
@@ -696,10 +878,61 @@ def check_executor_self_target():
     with mock.patch('executor.core.runner.time.sleep', return_value=None):
         result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['从者2技能3', '攻击']
+    expected = ['从者2技能3', '战斗跳过', '攻击']
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
     add_report('executor:self-target-direct-animation', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; progress={result.progress}', ok, simulated_ocr=True)
+
+    targeted = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
+                          member_slot=0, skill=0, player_target_slot=1)
+    targeted_battle = replace(battle, controls=(
+        battle.controls[0],
+        Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+        Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+    ))
+    servant_target = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.SKILL_TARGET}),
+                                 controls=tuple(Control(
+                                     f'目标从者{index}', ControlKind.TARGET,
+                                     (index * 300, 269, index * 300 + 200, 499), True)
+                                     for index in range(1, 4)))
+    targeted_turn = replace(turn, actions=(targeted,))
+    targeted_plan = replace(plan, waves=(replace(plan.waves[0], turns=(targeted_turn,)),))
+    result, _, events = run_core_scenario(
+        [targeted_battle, servant_target, targeted_battle, targeted_battle, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4], targeted_plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者1技能1', '目标从者2', '战斗跳过', '攻击']
+    ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
+    add_report('executor:targeted-skill-panel-open-close', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    result, _, events = run_core_scenario(
+        [targeted_battle, targeted_battle, targeted_battle, servant_target,
+         targeted_battle, targeted_battle, wrong],
+        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5], targeted_plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击']
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    ok = (result.reason == 'card_mismatch' and controls == expected and len(recoveries) == 1
+          and recoveries[0].data.get('attempt') == 1)
+    add_report('executor:targeted-skill-one-new-frame-recovery', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; recoveries={len(recoveries)}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle],
+        [0.0, 0.1, 2.1, 2.2, 32.2], targeted_plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者1技能1', '从者1技能1']
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    ok = (result.status.value == 'stopped' and result.reason == 'target_selection_timeout'
+          and controls == expected and len(device.actions) == 2 and len(recoveries) == 1
+          and events.events[-1].data.get('stage') == 'skill_target'
+          and events.events[-1].data.get('wait_ms', 0) >= 30000)
+    add_report('executor:targeted-skill-recovery-failure-stops', LOADING_IMAGE,
+               'target_selection_timeout; two skill taps', f'{result.reason}; {controls}',
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
 
     master = ActionPlan(kind='master', title='御主二技能', detail='', icon='',
                         skill=1, player_target_slot=1)
@@ -707,7 +940,8 @@ def check_executor_self_target():
     plan = replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
     master_battle = replace(battle, controls=(
         Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
-        Control('御主技能', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+        Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+        Control('御主技能', ControlKind.BUTTON, (1139, 271, 1248, 365), True),
     ))
     menu = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
         Control(f'御主技能{index}', ControlKind.BUTTON, (850 + index * 90, 275, 920 + index * 90, 352), True)
@@ -727,10 +961,22 @@ def check_executor_self_target():
     with mock.patch('executor.core.runner.time.sleep', return_value=None):
         result = run(plan, device, ScriptedPerception(), events, options=RunOptions(write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['御主技能', '御主技能2', '目标从者2', '攻击']
+    expected = ['御主技能', '御主技能2', '目标从者2', '战斗跳过', '攻击']
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
     add_report('executor:master-target-with-overlay', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+
+    result, device, events = run_core_scenario(
+        [master_battle, menu, menu, menu, menu, menu],
+        [0.0, 0.1, 0.2, 2.2, 2.3, 32.3], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['御主技能', '御主技能2', '御主技能2']
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    ok = (result.status.value == 'stopped' and result.reason == 'target_selection_timeout'
+          and controls == expected and len(device.actions) == 3 and len(recoveries) == 1)
+    add_report('executor:master-target-one-recovery', LOADING_IMAGE, expected, controls,
+               'stop', f'reason={result.reason}; recoveries={len(recoveries)}', ok, simulated_ocr=True)
 
 
 def check_executor_repeat_support():
@@ -778,7 +1024,7 @@ def check_executor_repeat_support():
     with mock.patch('executor.core.runner.time.sleep', return_value=None):
         result = run(plan, device, ScriptedPerception(), events, options=RunOptions(run_count=2, write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['连续出击', '助战卡片第1行', '开始任务', '攻击']
+    expected = ['连续出击', '职阶筛选:berserker', '助战卡片第1行', '开始任务', '攻击']
     ok = result.reason == 'card_mismatch' and controls == expected
     add_report('executor:repeat-continues-through-support', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
@@ -793,7 +1039,7 @@ def check_executor_repeat_support():
         result = run(plan, device, ScriptedPerception(), events,
                      options=RunOptions(run_count=2, write_evidence=False))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['连续出击', '助战卡片第1行', '攻击']
+    expected = ['连续出击', '职阶筛选:berserker', '助战卡片第1行', '攻击']
     ok = result.reason == 'card_mismatch' and controls == expected
     add_report('executor:repeat-support-skips-team', SUPPORT_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
@@ -974,13 +1220,29 @@ def check_executor_safety():
         Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
                 card=CommandCardIdentity(4, 'arts')) for index in range(1, 6)))
     skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+    ready = replace(battle(), controls=(*battle().controls, Control(
+        '战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True)))
     result, _, events = run_core_scenario(
-        [battle(), battle(), battle(), animation, battle(), battle(), battle(), wrong],
-        [0.0, 0.5, 0.6, 1.1, 1.2, 1.3, 1.8, 1.9], make_plan((skill,)))
+        [ready, ready, wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
     actions = [event for event in events.events if event.type == 'action']
-    ok = result.reason == 'card_mismatch' and actions[-1].timestamp == 1.8
-    add_report('executor:skill-needs-animation', LOADING_IMAGE, 1.8, actions[-1].timestamp,
-               'stop', f'reason={result.reason}', ok, simulated_ocr=True)
+    controls = [event.data['control'] for event in actions]
+    expected = ['从者1技能1', '攻击']
+    ok = (result.reason == 'card_mismatch' and controls == expected
+          and [event.timestamp for event in actions] == [0.0, 0.1]
+          and all(event.data.get('channel_ms', -1) >= 0 and event.data.get('wait_ms', -1) >= 0
+                  and event.data.get('input_finished_at', 0) > 0 for event in actions)
+          and not any(event.data.get('reason') == 'skill_animation_skip' for event in actions))
+    add_report('executor:untargeted-skill-fixed-job-sequence', LOADING_IMAGE, expected, controls,
+               'stop', '固定作业直接推进，不用动画/冷却/图标变化推断技能是否生效', ok,
+               simulated_ocr=True)
+
+    result, _, events = run_core_scenario(
+        [battle(), battle(), wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:untargeted-skill-no-menu-wait', LOADING_IMAGE, expected, controls,
+               'stop', '普通技能不等待战斗菜单恢复；攻击仍必须进入选卡页', ok,
+               simulated_ocr=True)
 
     repeat = battle(overlays=(Overlay.REPEAT_DIALOG,))
     repeat = replace(repeat, controls=(*repeat.controls,
@@ -1017,12 +1279,12 @@ def check_executor_safety():
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
     resumed = battle(2, 3).with_fields({'turn': Field(FieldStatus.UNCERTAIN, None)})
-    observations = [resumed, resumed, *([card] * 6), animation,
+    observations = [resumed, resumed, card, animation,
                     battle(3, 4), battle(3, 4), wrong]
     result, _, events = run_core_scenario(
         observations, [index * 0.5 for index in range(len(observations))], make_plan(wave_count=3))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['攻击', '卡1', '卡2', '卡3', '攻击']
+    expected = ['攻击', '卡1', '卡2', '卡3', '战斗跳过', '攻击']
     progress = (result.progress.wave, result.progress.turn)
     ok = result.reason == 'card_mismatch' and controls == expected and progress == (3, 1)
     add_report('executor:resume-midbattle-fallback', LOADING_IMAGE, expected, controls,
@@ -1052,16 +1314,15 @@ def check_executor_safety():
     cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
                            controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
     result, device, events = run_core_scenario(
-        [wrong_support, wrong_support, wrong_support, wrong_support, wrong_support, wrong_support,
-         cooldown, cooldown, wrong_support, support, support, Observation(base_page=BasePage.UNKNOWN),
-         Observation(base_page=BasePage.UNKNOWN)],
-        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 9.0, 9.5, 10.0, 40.0],
+        [wrong_support] * 7 + [cooldown, cooldown, wrong_support, support, support,
+                              Observation(base_page=BasePage.UNKNOWN), Observation(base_page=BasePage.UNKNOWN)],
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0],
         make_plan(support_required=True))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
+    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第1行']
     add_report('executor:support-refresh-cooldown', ROOT / 'captures/2026-11-22/key/support-refresh-cooldown.png',
                expected, controls, 'tap', f'reason={result.reason}',
-               controls == expected and (device.actions[3]['x'], device.actions[3]['y']) == (640, 565),
+               controls == expected and (device.actions[4]['x'], device.actions[4]['y']) == (640, 565),
                simulated_ocr=True)
 
     target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
@@ -1071,8 +1332,8 @@ def check_executor_safety():
     detail = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.BATTLE_STATUS_CHANGE_DETAIL}),
                          controls=(Control('关闭', ControlKind.BUTTON, (990, 640, 1010, 660), True),))
     result, device, events = run_core_scenario(
-        [target_battle, target_battle, detail, detail, target_battle, target_battle, wrong],
-        [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8], make_plan((target,)))
+        [target_battle, detail, detail, target_battle, target_battle, wrong],
+        [0.0, 0.1, 0.6, 0.7, 1.2, 1.3], make_plan((target,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['敌方2', '关闭', '攻击']
     add_report('executor:battle-status-change-detail', ROOT / 'captures/2026-11-22/key/battle-status-change-detail.png',
@@ -1083,12 +1344,87 @@ def check_executor_safety():
     plan = make_plan((target,))
     plan = replace(plan, waves=(replace(plan.waves[0], target=2),))
     result, _, events = run_core_scenario(
-        [target_battle, target_battle, target_battle, target_battle, wrong],
-        [0.0, 0.5, 0.6, 1.1, 1.2], plan)
-    controls = [event.data['control'] for event in events.events if event.type == 'action']
+        [target_battle, target_battle, wrong], [0.0, 0.1, 0.2], plan)
+    actions = [event for event in events.events if event.type == 'action']
+    controls = [event.data['control'] for event in actions]
     expected = ['敌方2', '攻击']
-    add_report('executor:wave-target-explicit-only', LOADING_IMAGE, expected, controls,
-               'tap', f'reason={result.reason}', result.reason == 'card_mismatch' and controls == expected,
+    ok = (result.reason == 'card_mismatch' and controls == expected
+          and [event.timestamp for event in actions] == [0.0, 0.1])
+    add_report('executor:wave-target-action-confirmation', LOADING_IMAGE, expected, controls,
+               'tap', f'reason={result.reason}; times={[event.timestamp for event in actions]}',
+               ok, simulated_ocr=True)
+
+    from executor.device import DeviceConfig, DeviceError
+
+    class InterruptedScrcpyDevice(FakeDevice):
+        def __init__(self, frames):
+            super().__init__(frames, config=DeviceConfig(serial='replay-scrcpy', region='CN', channel='scrcpy'))
+
+        def tap(self, x, y):
+            raise DeviceError('scrcpy 控制通道中断：回放故障注入')
+
+    with mock.patch.object(legacy, 'FakeDevice', InterruptedScrcpyDevice):
+        result, _, events = run_core_scenario([battle(), battle()], [0.0, 0.5], make_plan())
+    ok = (result.reason == 'device_error' and events.events[-1].data.get('reason') == 'device_error'
+          and not any(event.type == 'channel_changed' for event in events.events))
+    add_report('executor:scrcpy-interruption-no-fallback', LOADING_IMAGE, 'device_error/no-channel-change',
+               f'{result.reason}/{[event.type for event in events.events]}', 'stop',
+               '控制中断在动作边界停止，不跨通道续跑', ok, simulated_ocr=True)
+
+    class UnresponsiveScrcpyDevice(FakeDevice):
+        def __init__(self, frames):
+            super().__init__(frames, config=DeviceConfig(serial='replay-scrcpy', region='CN', channel='scrcpy'))
+
+    with mock.patch.object(legacy, 'FakeDevice', UnresponsiveScrcpyDevice):
+        result, device, events = run_core_scenario(
+            [ready, ready, ready, ready], [0.0, 0.5, 2.5, 32.5], make_plan())
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.reason == 'action_confirmation_timeout' and controls == ['攻击', '攻击']
+          and len(device.actions) == 2
+          and not any(event.type == 'channel_changed' for event in events.events))
+    add_report('executor:scrcpy-input-success-without-screen-response', LOADING_IMAGE,
+               'action_confirmation_timeout; one recovery/no-channel-change',
+               f'{result.reason}; {controls}', 'stop',
+               '输入无画面响应时基于新帧最多恢复一次，仍失败则停止', ok, simulated_ocr=True)
+
+    card_without_hand = Observation(base_page=BasePage.CARD)
+    result, _, events = run_core_scenario(
+        [ready, ready, ready, card_without_hand], [0.0, 0.5, 2.5, 2.6], make_plan())
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    recoveries = [event for event in events.events
+                  if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
+    ok = (controls == ['攻击', '攻击'] and len(recoveries) == 1
+          and recoveries[0].timestamp == 2.5 and recoveries[0].data.get('control') == '攻击')
+    add_report('executor:attack-recovers-from-fresh-battle-frame', LOADING_IMAGE,
+               'two attacks; one recovery at 2.5s', f'{controls}; {recoveries}', 'tap',
+               '实机故障回归：攻击首次未生效时以新战斗帧有限恢复', ok, simulated_ocr=True)
+
+    import struct
+    from executor.device.scrcpy import ScrcpyDevice
+    down = struct.unpack('>BBQiiHHHII', ScrcpyDevice._touch(0, 930, 130, 1280, 720))
+    up = struct.unpack('>BBQiiHHHII', ScrcpyDevice._touch(1, 930, 130, 1280, 720))
+    expected = ((2, 0, 0, 930, 130, 1280, 720, 0xFFFF, 0, 0),
+                (2, 1, 0, 930, 130, 1280, 720, 0, 0, 0))
+    ok = (down, up) == expected
+    add_report('executor:scrcpy-touch-wire-protocol', LOADING_IMAGE, expected, (down, up), 'stop',
+               '实机故障回归：类型0是按键，触摸必须使用类型2及完整32字节字段', ok,
+               simulated_ocr=True)
+
+    import threading
+    from executor.device.config import DeviceMetrics
+    sampled = object.__new__(ScrcpyDevice)
+    sampled._metrics = DeviceMetrics(serial='replay', width=1280, height=720, density=240, region='CN')
+    sampled._input_lock = threading.Lock()
+    sampled._send = mock.Mock()
+    with mock.patch('executor.device.scrcpy.time.sleep', return_value=None):
+        sampled.tap(930, 130)
+    packets = [struct.unpack('>BBQiiHHHII', call.args[0]) for call in sampled._send.call_args_list]
+    actions = [packet[1] for packet in packets]
+    points = {packet[3:7] for packet in packets}
+    ok = actions == [0, 2, 2, 2, 1] and points == {(930, 130, 1280, 720)}
+    add_report('executor:scrcpy-tap-sampled-contact', LOADING_IMAGE,
+               'DOWN/MOVE/MOVE/MOVE/UP', actions, 'tap',
+               '实机故障回归：40ms 点击期间保留静止采样，不只发送 DOWN/UP', ok,
                simulated_ocr=True)
 
 
@@ -1483,12 +1819,101 @@ def check_ocr_action(name, path, expected):
     add_report(name, path, expected, action, "observe", f"ocr={rows}", action == expected)
 
 
+def check_final_frame_evidence():
+    from executor.core import RunOptions
+    from executor.domain import AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, Variant)
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)))
+    battle = Observation(base_page=BasePage.BATTLE, fields={
+        'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+        'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+    }, controls=(Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    card = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (46, 415, 211, 655), True,
+                card=CommandCardIdentity(index - 1, 'arts')) for index in range(1, 6)))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    result_page = Observation(base_page=BasePage.RESULT, controls=(
+        Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
+    drops = Observation(base_page=BasePage.DROPS, controls=(
+        Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
+    repeat = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                         controls=(Control('连续出击', ControlKind.BUTTON, (800, 540, 940, 610), True),))
+    observations = [battle, battle, card, card, card, card, card, card, animation,
+                    result_page, result_page, drops, drops, repeat]
+    times = [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.5, 3.0, 3.1, 3.6, 3.7]
+    with TemporaryDirectory() as directory:
+        result, _, _ = run_core_scenario(
+            observations, times, plan, options=RunOptions(run_dir=directory))
+        final = Path(directory) / 'final.png'
+        payload = json.loads((Path(directory) / 'result.json').read_text(encoding='utf-8'))
+        final_exists = final.is_file()
+        ok = result.status.value == 'completed' and final_exists and payload.get('final_frame') == str(final)
+    add_report('executor:completed-final-frame', DROPS_IMAGE, 'completed; final.png saved',
+               f'{result.reason}; final={final_exists}', 'observe', 'completed runs retain final visual evidence',
+               ok, simulated_ocr=True)
+
+
+def check_support_refresh_confirmation_timeout():
+    from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate
+    cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
+    turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
+    formation = (
+        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, role='Berserker',
+                          support=True, support_required=True),
+        FormationSlotPlan(slot=1, name='1'), FormationSlotPlan(slot=2, name='2'),
+    )
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
+    wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
+    wrong = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
+    ))
+    result, device, events = run_core_scenario(
+        [wrong] * 8, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新']
+    ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
+          and controls == expected and events.events[-1].data.get('stage') == 'page')
+    add_report('executor:support-refresh-confirmation-timeout', SUPPORT_IMAGE,
+               'action_confirmation_timeout; no repeated refresh', f'{result.reason}; {controls}',
+               'stop', f'taps={device.actions}', ok, simulated_ocr=True)
+
+    confirm = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
+                          controls=(Control('是', ControlKind.BUTTON, (708, 534, 969, 592), True),))
+    blank = Observation(base_page=BasePage.SUPPORT)
+    candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
+    match = Observation(base_page=BasePage.SUPPORT, controls=(
+        Control('助战卡片第2行', ControlKind.ROW, (40, 360, 1000, 560), True, support=candidate),))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    observations = [wrong] * 7 + [confirm] * 2 + [wrong] * 6 + [confirm] * 2
+    observations += [blank, blank, match, match, unknown, unknown]
+    times = [index * 0.5 for index in range(len(observations) - 2)]
+    times += [len(times) * 0.5, len(times) * 0.5 + 30.0]
+    result, device, events = run_core_scenario(observations, times, plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = result.reason == 'unknown_timeout' and '助战卡片第2行' in controls
+    add_report('executor:support-refresh-waits-for-candidates', SUPPORT_IMAGE,
+               'transient empty rows wait; matching Louhi selected', f'{result.reason}; {controls}',
+               'tap', 'second refresh returned candidates after a transient frame', ok, simulated_ocr=True)
+
+
 def run(output: Path, name_filter: str | None = None):
     REPORTS.clear()
     check_classifications()
     check_perception()
     check_perception_identities()
     check_executor_core()
+    check_command_card_batch()
+    check_support_refresh_confirmation_timeout()
+    check_final_frame_evidence()
     check_strategy_servant_priority()
     check_strategy_color_priority()
     check_strategy_crit_priority()

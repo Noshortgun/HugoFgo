@@ -43,14 +43,16 @@ class DeviceMetrics:
 
 
 class DeviceChannel(str, Enum):
-    """帧来源通道：adb 截图（默认，跨模拟器）或 LDPlayer 窗口原始帧（仅 Windows + LDPlayer）。"""
+    """帧与输入通道：adb 默认；LDPlayer 原始帧和 scrcpy 仅可显式选择。"""
 
     ADB = 'adb'
     LDPLAYER_WINDOW = 'ldplayer-window'
+    SCRCPY = 'scrcpy'
 
     @property
     def label(self) -> str:
-        return {'adb': 'adb 截图', 'ldplayer-window': 'LDPlayer 窗口原始帧'}[self.value]
+        return {'adb': 'adb 截图', 'ldplayer-window': 'LDPlayer 窗口原始帧',
+                'scrcpy': 'scrcpy 持续帧与输入'}[self.value]
 
     @classmethod
     def options(cls) -> str:
@@ -71,7 +73,7 @@ class DeviceChannel(str, Enum):
 class DeviceConfig:
     """设备配置。region 必填；None 仅用于构造时给出可操作错误，不是有效配置。
 
-    channel 默认 adb；只有显式选择 ldplayer-window 才会走窗口原始帧通道，不会静默切换。
+    channel 默认 adb；其他通道只有显式选择才会启用，不会静默切换。
     """
 
     serial: str
@@ -80,6 +82,7 @@ class DeviceConfig:
     width: int | None = None
     height: int | None = None
     channel: DeviceChannel | str = DeviceChannel.ADB
+    scrcpy_server_path: str | None = None
 
     def __post_init__(self) -> None:
         serial = str(self.serial).strip()
@@ -93,6 +96,8 @@ class DeviceConfig:
 
         adb_path = str(self.adb_path).strip() if self.adb_path else None
         object.__setattr__(self, 'adb_path', adb_path or None)
+        server_path = str(self.scrcpy_server_path).strip() if self.scrcpy_server_path else None
+        object.__setattr__(self, 'scrcpy_server_path', server_path or None)
 
         if (self.width is None) != (self.height is None):
             raise DeviceError('设备配置的 width 与 height 必须同时给出或同时省略')

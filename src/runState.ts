@@ -23,6 +23,8 @@ export interface RunState {
   recoveryUsed: Record<string, number>;
   logDir: string;
   error: string;
+  notice: string;
+  channel: string;
   exitCode: number | null;
 }
 
@@ -30,7 +32,7 @@ export function emptyRunState(): RunState {
   return {
     phase: 'idle', runId: '', serial: '', jobName: '', jobPath: '', startedAtMs: 0,
     screen: '', wave: 1, turn: 1, action: '', actionDetail: '', completedRuns: 0,
-    recoveryUsed: {}, logDir: '', error: '', exitCode: null,
+    recoveryUsed: {}, logDir: '', error: '', notice: '', channel: 'adb', exitCode: null,
   };
 }
 
@@ -56,6 +58,12 @@ export function applyRunEvent(state: RunState, event: RunEvent): RunState {
     next.phase = 'running';
     next.serial = text(data.serial) ?? state.serial;
     next.startedAtMs ||= event.timestamp * 1000;
+    next.channel = text(data.channel) ?? state.channel;
+  } else if (event.type === 'channel_changed') {
+    next.channel = text(data.to) ?? state.channel;
+    next.notice = text(data.message) ?? `设备通道已切换为 ${next.channel}`;
+  } else if (event.type === 'warning') {
+    next.notice = text(data.message) ?? text(data.reason) ?? state.notice;
   } else if (event.type === 'state_changed') {
     next.phase = 'running';
     next.screen = text(data.state) ?? state.screen;

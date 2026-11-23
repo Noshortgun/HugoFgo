@@ -19,11 +19,11 @@ class ExecutorReplayTest(unittest.TestCase):
         self.assertEqual('completed', report.result.status.value)
         self.assertEqual('completed', report.result.reason)
         self.assertEqual([
-            '助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4',
+            '职阶筛选:berserker', '助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
             '结算推进', '结算推进', '下一步',
         ], [event.data['control'] for event in report.events.events if event.type == 'action'])
-        self.assertEqual([(628, 431), (1165, 672), (1136, 608), (128, 535),
-                          (384, 535), (894, 535), (1130, 660), (1130, 660), (1110, 641)],
+        self.assertEqual([(565, 128), (628, 431), (1165, 672), (1136, 608), (128, 535),
+                          (384, 535), (894, 535), (1240, 420), (1130, 660), (1130, 660), (1110, 641)],
                          [(action['x'], action['y']) for action in report.device.actions])
         self.assertIn('animation', {variant.value for observation in report.observations
                                     for variant in observation.variants})
@@ -43,10 +43,11 @@ class ExecutorReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('support-search-refresh'), Path(directory))
 
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第2行'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是',
+                          '助战卡片第2行'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
-        self.assertEqual(['swipe', 'swipe', 'tap', 'tap', 'tap'],
+        self.assertEqual(['tap', 'swipe', 'swipe', 'tap', 'tap', 'tap'],
                          [action['action'] for action in report.device.actions])
 
     def test_support_refresh_cooldown_closes_then_resumes_search(self) -> None:
@@ -54,17 +55,18 @@ class ExecutorReplayTest(unittest.TestCase):
             report = run_case(get_case('support-refresh-cooldown'), Path(directory))
 
         self.assertEqual('unknown_timeout', report.result.reason)
-        self.assertEqual(['助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭',
+                          '助战卡片第2行'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
-        self.assertEqual((640, 565), (report.device.actions[3]['x'], report.device.actions[3]['y']))
+        self.assertEqual((640, 565), (report.device.actions[4]['x'], report.device.actions[4]['y']))
 
     def test_battle_status_detail_closes_then_target_action_finishes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('battle-status-detail'), Path(directory))
 
         self.assertEqual('completed', report.result.reason)
-        self.assertEqual(['敌方2', '关闭', '攻击', '卡1', '卡2', '卡4',
+        self.assertEqual(['敌方2', '关闭', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
                           '结算推进', '结算推进', '下一步'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
@@ -131,8 +133,8 @@ class ExecutorReplayTest(unittest.TestCase):
 
     def test_misopened_support_screens_close_in_order(self) -> None:
         for name, expected in (
-            ('grand-page-recovery', ['关闭', '助战卡片第2行']),
-            ('friend-request-recovery', ['结束', '助战卡片第2行']),
+            ('grand-page-recovery', ['关闭', '职阶筛选:berserker', '助战卡片第2行']),
+            ('friend-request-recovery', ['结束', '职阶筛选:berserker', '助战卡片第2行']),
         ):
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 report = run_case(get_case(name), Path(directory))
@@ -144,7 +146,7 @@ class ExecutorReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('class-info-recovery'), Path(directory))
 
-        self.assertEqual(['关闭', '助战卡片第2行'],
+        self.assertEqual(['关闭', '职阶筛选:berserker', '助战卡片第2行'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
         self.assertEqual('unknown_timeout', report.result.reason)
@@ -154,7 +156,7 @@ class ExecutorReplayTest(unittest.TestCase):
             report = run_case(get_case('resume-support-unknown'), Path(directory))
 
             self.assertEqual('unknown_timeout', report.result.reason)
-            self.assertEqual(['助战卡片第2行', '开始任务'],
+            self.assertEqual(['职阶筛选:berserker', '助战卡片第2行', '开始任务'],
                              [event.data['control'] for event in report.events.events
                               if event.type == 'action'])
             self.assertTrue((Path(report.result.evidence_dir) / 'failure.png').is_file())

@@ -41,6 +41,8 @@ class Frame:
     captured_at: float
     format: FrameFormat = FrameFormat.PNG
     capture_ms: float | None = None
+    frame_id: int | None = None
+    session_id: str | None = None
 
     def __post_init__(self) -> None:
         try:

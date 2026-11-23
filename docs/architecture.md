@@ -21,7 +21,7 @@
 │                ↑            ↑                      │      │
 │           画面感知      运行会话（日志/证据）        │      │
 └────────────────────────────────────────────────────┘      │
-                            │ adb（截图与输入）──────────────┘
+                            │ adb / scrcpy（截图与输入）─────┘
 ```
 
 壳与执行器之间的进程缝包括启动参数、stdin 控制、stdout JSON Lines 和退出码。任何一方可独立替换，但必须遵守第 3 节契约。
@@ -41,8 +41,9 @@
 
 - **接口**：`devices()` 与 `Device` 协议的 `metrics()`、`frame()`、`tap(x, y)`、`swipe(x1, y1, x2, y2)`。
 - **坐标**：动作使用 1280×720 基准，由适配器换算到真实分辨率；serial 与区服属于 `DeviceConfig`。
-- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）。
+- **适配器**：adb（实机截图与输入）、fake（回放喂截图、记录动作）、ldplayer-window（可选快速截图，仅 Windows + LDPlayer）、scrcpy（显式启用的持续帧与输入）。
 - **LDPlayer 边界**：原始帧适配器只截图，`tap`/`swipe` 会明确报错；当前完整实机闭环仍走 adb，不把该通道算作独立刷本通道。
+- **scrcpy 边界**：持续解码线程只保留最新帧，每次感知读取要求新帧并校验新鲜度、尺寸与会话身份；输入使用同一设备的控制 socket。触摸消息按固定 3.3.3 协议使用类型 2、完整 32 字节字段和同一 finger ID；40 ms 点击期间发送三次静止 MOVE，滑动约每 16 ms 采样移动。启动失败仅在用户预先确认后可见回退 adb，运行中断直接安全停止。固定服务端由 `resources/scrcpy/` 分发并校验，通道不进入作业 Schema。
 - **分辨率**：仅支持精确 16:9 横屏且不低于 1280×720；其他分辨率拒绝执行（ADR-0005）。
 - **区服**：设备配置必填并决定识别配置与图库；当前执行器只接受 CN（ADR-0003）。
 
@@ -54,7 +55,7 @@
 - **双速**：同步快路径只用区域模板、颜色与布局证据；OCR 在后台单线程按需补 NP、面/回合、AP 等字段，结果绑定帧哈希。
 - **观察内容**：基页、版式变体、覆盖层、控件、字段状态、帧哈希与证据。`unknown / loading` 不输出可行动控件。
 - **字段状态**：`not_applicable / not_read / pending / uncertain / confirmed`，区分“不需要读”和“读取失败”。
-- **中间态**：攻击/技能/换人动画归为 `battle + animation`；结算分 `bond / exp / loot`。被模态覆盖层或目标选择变体盖住时，不输出基页控件。
+- **中间态**：攻击/技能/换人动画归为 `battle + animation`；结算分 `bond / exp / loot`。被模态覆盖层或目标选择变体盖住时，不输出基页控件。固定作业技能按顺序点击并以 1 秒动作间隔推进，不检测冷却或技能动画；定向技能仍等待目标面板，攻击仍等待选卡页，补刀保留完整感知。
 - **当前限制**：只有国服识别配置；真实帧尚未输出指令卡暴击率和克制/抵抗，完整留出集验收未完成。
 
 ### 2.4 执行器核心 Executor
@@ -96,7 +97,8 @@ python -m executor <job.json> \
   [--recovery [saint_quartz|gold|silver|bronze|copper ...]] \
   [--drain-after-turns] \
   [--adb <adb路径>] \
-  [--channel adb|ldplayer-window] \
+  [--channel adb|ldplayer-window|scrcpy] \
+  [--allow-adb-fallback] [--scrcpy-server <固定服务端路径>] \
   [--fake]
 ```
 
@@ -132,7 +134,10 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
     "action_index": 0,
     "x": 1050,
     "y": 620,
-    "reason": "stable_actionable"
+    "reason": "battle_action",
+    "wait_ms": 0.0,
+    "channel_ms": 1.2,
+    "input_finished_at": 1760000000.01
   }
 }
 ```
@@ -144,8 +149,10 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | `run_started` | 进程与作业启动信息 |
 | `state_changed` | 感知基页变化 |
 | `wave_started` / `turn_started` | 面或面内回合推进 |
-| `action` | 实际设备动作及坐标、原因、面/回合 |
-| `warning` | 可恢复等待、字段降级等非终端警告 |
+| `action` | 实际设备动作及坐标、原因、面/回合；战斗动作另含 `wait_ms`、`channel_ms` 与输入完成时间；批量选卡另含批次、卡位、从者槽位、卡色、牌库索引、实测间隔与攻击到首卡耗时 |
+| `card_batch_submitted` | 一次三卡提交的批次、恢复次数、卡序和配置间隔；须结合后续确认或恢复事件判断成败 |
+| `action_confirmed` | 动作后画面确认；`stage` 标识等待阶段，`wait_ms` 记录该阶段耗时 |
+| `warning` | 可恢复等待、字段降级等非终端警告；有限动作恢复记录控件与次数 |
 | `recovery_used` | 后续画面确认后的恢复消耗 |
 | `drain_started` | 固定场数完成，进入清 AP |
 | `finished` / `stopped` / `failed` | 完成、停止、失败终端事件 |
@@ -173,6 +180,8 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | 资源 | `update_resources` | `{ region, refresh }`；`refresh=true` 表示完整校准 |
 | 设置 | `get_run_settings` / `save_run_settings` | 读取；保存接收 `{ settings }` |
 
+`RunState` 的 `notice` 显示可见回退等提示，`channel` 记录当前实际设备通道；`channel_changed` 会同时更新两者。
+
 `start_run` 示例：
 
 ```ts
@@ -183,11 +192,13 @@ const state = await invoke('start_run', {
   settings: {
     battles: 2,
     recovery: { allowed: ['bronze'], drain_after_turns: false },
+    device_channel: 'adb',
+    allow_adb_fallback: false,
   },
 });
 ```
 
-恢复项为 `saint_quartz | gold | silver | bronze | copper`。`RunState` 使用 snake_case：`running/run_id/serial/job_name/job_path/started_at_ms/status/screen/wave/turn/action/completed_runs/recovery_used/log_dir/error/exit_code`。
+恢复项为 `saint_quartz | gold | silver | bronze | copper`。`RunState` 使用 snake_case：`running/run_id/serial/job_name/job_path/started_at_ms/status/screen/wave/turn/action/completed_runs/recovery_used/log_dir/error/notice/channel/exit_code`。
 
 前端还使用：
 
@@ -202,9 +213,13 @@ const state = await invoke('start_run', {
 ```json
 {
   "battles": 1,
-  "recovery": { "allowed": ["bronze"], "drain_after_turns": false }
+  "recovery": { "allowed": ["bronze"], "drain_after_turns": false },
+  "device_channel": "adb",
+  "allow_adb_fallback": false
 }
 ```
+
+`device_channel` 默认为 `adb`，`scrcpy` 只能显式选择；`allow_adb_fallback` 仅控制启动失败后的可见回退，运行中中断不会跨通道续跑。
 
 每次运行目录可包含：
 
@@ -213,10 +228,11 @@ const state = await invoke('start_run', {
 | `events.jsonl` | 完整事件流 |
 | `result.json` | 状态、原因、进度、作业、设备、起止时间、最后观察与失败帧路径 |
 | `observation.json` | 最后一帧感知结果 |
+| `final.png` / `final.bgr24` | 完成或停止时的最后一帧（可用时） |
 | `failure.png` / `failure.bgr24` | 非完成状态下的最后一帧（可用时） |
 | `fake-actions.json` | 仅假运行的模拟动作记录 |
 
-`logs/run-history.jsonl` 每次终端事件追加一条 camelCase 记录：`id/jobName/jobFile/serial/region/startedAt/finishedAt/durationMs/result/reason/battlesCompleted/recoveryUsed/runDir/error`。
+`logs/run-history.jsonl` 每次终端事件追加一条 camelCase 记录：`id/jobName/jobFile/serial/region/channel/startedAt/finishedAt/durationMs/result/reason/battlesCompleted/recoveryUsed/runDir/error`。`channel` 是终端时实际通道，可见回退后记录为 `adb`。
 
 ### 3.5 Python 内部模块入口
 
@@ -246,7 +262,7 @@ src/            前端
 src-tauri/      壳
 executor/       Python 执行器
   domain/       作业模型与编译
-  device/       设备网关（adb + fake + 可选 ldplayer-window）
+  device/       设备网关（adb + fake + 可选 ldplayer-window / scrcpy）
   perception/   画面感知
   core/         执行器状态机
   session/      运行会话与历史
