@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
 
 from executor.domain import ExecutionPlan, FallbackStrategy
-from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+from executor.perception import BasePage, Control, ControlKind, Observation
 
 
 @dataclass(frozen=True)
@@ -79,36 +78,29 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
         ranks.setdefault(member.slot, len(ranks))
 
     color_ranks = {color: rank for rank, color in enumerate(effective.color_priority)}
+    selected_normal = []
 
-    def affinity_value(cards: list[CommandCardIdentity]) -> tuple:
-        return tuple(sorted((-affinity_ranks.get(card.affinity, affinity_ranks['neutral'])
-                             for card in cards)))
-
-    def key(indexed: tuple[tuple[int, Control], ...]) -> tuple:
-        cards = [control.card for _, control in reserved] + [control.card for _, control in indexed]
+    def key(indexed: tuple[int, Control]) -> tuple:
+        _index, control = indexed
+        card = control.card
         values = []
         for criterion in effective.strategy_order:
             if criterion == 'servant':
-                values.append(tuple(sorted(ranks.get(card.servant_slot, len(ranks)) for card in cards)))
+                values.append(ranks.get(card.servant_slot, len(ranks)))
             elif criterion == 'cards':
                 if effective.cards == 'balanced':
-                    preference = -len({card.card_type for card in cards})
+                    preference = -len({item.card_type for item in (*selected_normal, card)})
                 else:
-                    preference = -sum(card.card_type == effective.cards for card in cards)
-                values.append((preference,
-                               tuple(sorted(color_ranks.get(card.card_type, len(color_ranks))
-                                            for card in cards))))
+                    preference = -(card.card_type == effective.cards)
+                values.append((preference, color_ranks.get(card.card_type, len(color_ranks))))
             elif criterion == 'crit':
-                values.append(tuple(sorted((-(card.crit_rate or 0) for card in cards))))
+                values.append(-(card.crit_rate or 0))
             elif criterion == 'affinity':
-                values.append(affinity_value(cards))
+                values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
         if 'affinity' not in effective.strategy_order:
-            values.append(affinity_value(cards))
-        return (*values, tuple(index for index, _ in indexed))
+            values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
+        return (*values, control.center[0], control.center[1])
 
-    chosen_indexed = min(combinations(enumerate(candidates), needed), key=key)
-    chosen = {id(control) for _, control in chosen_indexed}
-    available = [control for control in candidates if id(control) in chosen]
     positioned: list[Control | None] = [None, None, None]
     automatic: list[Control] = []
     for position, control in reserved:
@@ -116,8 +108,23 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
             automatic.append(control)
         else:
             positioned[position - 1] = control
-    for control in (*automatic, *available):
+    for control in automatic:
         positioned[positioned.index(None)] = control
+
+    normal = [control for control in candidates if not control.card.noble_phantasm]
+    noble_phantasm = [control for control in candidates if control.card.noble_phantasm]
+    while None in positioned:
+        available = normal or (noble_phantasm if effective.allow_np else [])
+        if not available:
+            return _empty('可用指令卡不足三张', source, tuple(warnings))
+        chosen = min(enumerate(available), key=key)[1]
+        positioned[positioned.index(None)] = chosen
+        if chosen in normal:
+            normal.remove(chosen)
+            selected_normal.append(chosen.card)
+        else:
+            noble_phantasm.remove(chosen)
+
     controls = tuple(control for control in positioned if control is not None)
     return CardSelection(controls, tuple(control.center for control in controls),
                          '按补刀策略顺序选择三张指令卡', source, tuple(warnings))

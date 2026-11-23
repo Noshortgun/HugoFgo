@@ -9,6 +9,7 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from typing import Callable
 
+import cv2
 import numpy as np
 
 from executor.perception.errors import PerceptionError
@@ -26,7 +27,7 @@ class OcrLine:
 
 Reader = Callable[[np.ndarray], list[OcrLine]]
 
-PARSEABLE_FIELDS = ('wave', 'turn', 'ap', 'np', 'enemies')
+PARSEABLE_FIELDS = ('wave', 'turn', 'ap', 'np', 'enemies', 'crit')
 
 
 def rapidocr_reader() -> Reader:
@@ -37,18 +38,32 @@ def rapidocr_reader() -> Reader:
 
     engine = RapidOCR()
 
-    def read(image: np.ndarray) -> list[OcrLine]:
+    def read_image(image: np.ndarray, offset=(0, 0), scale=1.0) -> list[OcrLine]:
         result, _ = engine(image)
         lines = []
         for box, text, score in result or []:
-            xs = [point[0] for point in box]
-            ys = [point[1] for point in box]
+            xs = [point[0] / scale + offset[0] for point in box]
+            ys = [point[1] / scale + offset[1] for point in box]
             lines.append(OcrLine(
                 text=str(text).strip(),
                 x=round(sum(xs) / 4),
                 y=round(sum(ys) / 4),
                 confidence=float(score),
             ))
+        return lines
+
+    def read(image: np.ndarray) -> list[OcrLine]:
+        lines = read_image(image)
+        x1, y1, x2, y2 = cn.TURN_FALLBACK_REGION
+        turn = image[y1:y2, x1:x2]
+        turn = cv2.cvtColor(turn, cv2.COLOR_BGR2GRAY)
+        turn = cv2.threshold(turn, 150, 255, cv2.THRESH_BINARY)[1]
+        turn = cv2.resize(turn, None, fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+        lines.extend(read_image(turn, (x1, y1), 3.0))
+        x1, y1, x2, y2 = cn.CRIT_REGION
+        crit = image[y1:y2, x1:x2]
+        crit = cv2.resize(crit, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        lines.extend(read_image(crit, (x1, y1), 2.0))
         return lines
 
     return read
@@ -93,20 +108,28 @@ def _parse_ap(lines: list[OcrLine]) -> Field:
                               lambda match: (int(match.group(1)), int(match.group(2)))))
 
 
-def _parse_np(lines: list[OcrLine]) -> Field:
+def _parse_percentages(lines: list[OcrLine], region, expected_count: int | None = None) -> Field:
     readings = []
     for line in lines:
-        if line.confidence < cn.OCR_MIN_CONFIDENCE or not _inside(line, cn.NP_REGION):
+        if line.confidence < cn.OCR_MIN_CONFIDENCE or not _inside(line, region):
             continue
-        match = re.search(cn.NP_PATTERN, line.text)
+        text = re.sub(r'(\d{1,2})\.0\s*%', r'\g<1>0%', line.text)
+        match = re.search(cn.PERCENT_PATTERN, text)
         if match is None:
             continue
         readings.append((line.x, int(match.group(1)), line.confidence))
-    if not readings:
-        return Field(FieldStatus.UNCERTAIN)
     readings.sort()
-    return Field(FieldStatus.CONFIRMED, tuple(value for _, value, _ in readings),
-                 round(min(score for _, _, score in readings), 3))
+    deduplicated = []
+    for reading in readings:
+        if deduplicated and abs(reading[0] - deduplicated[-1][0]) < 20:
+            if reading[2] > deduplicated[-1][2]:
+                deduplicated[-1] = reading
+        else:
+            deduplicated.append(reading)
+    if not deduplicated or expected_count is not None and len(deduplicated) != expected_count:
+        return Field(FieldStatus.UNCERTAIN)
+    return Field(FieldStatus.CONFIRMED, tuple(value for _, value, _ in deduplicated),
+                 round(min(score for _, _, score in deduplicated), 3))
 
 
 def _parse_turn(lines: list[OcrLine]) -> Field:
@@ -121,8 +144,9 @@ def parse_fields(lines: list[OcrLine]) -> dict[str, Field]:
         'wave': _parse_number(lines, cn.WAVE_REGION, cn.WAVE_PATTERN),
         'turn': _parse_turn(lines),
         'ap': _parse_ap(lines),
-        'np': _parse_np(lines),
+        'np': _parse_percentages(lines, cn.NP_REGION),
         'enemies': _parse_number(lines, cn.ENEMY_COUNT_REGION, cn.ENEMY_COUNT_PATTERN),
+        'crit': _parse_percentages(lines, cn.CRIT_REGION, expected_count=5),
     }
 
 

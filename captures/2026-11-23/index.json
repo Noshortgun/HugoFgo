@@ -6,8 +6,609 @@
     "density": 240
   },
   "capturedAt": "2026-11-23",
-  "source": "scrcpy 实机故障回归 logs/farm/20261123-075610-scrcpy-fixed-2runs/",
+  "source": "scrcpy 实机故障回归 logs/farm/20261123-075610-scrcpy-fixed-2runs/；手动作业关键帧采集（ADB 只读取帧）",
   "keyFrames": [
+    {
+      "file": "key/manual-support-01.png",
+      "state": "助战选择页；当前列表没有目标助战，需要先切换到狂阶",
+      "expectedAction": {
+        "kind": "support_class_filter",
+        "role": "Berserker",
+        "x": 565,
+        "y": 128
+      },
+      "observedAction": {
+        "kind": "support_class_filter",
+        "role": "berserker",
+        "x": 565,
+        "y": 128
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-support-berserker-02.png",
+      "state": "狂阶助战选择页；当前完整显示的候选没有目标娄希，且尚未翻到底",
+      "expectedAction": {
+        "kind": "support_scroll_down",
+        "reason": "先翻找当前列表，到底后仍无目标才允许列表更新"
+      },
+      "observedAction": {
+        "kind": "support_class_filter",
+        "role": "berserker",
+        "x": 565,
+        "y": 128
+      },
+      "match": false
+    },
+    {
+      "file": "key/manual-support-berserker-03.png",
+      "state": "狂阶助战选择页；最上方候选为带迦勒底午茶时光的目标娄希",
+      "expectedAction": {
+        "kind": "select_support",
+        "svtId": 705000,
+        "ceId": 9403520,
+        "x": 628,
+        "y": 279
+      },
+      "observedAction": {
+        "kind": "support_class_filter",
+        "role": "berserker",
+        "x": 565,
+        "y": 128
+      },
+      "observedSupport": {
+        "svtId": 705000,
+        "ceId": 9403520,
+        "x": 628,
+        "y": 279
+      },
+      "match": false
+    },
+    {
+      "file": "key/manual-team-04.png",
+      "state": "队伍确认页；助战娄希、己方阵型与开始任务控件可见",
+      "expectedObservation": {
+        "activeServants": [
+          {"slot": 0, "svtId": 705000, "support": true},
+          {"slot": 1, "svtId": 705000, "support": false},
+          {"slot": 2, "svtId": 2800100, "support": false}
+        ],
+        "supportCeId": 9403520,
+        "mysticId": "atlas-260"
+      },
+      "expectedAction": {
+        "kind": "start_battle",
+        "x": 1165,
+        "y": 672
+      },
+      "observedAction": {
+        "kind": "start_battle",
+        "x": 1165,
+        "y": 672
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w1-t1-start-05.png",
+      "state": "第一面第一回合初始战斗页；当前目标为敌方3，作业要求切换到敌方2",
+      "context": "从 manual-team-04.png 开始任务后进入，不是战斗中途中断接续",
+      "expectedAction": {
+        "kind": "target",
+        "toTarget": 2,
+        "x": 382,
+        "y": 54
+      },
+      "observedAction": {
+        "kind": "target",
+        "toTarget": 2,
+        "x": 382,
+        "y": 54
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w1-t1-target2-06.png",
+      "state": "第一面第一回合；敌方目标已切换为敌方2，下一动作为己方娄希3技能",
+      "context": "接续 manual-w1-t1-start-05.png，已完成 target 动作，action_index=1",
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 1,
+        "skill": 2,
+        "x": 570,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 1,
+        "skill": 2,
+        "x": 570,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w1-t1-after-s3-07.png",
+      "state": "第一面第一回合；己方娄希3技能已结束，下一动作为己方娄希1技能",
+      "context": "接续 manual-w1-t1-target2-06.png，己方娄希3技能已确认回到战斗页，action_index=2",
+      "expectedObservation": {
+        "wave": 1,
+        "turn": 1,
+        "np": [40, 100, 40]
+      },
+      "observedObservation": {
+        "wave": 1,
+        "turn": null,
+        "np": null
+      },
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 1,
+        "skill": 0,
+        "x": 396,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 1,
+        "skill": 0,
+        "x": 396,
+        "y": 579
+      },
+      "actionMatch": true,
+      "match": false
+    },
+    {
+      "file": "key/manual-w1-t1-after-s1-08.png",
+      "state": "第一面第一回合；己方娄希1技能已结束，本回合技能动作完成",
+      "context": "接续 manual-w1-t1-after-s3-07.png，己方娄希1技能已执行",
+      "expectedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "observedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w1-t1-cards-09.png",
+      "state": "第一面第一回合选卡页；五张普通卡身份完整，己方娄希宝具可用",
+      "context": "接续 manual-w1-t1-after-s1-08.png，已点击攻击",
+      "expectedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "noblePhantasm": true, "x": 635, "y": 200},
+          {"position": 2, "memberSlot": 1, "cardType": "arts", "control": "卡4", "x": 894, "y": 535},
+          {"position": 3, "memberSlot": 0, "cardType": "quick", "alternatives": [
+            {"control": "卡1", "x": 128, "y": 535},
+            {"control": "卡3", "x": 638, "y": 535}
+          ]}
+        ],
+        "reason": "宝具单独保留；普通卡逐张选择，先选己方娄希卡4，再从助战娄希并列的卡1、卡3中选靠左的卡1"
+      },
+      "observedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "noblePhantasm": true, "x": 635, "y": 200},
+          {"position": 2, "memberSlot": 0, "cardType": "quick", "control": "卡1", "x": 128, "y": 535},
+          {"position": 3, "memberSlot": 1, "cardType": "arts", "control": "卡4", "x": 894, "y": 535}
+        ]
+      },
+      "match": false
+    },
+    {
+      "file": "key/manual-w2-t1-start-10.png",
+      "state": "第二面第一回合初始战斗页；游戏累计回合为2，下一动作为助战娄希3技能",
+      "context": "接续 manual-w1-t1-cards-09.png，第一面攻击已结束并确认进入第二面",
+      "expectedObservation": {
+        "wave": 2,
+        "turn": 1,
+        "gameTurn": 2,
+        "np": [40, 19, 40]
+      },
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 0,
+        "skill": 2,
+        "x": 248,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 0,
+        "skill": 2,
+        "x": 248,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w2-t1-after-support-s3-11.png",
+      "state": "第二面第一回合；助战娄希3技能已结束，下一动作为助战娄希1技能",
+      "context": "接续 manual-w2-t1-start-10.png，助战娄希3技能已确认回到战斗页，action_index=1",
+      "expectedObservation": {
+        "wave": 2,
+        "turn": 1,
+        "gameTurn": 2,
+        "np": [120, 39, 60]
+      },
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 0,
+        "skill": 0,
+        "x": 74,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 0,
+        "skill": 0,
+        "x": 74,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w2-t1-after-support-s1-12.png",
+      "state": "第二面第一回合；助战娄希1技能已结束，下一动作为奥伯龙1技能",
+      "context": "接续 manual-w2-t1-after-support-s3-11.png，助战娄希1技能已执行，action_index=2",
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 0,
+        "x": 706,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 0,
+        "x": 706,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w2-t1-after-oberon-s1-13.png",
+      "state": "第二面第一回合；奥伯龙1技能已结束，本回合技能动作完成",
+      "context": "接续 manual-w2-t1-after-support-s1-12.png，奥伯龙1技能已执行",
+      "expectedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "observedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w2-t1-cards-14.png",
+      "state": "第二面第一回合选卡页；助战娄希宝具固定在第二位，己方娄希卡1与卡4同为迅击，暴击率分别为10%和30%",
+      "context": "接续 manual-w2-t1-after-oberon-s1-13.png，已点击攻击",
+      "expectedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "cardType": "quick", "control": "卡4", "critRate": 30, "x": 894, "y": 535},
+          {"position": 2, "memberSlot": 0, "noblePhantasm": true, "x": 420, "y": 215},
+          {"position": 3, "memberSlot": 1, "cardType": "quick", "control": "卡1", "critRate": 10, "x": 128, "y": 535}
+        ],
+        "reason": "普通卡逐张选择；卡1与卡4从者和卡色相同，先选暴击率30%的卡4，再选10%的卡1"
+      },
+      "observedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "cardType": "quick", "control": "卡1", "critRate": null, "x": 128, "y": 535},
+          {"position": 2, "memberSlot": 0, "noblePhantasm": true, "x": 420, "y": 215},
+          {"position": 3, "memberSlot": 1, "cardType": "quick", "control": "卡4", "critRate": null, "x": 894, "y": 535}
+        ]
+      },
+      "match": false
+    },
+    {
+      "file": "key/manual-w3-t1-start-15.png",
+      "state": "第三面第一回合初始战斗页；游戏累计回合为3，下一动作为奥伯龙2技能，目标为己方娄希",
+      "context": "接续 manual-w2-t1-cards-14.png，第二面攻击已结束并确认进入第三面",
+      "expectedObservation": {
+        "wave": 3,
+        "turn": 1,
+        "gameTurn": 3,
+        "np": [26, 66, 80]
+      },
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 1,
+        "playerTargetSlot": 1,
+        "x": 792,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 1,
+        "playerTargetSlot": 1,
+        "x": 792,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-oberon-s2-target-16.png",
+      "state": "第三面第一回合；奥伯龙2技能目标选择页，作业目标为中间己方娄希",
+      "context": "接续 manual-w3-t1-start-15.png，奥伯龙2技能已打开目标选择页，action_index=0",
+      "expectedAction": {
+        "kind": "select_skill_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "observedAction": {
+        "kind": "select_skill_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-after-oberon-s2-17.png",
+      "state": "第三面第一回合；奥伯龙2技能已结束，己方娄希NP为116%，下一动作为奥伯龙3技能",
+      "context": "接续 manual-w3-t1-oberon-s2-target-16.png，已选择中间己方娄希并回到战斗页，action_index=1",
+      "expectedObservation": {
+        "wave": 3,
+        "turn": 1,
+        "gameTurn": 3,
+        "np": [26, 116, 80]
+      },
+      "expectedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 2,
+        "playerTargetSlot": 1,
+        "x": 880,
+        "y": 579
+      },
+      "observedAction": {
+        "kind": "skill",
+        "memberSlot": 2,
+        "skill": 2,
+        "playerTargetSlot": 1,
+        "x": 880,
+        "y": 579
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-oberon-s3-target-18.png",
+      "state": "第三面第一回合；奥伯龙3技能目标选择页，作业目标为中间己方娄希",
+      "context": "接续 manual-w3-t1-after-oberon-s2-17.png，奥伯龙3技能已打开目标选择页，action_index=1",
+      "expectedAction": {
+        "kind": "select_skill_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "observedAction": {
+        "kind": "select_skill_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-after-oberon-s3-19.png",
+      "state": "第三面第一回合；奥伯龙3技能已结束，下一动作为打开御主技能菜单",
+      "context": "接续 manual-w3-t1-oberon-s3-target-18.png，已选择中间己方娄希并回到战斗页，action_index=2",
+      "expectedAction": {
+        "kind": "open_master_skills",
+        "x": 1194,
+        "y": 318
+      },
+      "observedAction": {
+        "kind": "open_master_skills",
+        "x": 1194,
+        "y": 318
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-master-menu-20.png",
+      "state": "第三面第一回合御主技能页；新春装束三个技能可见，下一动作为技能1（己方全体）",
+      "context": "接续 manual-w3-t1-after-oberon-s3-19.png，御主技能菜单已由当前作业动作打开，action_index=2",
+      "expectedAction": {
+        "kind": "master",
+        "skill": 0,
+        "x": 906,
+        "y": 314
+      },
+      "observedAction": {
+        "kind": "master",
+        "skill": 0,
+        "x": 906,
+        "y": 314
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-after-master-s1-21.png",
+      "state": "第三面第一回合；新春装束技能1已结束，下一动作为重新打开御主技能菜单",
+      "context": "接续 manual-w3-t1-master-menu-20.png，新春装束技能1已确认回到战斗页，action_index=3",
+      "expectedAction": {
+        "kind": "open_master_skills",
+        "x": 1194,
+        "y": 318
+      },
+      "observedAction": {
+        "kind": "open_master_skills",
+        "x": 1194,
+        "y": 318
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-master-menu-s2-22.png",
+      "state": "第三面第一回合御主技能页；新春装束技能1已冷却，下一动作为技能2，目标为己方娄希",
+      "context": "接续 manual-w3-t1-after-master-s1-21.png，御主技能菜单已由当前作业动作重新打开，action_index=3",
+      "expectedAction": {
+        "kind": "master",
+        "skill": 1,
+        "playerTargetSlot": 1,
+        "x": 996,
+        "y": 314
+      },
+      "observedAction": {
+        "kind": "master",
+        "skill": 1,
+        "playerTargetSlot": 1,
+        "x": 996,
+        "y": 314
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-master-s2-target-23.png",
+      "state": "第三面第一回合；新春装束技能2目标选择页，作业目标为中间己方娄希",
+      "context": "接续 manual-w3-t1-master-menu-s2-22.png，新春装束技能2已打开目标选择页，action_index=3",
+      "expectedAction": {
+        "kind": "select_master_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "observedAction": {
+        "kind": "select_master_target",
+        "playerTargetSlot": 1,
+        "x": 636,
+        "y": 384
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-after-master-s2-24.png",
+      "state": "第三面第一回合；新春装束技能2已结束，己方娄希NP为126%，下一动作为攻击",
+      "context": "接续 manual-w3-t1-master-s2-target-23.png，已选择中间己方娄希并回到战斗页",
+      "expectedObservation": {
+        "wave": 3,
+        "turn": 1,
+        "gameTurn": 3,
+        "np": [26, 126, 80]
+      },
+      "expectedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "observedAction": {
+        "kind": "attack",
+        "x": 1136,
+        "y": 608
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-w3-t1-cards-25.png",
+      "state": "第三面第一回合选卡页；己方娄希宝具可用，卡1与卡3均为己方娄希力击且暴击率同为100%",
+      "context": "接续 manual-w3-t1-after-master-s2-24.png，已点击攻击",
+      "expectedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "noblePhantasm": true, "x": 635, "y": 200},
+          {"position": 2, "memberSlot": 1, "cardType": "buster", "control": "卡1", "critRate": 100, "x": 128, "y": 535},
+          {"position": 3, "memberSlot": 1, "cardType": "buster", "control": "卡3", "critRate": 100, "x": 638, "y": 535}
+        ],
+        "reason": "宝具自动在首位；两张己方娄希普通卡各项并列，按从左到右逐张选择"
+      },
+      "observedAction": {
+        "kind": "command_card_batch",
+        "cards": [
+          {"position": 1, "memberSlot": 1, "noblePhantasm": true, "x": 635, "y": 200},
+          {"position": 2, "memberSlot": 1, "cardType": "buster", "control": "卡1", "critRate": null, "x": 128, "y": 535},
+          {"position": 3, "memberSlot": 1, "cardType": "buster", "control": "卡3", "critRate": null, "x": 638, "y": 535}
+        ]
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-result-26.png",
+      "state": "战斗结果牵绊页；第三面攻击已结束，剩余敌人为0",
+      "context": "接续 manual-w3-t1-cards-25.png，第三面三张卡已提交并确认战斗结束",
+      "expectedAction": {
+        "kind": "result_next",
+        "x": 1130,
+        "y": 660
+      },
+      "observedAction": {
+        "kind": "result_next",
+        "x": 1130,
+        "y": 660
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-result-exp-27.png",
+      "state": "战斗结果经验页；御主礼装显示为新春装束，等级已满",
+      "expectedObservation": {
+        "mysticId": "atlas-260",
+        "mysticName": "新春装束"
+      },
+      "expectedAction": {
+        "kind": "result_next",
+        "x": 1130,
+        "y": 660
+      },
+      "observedAction": {
+        "kind": "result_next",
+        "x": 1130,
+        "y": 660
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-drops-28.png",
+      "state": "掉落奖励页；显示战利品与下一步控件",
+      "expectedAction": {
+        "kind": "drops_next",
+        "x": 1110,
+        "y": 641
+      },
+      "observedAction": {
+        "kind": "drops_next",
+        "x": 1110,
+        "y": 641
+      },
+      "match": true
+    },
+    {
+      "file": "key/manual-repeat-dialog-29.png",
+      "state": "单场完成后的连续出击弹窗；剩余场数为0",
+      "context": "接续 manual-drops-28.png，已点击下一步，run_count=1",
+      "expectedAction": null,
+      "expectedResult": {
+        "status": "completed",
+        "completedRuns": 1
+      },
+      "observedAction": null,
+      "observedResult": {
+        "status": "completed",
+        "completedRuns": 1
+      },
+      "match": true
+    },
+    {
+      "file": "key/support-unknown-candidates.png",
+      "state": "实机故障：狂阶助战列表存在摩根等可见候选，但均非作业目标且身份未确认；这些行必须计为列表内容，不得当成空列表",
+      "expectedAction": {
+        "kind": "support_scroll_or_refresh_after_bottom",
+        "reason": "未知候选行仍参与翻找与到底判断；不得触发 support_candidates_unavailable"
+      }
+    },
     {
       "file": "key/skill-cooldowns.png",
       "state": "第三面战斗页；从者1技能3、从者2技能3、从者3技能2已灰化冷却，从者2技能1漏用且仍可用"

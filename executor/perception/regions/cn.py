@@ -458,6 +458,10 @@ SUPPORT_CE_CROP_HEIGHT = 58
 SUPPORT_CE_BOTTOM_OFFSET = 60
 SUPPORT_CE_THRESHOLD = 0.45
 SUPPORT_CE_MARGIN = 0.04
+SUPPORT_CLASS_CENTERS = (92, 160, 228, 296, 362, 430, 498, 566, 632, 700)
+SUPPORT_CLASS_NAMES = ('all', 'saber', 'archer', 'lancer', 'rider', 'caster', 'assassin', 'berserker', 'extra', 'all')
+SUPPORT_CLASS_MIN_SCORE = 700
+SUPPORT_CLASS_MIN_MARGIN = 200
 
 COMMAND_SIFT_FEATURES = 400
 COMMAND_SIFT_RATIO = 0.75
@@ -487,21 +491,27 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'wave': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'turn': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'np': frozenset({BasePage.BATTLE, BasePage.CARD}),
+    'crit': frozenset({BasePage.CARD}),
     'enemies': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'ap': frozenset({BasePage.AP_RECOVERY}),
+    'support_class': frozenset({BasePage.SUPPORT}),
+    'team_servants': frozenset({BasePage.TEAM}),
+    'team_support_ce': frozenset({BasePage.TEAM}),
+    'team_mystic': frozenset({BasePage.TEAM}),
 }
 
 # OCR 只读这些区域；区域用 1280×720 基准坐标。
 WAVE_REGION: Box = (760, 0, 1060, 50)
 TURN_REGION: Box = (760, 80, 1060, 140)
 NP_REGION: Box = (0, 640, 1100, 720)
+CRIT_REGION: Box = (0, 340, 1280, 425)
 
 OCR_MIN_CONFIDENCE = 0.5
 
 WAVE_PATTERN = r'(\d+)\s*/\s*(\d+)'
 TURN_PATTERN = r'(\d+)\s*回合'
 AP_PATTERN = r'行动力现在[：:]\s*(\d+)\s*/\s*(\d+)'
-NP_PATTERN = r'^(\d+)\s*%$'
+PERCENT_PATTERN = r'(\d{1,3})\s*%'
 TURN_FALLBACK_REGION: Box = (900, 80, 980, 120)
 # 敌人数量不依赖血条颜色/位置，直接读“敌方单位 还剩 N 名”。
 ENEMY_COUNT_REGION: Box = (760, 40, 1060, 90)
