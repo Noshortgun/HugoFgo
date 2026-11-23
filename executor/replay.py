@@ -21,7 +21,7 @@ from executor.core.smoke import ConfirmedStartPerception
 from executor.device import FakeDevice
 from executor.device.base import Frame
 from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
-                             TurnPlan, WavePlan)
+                             TurnPlan, WavePlan, compile_job)
 from executor.perception import Observation, Perception
 from executor.session import MemoryEventSink, RunEvent
 
@@ -50,6 +50,7 @@ class ReplayCase:
     confirmed_start: tuple[int, int] | None = None
     suppress_controls: tuple[str, ...] = ()
     fresh_hashes: bool = True
+    ignored_action_reasons: tuple[str, ...] = ()
 
 
 @dataclass
@@ -89,6 +90,11 @@ class ReplayPerception:
 
     def bind_formation(self, formation) -> None:
         self.perception.bind_formation(formation)
+
+    def bind_mystic(self, mystic_id: str) -> None:
+        bind = getattr(self.perception, 'bind_mystic', None)
+        if bind is not None:
+            bind(mystic_id)
 
     def _record(self, observation: Observation) -> Observation:
         if self.suppress_controls:
@@ -182,8 +188,9 @@ def check_report(report: ReplayReport) -> None:
     case = report.case
     require_equal(case, case.status, report.result.status, '运行状态')
     require_equal(case, case.reason, report.result.reason, '停止原因')
-    require_equal(case, list(case.actions), [event.data['control'] for event in report.events.events
-                                           if event.type == 'action'], '动作序列')
+    actual_actions = [event.data['control'] for event in report.events.events
+                      if event.type == 'action' and event.data.get('reason') not in case.ignored_action_reasons]
+    require_equal(case, list(case.actions), actual_actions, '动作序列')
     require_ordered(case, case.states, [item.base_page.value for item in report.observations], '画面顺序')
     actual_events = [event.type for event in report.events.events]
     require_ordered(case, case.event_types, actual_events, '事件顺序')
@@ -237,6 +244,20 @@ def run_case(case: ReplayCase, output: str | Path) -> ReplayReport:
 
 
 FULL_LOOP = 'captures/2026-11-20/key/'
+MANUAL_LOOP = 'captures/2026-11-23/key/'
+
+
+def manual_frames(*names: str) -> tuple[str, ...]:
+    return tuple(MANUAL_LOOP + name for name in names for _ in range(2))
+
+
+def manual_job_plan() -> ExecutionPlan:
+    compiled = compile_job((ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8'))
+    if compiled.plan is None:
+        raise ValueError(f'人工关键帧作业无法编译：{compiled.diagnostics}')
+    return compiled.plan
+
+
 CASES = (
     ReplayCase(
         name='full-loop',
@@ -252,7 +273,7 @@ CASES = (
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
             FULL_LOOP + 'repeat-dialog.png',
         ),
-        actions=('职阶筛选:berserker', '助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
+        actions=('助战卡片第2行', '开始任务', '攻击', '卡1', '卡2', '卡4', '战斗跳过',
                  '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('state_changed', 'action', 'action', 'action', 'finished'),
@@ -289,7 +310,7 @@ CASES = (
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
             FULL_LOOP + 'repeat-dialog.png',
         ),
-        actions=('职阶筛选:berserker', '助战卡片第2行', '开始任务', '从者1技能1', '攻击', '卡1', '卡2', '卡4',
+        actions=('助战卡片第2行', '开始任务', '从者1技能1', '攻击', '卡1', '卡2', '卡4',
                  '战斗跳过', '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'action', 'finished'),
@@ -320,11 +341,27 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 40.0),
-        actions=('职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '是', '助战卡片第2行'),
+        actions=('助战列表向下', '列表更新', '是', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
-        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
+        event_types=('action', 'action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='support-unknown-rows-bottom',
+        frames=(
+            *(('captures/2026-11-23/key/support-unknown-candidates.png',) * 6),
+            FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
+        actions=('助战列表向下', '列表更新', '是'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'warning', 'failed'),
         completed_runs=0,
     ),
     ReplayCase(
@@ -342,11 +379,11 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0),
-        actions=('职阶筛选:berserker', '助战列表回顶', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'),
+        actions=('助战列表向下', '列表更新', '关闭', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
-        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
+        event_types=('action', 'action', 'action', 'action', 'warning', 'failed'),
         completed_runs=0,
     ),
     ReplayCase(
@@ -515,7 +552,7 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
-        actions=('关闭', '职阶筛选:berserker', '助战卡片第2行'),
+        actions=('关闭', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
@@ -532,7 +569,7 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
-        actions=('结束', '职阶筛选:berserker', '助战卡片第2行'),
+        actions=('结束', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
@@ -548,7 +585,7 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
-        actions=('关闭', '职阶筛选:berserker', '助战卡片第2行'),
+        actions=('关闭', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
@@ -564,7 +601,7 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 32.0),
-        actions=('职阶筛选:berserker', '助战卡片第2行', '开始任务'),
+        actions=('助战卡片第2行', '开始任务'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'team', 'unknown'),
@@ -598,6 +635,66 @@ CASES = (
         actions=('结算推进', '结算推进', '下一步'),
         states=('result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'finished'),
+    ),
+    ReplayCase(
+        name='manual-full-loop',
+        frames=manual_frames(
+            'manual-support-01.png', 'manual-support-berserker-02.png', 'manual-support-berserker-03.png',
+            'manual-team-04.png', 'manual-w1-t1-start-05.png', 'manual-w1-t1-target2-06.png',
+            'manual-w1-t1-after-s3-07.png', 'manual-w1-t1-after-s1-08.png', 'manual-w1-t1-cards-09.png',
+            'manual-w2-t1-start-10.png', 'manual-w2-t1-after-support-s3-11.png',
+            'manual-w2-t1-after-support-s1-12.png', 'manual-w2-t1-after-oberon-s1-13.png',
+            'manual-w2-t1-cards-14.png', 'manual-w3-t1-start-15.png',
+            'manual-w3-t1-oberon-s2-target-16.png', 'manual-w3-t1-after-oberon-s2-17.png',
+            'manual-w3-t1-oberon-s3-target-18.png', 'manual-w3-t1-after-oberon-s3-19.png',
+            'manual-w3-t1-master-menu-20.png', 'manual-w3-t1-after-master-s1-21.png',
+            'manual-w3-t1-master-menu-s2-22.png', 'manual-w3-t1-master-s2-target-23.png',
+            'manual-w3-t1-after-master-s2-24.png', 'manual-w3-t1-cards-25.png',
+            'manual-result-26.png', 'manual-result-exp-27.png', 'manual-drops-28.png',
+            'manual-repeat-dialog-29.png',
+        ),
+        plan_factory=manual_job_plan,
+        actions=(
+            '职阶筛选:berserker', '助战列表向下', '助战卡片第2行', '开始任务',
+            '敌方2', '从者2技能3', '从者2技能1', '攻击', '宝具卡2', '卡4', '卡1',
+            '从者1技能3', '从者1技能1', '从者3技能1', '攻击', '卡4', '宝具卡1', '卡1',
+            '从者3技能2', '目标从者2', '从者3技能3', '目标从者2',
+            '御主技能', '御主技能1', '御主技能', '御主技能2', '目标从者2',
+            '攻击', '宝具卡2', '卡1', '卡3', '结算推进', '结算推进', '下一步',
+        ),
+        ignored_action_reasons=('skill_animation_skip', 'attack_animation_skip'),
+        states=('support', 'team', 'battle', 'card', 'result', 'drops', 'battle'),
+        event_types=('state_changed', 'action', 'finished'),
+    ),
+    ReplayCase(
+        name='manual-team-mystic-mismatch',
+        frames=(MANUAL_LOOP + 'manual-team-04.png', MANUAL_LOOP + 'manual-team-04.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: replace(manual_job_plan(), mystic_id='default'),
+        actions=(),
+        status=RunStatus.STOPPED,
+        reason='team_mismatch',
+        states=('team',),
+        event_types=('state_changed', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='manual-team-servant-mismatch',
+        frames=(MANUAL_LOOP + 'manual-team-04.png', MANUAL_LOOP + 'manual-team-04.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: replace(manual_job_plan(), formation=(
+            *manual_job_plan().formation[:2], replace(manual_job_plan().formation[2], svt_id=500800))),
+        actions=(), status=RunStatus.STOPPED, reason='team_mismatch', states=('team',),
+        event_types=('state_changed', 'failed'), completed_runs=0,
+    ),
+    ReplayCase(
+        name='manual-team-support-ce-mismatch',
+        frames=(MANUAL_LOOP + 'manual-team-04.png', MANUAL_LOOP + 'manual-team-04.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: replace(manual_job_plan(), formation=(
+            replace(manual_job_plan().formation[0], ce_id=9400480), *manual_job_plan().formation[1:])),
+        actions=(), status=RunStatus.STOPPED, reason='team_mismatch', states=('team',),
+        event_types=('state_changed', 'failed'), completed_runs=0,
     ),
 )
 
