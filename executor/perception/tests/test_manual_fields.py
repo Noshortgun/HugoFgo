@@ -51,6 +51,51 @@ class ManualFieldTest(unittest.TestCase):
         self.assertEqual(9403520, observation.field('team_support_ce').value)
         self.assertEqual('atlas-260', observation.field('team_mystic').value)
 
+    def test_crit_templates_cover_four_six_and_seven(self) -> None:
+        for name, expected in (
+            ('captures/2026-11-22/key/card-crit-50-60-100-40-30.png', (50, 60, 100, 40, 30)),
+            ('captures/2026-11-22/key/card-crit-40-100-70-30-40.png', (40, 100, 70, 30, 40)),
+            ('captures/2026-11-22/key/card-w3-t6.png', (10, 60, 100, 100, 40)),
+        ):
+            with self.subTest(expected=expected):
+                observation = self.read_fields(name, 'crit')
+                self.assertEqual(expected, observation.field('crit').value)
+
+    def test_np_templates_cover_two_three_and_five_through_nine(self) -> None:
+        for name, expected in (
+            ('captures/2026-11-20/key/battle-wave1.png', (20, 20, 20)),
+            ('captures/2026-11-22/key/card-crit-40-100-70-30-40.png', (107, 114, 43)),
+            ('captures/2026-11-23/key/manual-w2-t1-cards-14.png', (140, 59, 80)),
+            ('captures/2026-11-23/key/card-np-12-94-60.png', (12, 94, 60)),
+            ('captures/2026-11-22/key/card-np-114-74-43.png', (114, 74, 43)),
+            ('captures/2026-11-22/key/card-np-154-89-43.png', (154, 89, 43)),
+            ('captures/2026-11-22/key/card-w3-t6.png', (154, 110, 43)),
+        ):
+            with self.subTest(expected=expected):
+                observation = self.read_fields(name, 'np')
+                self.assertEqual(expected, observation.field('np').value)
+
+    def test_turn_templates_cover_four_through_seven(self) -> None:
+        for name, wave, turn in (
+            ('captures/2026-11-22/key/battle-w2-t4.png', 2, 4),
+            ('captures/2026-11-22/key/battle-w3-t5.png', 3, 5),
+            ('captures/2026-11-22/key/battle-w3-t6.png', 3, 6),
+            ('captures/2026-11-22/key/battle-w3-t7.png', 3, 7),
+        ):
+            with self.subTest(wave=wave, turn=turn):
+                observation = self.read_fields(name, 'wave', 'turn')
+                self.assertEqual(wave, observation.field('wave').value)
+                self.assertEqual(turn, observation.field('turn').value)
+
+    def test_all_cards_can_read_three_digit_crit_rates(self) -> None:
+        observation = self.read_fields('manual-w3-t1-cards-25.png', 'crit')
+        self.assertEqual((100, 100, 100, 100, 100), observation.field('crit').value)
+
+    def test_missing_crit_numbers_stay_uncertain(self) -> None:
+        observation = self.read_fields('manual-w1-t1-cards-09.png', 'crit')
+        self.assertIsNone(observation.field('crit').value)
+        self.assertEqual('uncertain', observation.field('crit').status.value)
+
     def test_support_page_reads_selected_class(self) -> None:
         perception = Perception()
         try:

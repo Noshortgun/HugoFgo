@@ -492,6 +492,46 @@
         104
       ]
     },
+    "turn/4": {
+      "file": "digits/turn-4.png",
+      "source": "captures/2026-11-22/key/battle-w2-t4.png",
+      "box": [
+        905,
+        87,
+        918,
+        104
+      ]
+    },
+    "turn/5": {
+      "file": "digits/turn-5.png",
+      "source": "captures/2026-11-22/key/battle-w3-t5.png",
+      "box": [
+        906,
+        87,
+        918,
+        104
+      ]
+    },
+    "turn/6": {
+      "file": "digits/turn-6.png",
+      "source": "captures/2026-11-22/key/battle-w3-t6.png",
+      "box": [
+        905,
+        86,
+        918,
+        104
+      ]
+    },
+    "turn/7": {
+      "file": "digits/turn-7.png",
+      "source": "captures/2026-11-22/key/battle-w3-t7.png",
+      "box": [
+        907,
+        87,
+        919,
+        104
+      ]
+    },
     "np/0": {
       "file": "digits/np-0.png",
       "source": "captures/2026-11-23/key/manual-w1-t1-after-s3-07.png",
@@ -500,6 +540,16 @@
         661,
         269,
         675
+      ]
+    },
+    "np/0-dim": {
+      "file": "digits/np-0-dim.png",
+      "source": "captures/2026-11-22/key/card-crit-40-100-70-30-40.png",
+      "box": [
+        245,
+        660,
+        256,
+        676
       ]
     },
     "np/1": {
@@ -512,6 +562,36 @@
         675
       ]
     },
+    "np/1-dim": {
+      "file": "digits/np-1-dim.png",
+      "source": "captures/2026-11-22/key/card-crit-40-100-70-30-40.png",
+      "box": [
+        235,
+        661,
+        242,
+        675
+      ]
+    },
+    "np/2": {
+      "file": "digits/np-2.png",
+      "source": "captures/2026-11-20/key/battle-wave1.png",
+      "box": [
+        245,
+        661,
+        255,
+        675
+      ]
+    },
+    "np/3": {
+      "file": "digits/np-3.png",
+      "source": "captures/2026-11-22/key/card-crit-40-100-70-30-40.png",
+      "box": [
+        894,
+        660,
+        905,
+        676
+      ]
+    },
     "np/4": {
       "file": "digits/np-4.png",
       "source": "captures/2026-11-23/key/manual-w1-t1-after-s3-07.png",
@@ -520,6 +600,56 @@
         661,
         255,
         675
+      ]
+    },
+    "np/5": {
+      "file": "digits/np-5.png",
+      "source": "captures/2026-11-23/key/manual-w2-t1-cards-14.png",
+      "box": [
+        564,
+        661,
+        575,
+        676
+      ]
+    },
+    "np/6": {
+      "file": "digits/np-6.png",
+      "source": "captures/2026-11-23/key/card-np-12-94-60.png",
+      "box": [
+        879,
+        660,
+        890,
+        676
+      ]
+    },
+    "np/7": {
+      "file": "digits/np-7.png",
+      "source": "captures/2026-11-22/key/card-crit-40-100-70-30-40.png",
+      "box": [
+        259,
+        661,
+        269,
+        675
+      ]
+    },
+    "np/8": {
+      "file": "digits/np-8.png",
+      "source": "captures/2026-11-23/key/manual-w2-t1-cards-14.png",
+      "box": [
+        880,
+        660,
+        891,
+        676
+      ]
+    },
+    "np/9": {
+      "file": "digits/np-9.png",
+      "source": "captures/2026-11-23/key/manual-w2-t1-cards-14.png",
+      "box": [
+        576,
+        660,
+        587,
+        676
       ]
     },
     "crit/0": {
@@ -562,6 +692,16 @@
         382
       ]
     },
+    "crit/4": {
+      "file": "digits/crit-4.png",
+      "source": "captures/2026-11-22/key/card-crit-50-60-100-40-30.png",
+      "box": [
+        858,
+        371,
+        872,
+        385
+      ]
+    },
     "crit/5": {
       "file": "digits/crit-5.png",
       "source": "captures/2026-11-19-ember/key/10-np-card-select.png",
@@ -570,6 +710,26 @@
         362,
         616,
         377
+      ]
+    },
+    "crit/6": {
+      "file": "digits/crit-6.png",
+      "source": "captures/2026-11-22/key/card-crit-50-60-100-40-30.png",
+      "box": [
+        342,
+        370,
+        360,
+        385
+      ]
+    },
+    "crit/7": {
+      "file": "digits/crit-7.png",
+      "source": "captures/2026-11-22/key/card-crit-40-100-70-30-40.png",
+      "box": [
+        600,
+        368,
+        618,
+        382
       ]
     },
     "crit/8": {

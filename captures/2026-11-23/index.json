@@ -616,6 +616,11 @@
     {
       "file": "key/skill1-cooldown.png",
       "state": "补用从者2技能1后的战斗页；该技能显示剩余5，用于比较动作前后图标外观"
+    },
+    {
+      "file": "key/card-np-12-94-60.png",
+      "state": "scrcpy 实机运行末帧；NP 12/94/60，用于 NP 6 模板与 2/6/9 交叉验证",
+      "expectedFields": {"np": [12, 94, 60]}
     }
   ]
 }

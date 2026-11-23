@@ -6,7 +6,7 @@
     "density": 280
   },
   "capturedAt": "2026-11-22",
-  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880、run-1795291320461-33880、run-1795293140147-4220 与 run-1795319937606-41448 与 run-1795328277192-41448",
+  "source": "实机验收失败证据 logs/farm/run-1795291055215-33880、run-1795291320461-33880、run-1795293140147-4220 与 run-1795319937606-41448 与 run-1795328277192-41448；#41 留出集 logs/holdout/ 与感知监控 logs/perception-monitor/ 的数字模板来源帧",
   "keyFrames": [
     {
       "file": "key/support-refresh-cooldown.png",
@@ -27,6 +27,51 @@
     {
       "file": "key/ap-recovery-confirm-bronze.png",
       "state": "青铜果实 AP 恢复数量确认弹窗（取消/决定可点，道具为青铜果实）"
+    },
+    {
+      "file": "key/card-crit-50-60-100-40-30.png",
+      "state": "指令卡暴击率 50/60/100/40/30；来源 logs/perception-monitor/20261122-221354-140835.png，用于数字模板 4 与 6",
+      "expectedFields": {"crit": [50, 60, 100, 40, 30]}
+    },
+    {
+      "file": "key/card-crit-40-100-70-30-40.png",
+      "state": "留出集 card_w1_t2_with_np；暴击率 40/100/70/30/40，NP 107/114/43，用于暴击率 7 与 NP 3/7 模板",
+      "expectedFields": {"crit": [40, 100, 70, 30, 40], "np": [107, 114, 43]}
+    },
+    {
+      "file": "key/card-w3-t6.png",
+      "state": "留出集 card_w3_t6；暴击率 10/60/100/100/40，NP 154/110/43，作为未参与模板制作的交叉验证帧",
+      "expectedFields": {"crit": [10, 60, 100, 100, 40], "np": [154, 110, 43]}
+    },
+    {
+      "file": "key/card-np-114-74-43.png",
+      "state": "留出集 card_w2_t4_with_np；NP 114/74/43，作为未参与模板制作的交叉验证帧",
+      "expectedFields": {"np": [114, 74, 43]}
+    },
+    {
+      "file": "key/card-np-154-89-43.png",
+      "state": "留出集 card_w3_t5；NP 154/89/43，作为未参与模板制作的交叉验证帧",
+      "expectedFields": {"np": [154, 89, 43]}
+    },
+    {
+      "file": "key/battle-w2-t4.png",
+      "state": "留出集 battle_w2_t4_stable；第 2 面累计第 4 回合",
+      "expectedFields": {"wave": 2, "turn": 4}
+    },
+    {
+      "file": "key/battle-w3-t5.png",
+      "state": "留出集 battle_w2_t5（人工备注实际第 3 面第 5 回合）",
+      "expectedFields": {"wave": 3, "turn": 5}
+    },
+    {
+      "file": "key/battle-w3-t6.png",
+      "state": "留出集 battle_w3_t6；第 3 面累计第 6 回合",
+      "expectedFields": {"wave": 3, "turn": 6}
+    },
+    {
+      "file": "key/battle-w3-t7.png",
+      "state": "留出集 battle_w3_t7；第 3 面累计第 7 回合",
+      "expectedFields": {"wave": 3, "turn": 7}
     }
   ]
 }

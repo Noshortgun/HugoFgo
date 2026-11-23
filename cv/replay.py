@@ -2006,6 +2006,41 @@ def check_manual_key_frames():
         add_report('perception:legacy-card-crit', path, expected, actual, 'observe',
                    '二十、三十与五十暴击率数字模板',
                    actual == expected and image_fields_ok(observation, cached))
+
+        cases = [
+            ('perception:crit-digits-4-6', 'card-crit-50-60-100-40-30.png', '2026-11-22',
+             ('crit',), (50, 60, 100, 40, 30)),
+            ('perception:crit-digit-7', 'card-crit-40-100-70-30-40.png', '2026-11-22',
+             ('crit',), (40, 100, 70, 30, 40)),
+            ('perception:crit-cross-validation', 'card-w3-t6.png', '2026-11-22',
+             ('crit',), (10, 60, 100, 100, 40)),
+            ('perception:np-digit-2', 'battle-wave1.png', '2026-11-20', ('np',), (20, 20, 20)),
+            ('perception:np-digits-3-7', 'card-crit-40-100-70-30-40.png', '2026-11-22',
+             ('np',), (107, 114, 43)),
+            ('perception:np-digits-5-8-9', 'manual-w2-t1-cards-14.png', '2026-11-23',
+             ('np',), (140, 59, 80)),
+            ('perception:np-digit-6', 'card-np-12-94-60.png', '2026-11-23', ('np',), (12, 94, 60)),
+            ('perception:np-cross-114-74-43', 'card-np-114-74-43.png', '2026-11-22',
+             ('np',), (114, 74, 43)),
+            ('perception:np-cross-154-89-43', 'card-np-154-89-43.png', '2026-11-22',
+             ('np',), (154, 89, 43)),
+            ('perception:np-cross-154-110-43', 'card-w3-t6.png', '2026-11-22',
+             ('np',), (154, 110, 43)),
+            ('perception:turn-digit-4', 'battle-w2-t4.png', '2026-11-22', ('wave', 'turn'), (2, 4)),
+            ('perception:turn-digit-5', 'battle-w3-t5.png', '2026-11-22', ('wave', 'turn'), (3, 5)),
+            ('perception:turn-digit-6', 'battle-w3-t6.png', '2026-11-22', ('wave', 'turn'), (3, 6)),
+            ('perception:turn-digit-7', 'battle-w3-t7.png', '2026-11-22', ('wave', 'turn'), (3, 7)),
+            ('perception:crit-all-100', 'manual-w3-t1-cards-25.png', '2026-11-23',
+             ('crit',), (100, 100, 100, 100, 100)),
+            ('perception:crit-no-digits', 'manual-w1-t1-cards-09.png', '2026-11-23', ('crit',), None),
+        ]
+        for report_name, filename, date, fields, expected in cases:
+            path, observation, cached = observe(filename, fields, root=ROOT / 'captures' / date / 'key')
+            actual = tuple(observation.field(name).value for name in fields)
+            expected_values = (expected,) if len(fields) == 1 else expected
+            add_report(report_name, path, expected_values, actual, 'observe',
+                       '真实帧数字模板与同帧缓存',
+                       actual == expected_values and image_fields_ok(observation, cached))
     finally:
         perception.close()
 
