@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HugoFgo 实机验证监控</title>
+  <link rel="stylesheet" href="/live_monitor.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">HF</div>
+    <div>
+      <h1>HugoFgo 实机验证监控</h1>
+      <p>关键帧 · 图像识别 · 真实决策 · 逐面审计</p>
+    </div>
+  </div>
+  <div class="run-controls">
+    <span id="status" class="status ready">准备就绪</span>
+    <button id="start" class="primary">开始实机验证</button>
+    <button id="stop" class="secondary" disabled>停止</button>
+  </div>
+</header>
+
+<main>
+  <section class="run-meta">
+    <div><span>通道</span><strong>scrcpy · <span id="serial">emulator-5554</span></strong></div>
+    <div><span>作业</span><strong id="job-name">娄希、娄希、奥伯龙</strong></div>
+    <div class="wide"><span>运行目录</span><strong id="run-dir">尚未开始（当前为演示帧）</strong></div>
+    <button id="latest" class="link">回到实时帧</button>
+  </section>
+
+  <section class="hero-grid">
+    <div class="frame-column">
+      <div class="frame-shell">
+        <div class="frame-topline">
+          <span id="frame-label">实时关键帧</span>
+          <span id="revision">等待画面</span>
+        </div>
+        <img id="frame" src="/frame.jpg" alt="当前识别关键帧">
+      </div>
+      <div class="decision-card">
+        <div class="section-title"><span>当前决策</span><span id="decision-time">—</span></div>
+        <h2 id="decision-control">尚未执行动作</h2>
+        <p id="decision-reason">监控已就绪，开始实机验证后显示真实执行动作。</p>
+        <div id="decision-tags" class="tags"></div>
+      </div>
+      <div class="kpis">
+        <div><span>画面</span><strong id="page">—</strong></div>
+        <div><span>面 / 回合</span><strong id="progress">—</strong></div>
+        <div><span>动作序号</span><strong id="action-index">—</strong></div>
+        <div><span>字段耗时</span><strong id="field-ms">—</strong></div>
+        <div><span>字段缓存</span><strong id="field-cache">—</strong></div>
+      </div>
+      <section class="history-section">
+        <div class="section-title"><span>关键帧时间线</span><span id="history-count">0 帧</span></div>
+        <div id="history" class="history"></div>
+      </section>
+    </div>
+
+    <aside class="inspector">
+      <section class="panel">
+        <div class="section-title"><span>字段识别</span><span>状态 / 值 / 置信度</span></div>
+        <div id="fields" class="fields"></div>
+      </section>
+      <section class="panel controls-panel">
+        <div class="section-title"><span>控件与身份</span><span id="control-count">0</span></div>
+        <div id="controls" class="controls"></div>
+      </section>
+      <section class="panel stats-panel">
+        <div class="section-title"><span>识别统计</span><span>读取 / 缓存</span></div>
+        <div id="stats" class="stats"></div>
+      </section>
+    </aside>
+  </section>
+
+  <section class="events-section panel">
+    <div class="section-title"><span>真实事件流</span><span>最新在后</span></div>
+    <div id="events" class="events"></div>
+  </section>
+
+  <footer>
+    <span>绿色控件 = 可执行；灰框 = 不可执行；青框 = 面/回合；黄框 = NP；紫框 = 暴击率。</span>
+    <span>仅本机 127.0.0.1 可访问 · 开始按钮之前不连接设备</span>
+  </footer>
+</main>
+<script src="/live_monitor.js"></script>
+</body>
+</html>
