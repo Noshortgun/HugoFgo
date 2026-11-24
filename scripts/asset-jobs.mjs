@@ -28,6 +28,9 @@ export function servantAssetJobs(servant) {
       add('cards.ascension', assets.charaGraph?.ascension?.[String(stage)], `data/assets/atlas/cards/${servant.id}-${stage}.png`);
     }
   }
+  for (const [costume, url] of Object.entries(assets.faces?.costume ?? {})) {
+    add('faces.costume', url, `data/assets/atlas/faces/${servant.id}-costume-${costume}.png`);
+  }
   for (const [stage, url] of Object.entries(assets.commands?.ascension ?? {})) {
     add('commands.ascension', url, `data/assets/atlas/commands/${servant.id}/${stage}.png`);
   }

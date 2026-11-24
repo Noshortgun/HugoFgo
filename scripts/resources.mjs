@@ -314,7 +314,10 @@ if (command === 'self-test') {
     servants: [{
       id: 1,
       extraAssets: {
-        faces: { ascension: { 1: 'https://example.test/face.png' } },
+        faces: {
+          ascension: { 1: 'https://example.test/face.png' },
+          costume: { 101: 'https://example.test/costume-face.png' },
+        },
         commands: { ascension: { 1: 'https://example.test/command.png', 2: 'https://example.test/command2.png' } },
       },
       skills: [{ icon: 'https://example.test/skill.png' }, { icon: 'https://example.test/skill.png' }],
@@ -324,6 +327,10 @@ if (command === 'self-test') {
   });
   const categories = countAssetCategories(jobs);
   assert.equal(categories['faces.ascension'], 1);
+  assert.equal(categories['faces.costume'], 1);
+  assert.ok(jobs.some((job) => job.category === 'faces.costume'
+    && job.file === 'data/assets/atlas/faces/1-costume-101.png'
+    && job.url === 'https://example.test/costume-face.png'));
   assert.equal(categories['commands.ascension'], 2);
   assert.equal(categories['skills.servant'], 1);
   assert.equal(categories.classes, 15);

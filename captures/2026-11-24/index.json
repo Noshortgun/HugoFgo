@@ -1,0 +1,43 @@
+{
+  "device": {
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-24",
+  "source": "scrcpy 实机故障回归 logs/farm/run-1795492984431-30616/；队伍页停止帧",
+  "keyFrames": [
+    {
+      "file": "key/live-team-merlin-costume.png",
+      "state": "队伍确认页；第二位梅林使用灵衣 500830，其余先发从者与御主礼装符合作业",
+      "expectedObservation": {
+        "activeServants": [
+          {"slot": 0, "svtId": 2300900, "support": false},
+          {"slot": 1, "svtId": 500800, "support": false},
+          {"slot": 2, "svtId": 604200, "support": true}
+        ],
+        "mysticId": "atlas-40"
+      },
+      "expectedAction": {
+        "kind": "start_battle",
+        "x": 1165,
+        "y": 672
+      },
+      "observedObservation": {
+        "activeServants": [
+          {"slot": 0, "svtId": 2300900, "support": false},
+          {"slot": 1, "svtId": 500800, "support": false},
+          {"slot": 2, "svtId": 604200, "support": true}
+        ],
+        "mysticId": "atlas-40"
+      },
+      "observedAction": {
+        "kind": "start_battle",
+        "x": 1165,
+        "y": 672
+      },
+      "match": true
+    }
+  ]
+}

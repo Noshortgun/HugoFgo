@@ -258,6 +258,17 @@ def manual_job_plan() -> ExecutionPlan:
     return compiled.plan
 
 
+def costume_team_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    formation = (
+        FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900, role='Moon Cancer'),
+        FormationSlotPlan(slot=1, name='梅林', svt_id=500800, role='Caster'),
+        FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, role='Assassin',
+                          support=True, support_required=True),
+    )
+    return replace(plan, mystic_id='atlas-40', formation=formation)
+
+
 CASES = (
     ReplayCase(
         name='full-loop',
@@ -700,6 +711,23 @@ CASES = (
         ignored_action_reasons=('skill_animation_skip', 'attack_animation_skip'),
         states=('support', 'team', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('state_changed', 'action', 'finished'),
+    ),
+    ReplayCase(
+        name='costume-team-start',
+        frames=(
+            'captures/2026-11-24/key/live-team-merlin-costume.png',
+            'captures/2026-11-24/key/live-team-merlin-costume.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 32.0),
+        plan_factory=costume_team_plan,
+        actions=('开始任务',),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('team', 'unknown'),
+        event_types=('state_changed', 'action', 'warning', 'failed'),
+        completed_runs=0,
     ),
     ReplayCase(
         name='manual-team-mystic-mismatch',
