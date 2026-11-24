@@ -57,7 +57,7 @@
 - **观察内容**：基页、版式变体、覆盖层、控件、字段状态、帧哈希与证据。`unknown / loading` 不输出可行动控件。
 - **字段状态**：`not_applicable / not_read / uncertain / confirmed`，区分“不需要读”和“读取失败”。
 - **耗时与缓存**：观察证据记录本次数字识别的 `field_ms` 与 `field_cache_hit`；`Perception.stats()` 汇总普通读帧和字段读取的耗时、读取次数与缓存命中，并随 `RunResult` 写入运行目录的 `result.json`。
-- **中间态**：攻击/技能/换人动画归为 `battle + animation`；结算分 `bond / exp / loot`。被模态覆盖层或目标选择变体盖住时，不输出基页控件。单帧出现两个及以上宝具区域时，执行器要求连续两帧一致证据，避免技能特效被当成额外宝具卡。固定作业技能按顺序点击并以至少 1.5 秒动作间隔推进，不检测冷却或技能动画；定向技能仍等待目标面板，攻击仍等待选卡页，补刀保留完整感知。
+- **中间态**：攻击/技能/换人动画归为 `battle + animation`；结算分 `bond / exp / loot`。被模态覆盖层或目标选择变体盖住时，不输出基页控件。单帧出现两个及以上宝具区域时，执行器要求连续两帧一致证据，避免技能特效被当成额外宝具卡。所有从者技能与御主技能先完成所需目标选择，在动作后新画面最多点击一次空白加速，再等待连续两个战斗可操作新帧才推进；不使用固定 1.5 秒等待，不检测冷却、NP 或技能实际生效。自身目标技能遇到尚未反映动作的旧可操作帧时不得提前加速，以免越过随后出现的目标面板；若加速后才出现目标面板，则安全停止，不再执行乱序目标选择或第二次加速。攻击仍等待选卡页，补刀保留完整感知。
 - **当前限制**：只有国服识别配置；面/回合/暴击率已有指定人工帧的数字模板断言，但模板只覆盖已采集字形，完整留出集和修复后实机验收未完成。
 
 ### 2.4 执行器核心 Executor
@@ -68,8 +68,8 @@
 
 ### 2.5 运行会话 Run Session
 
-- **接口**：事件出口 + `RunControl.stop()`；产出运行目录与历史记录。
-- **实现**：动作日志、失败截图、状态快照、结果分类、历史索引。
+- **接口**：事件出口 + `RunControl.stop()`；产出运行目录与历史记录。`write_run_summary(运行目录)` 生成中文动作摘要，`python -m executor.session.summary <运行目录> [--job <作业>]` 为既有运行重新生成。
+- **实现**：动作日志、失败截图、状态快照、结果分类、历史索引、作业/执行计划快照与中文摘要。摘要按场、面、回合和动作整理，使用作业名称与相对耗时，分别标注已点击、画面确认与没有独立生效确认；原始 `events.jsonl` 不改写，证据不足时不推断结果。
 - **停止语义**：收到停止后在当前动作边界结束。壳最多等待终端事件 30 秒，超时才强制终止进程树并记录异常停止。
 
 ### 2.6 壳 Shell
@@ -118,6 +118,7 @@ python -m executor <job.json> \
 python -m executor.domain <job.json> [--json]          # 校验与编译
 python -m executor.perception <截图> [--ready] [--json] # 单帧感知
 python -m executor.replay [--only <名称> ...]           # 执行器回放
+python -m executor.session.summary <运行目录> [--job <作业.json>] # 重新生成中文动作摘要
 python -m executor.device --self-test                  # 设备自检
 ```
 
@@ -232,7 +233,10 @@ const state = await invoke('start_run', {
 
 | 文件 | 内容 |
 | --- | --- |
-| `events.jsonl` | 完整事件流 |
+| `events.jsonl` | 完整事件流；生成摘要不会改写 |
+| `summary.md` | 按场、面、回合与动作组织的中文摘要，区分输入、画面确认与没有独立生效确认 |
+| `job.json` | CLI 启动时保存的原始作业快照（成功读取作业后） |
+| `plan.json` | 核心执行器写证据时保存的执行计划快照，供独立重新生成摘要 |
 | `result.json` | 状态、原因、进度、作业、设备、起止时间、最后观察与失败帧路径 |
 | `observation.json` | 最后一帧感知结果 |
 | `final.png` / `final.bgr24` | 完成或停止时的最后一帧（可用时） |
@@ -250,6 +254,7 @@ const state = await invoke('start_run', {
 - `executor.device.open_device(config)`：打开设备适配器。
 - `executor.perception.Perception.read(frame)` / `read_fields(...)`：单帧感知。
 - `executor.session.JsonlEventSink` / `MemoryEventSink` / `RunControl`：事件与停止控制。
+- `executor.session.summary.write_run_summary(directory, job_path=None, plan=None)`：生成或重新生成中文动作摘要。
 
 ## 4. 存储布局
 

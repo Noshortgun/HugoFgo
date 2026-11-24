@@ -23,7 +23,6 @@ NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
 COMMAND_CARD_INTERVAL_SECONDS = 0.2
-JOB_ACTION_INTERVAL_SECONDS = 1.5
 SUPPORT_CLASS_TAB_POINTS = {
     'saber': (161, 128), 'archer': (227, 128), 'lancer': (295, 128),
     'rider': (362, 128), 'caster': (430, 128), 'assassin': (497, 128), 'berserker': (565, 128),
@@ -235,6 +234,9 @@ class Runner:
         self.pending_frame_hash: str | None = None
         self.pending_stage = 'page'
         self.pending_skill_skip = False
+        self.pending_skill_recovery = False
+        self.pending_skill_ready_seen = False
+        self.skill_animation_skipped = False
         self.pending_recovery_control: str | None = None
         self.pending_recovery_used = False
         self.pending_variant: Variant | None = None
@@ -281,7 +283,6 @@ class Runner:
         self.fallback_mode = False
         self.startup = True
         self.battle_since: float | None = None
-        self.last_skill_at: float | None = None
         self.team_since: float | None = None
         self.support_stage = 'idle'
         self.support_class_selected = False
@@ -394,17 +395,20 @@ class Runner:
         self.pending_overlay = None
         self.pending_stage = 'page'
         self.pending_skill_skip = False
+        self.pending_skill_recovery = False
+        self.pending_skill_ready_seen = False
         self.pending_recovery_control = None
         self.pending_recovery_used = False
 
     def wait_for_page(self, page: BasePage, now: float) -> None:
         self.wait_for_pages(now, page)
 
-    def wait_for_job_action(self, now: float) -> None:
+    def wait_for_job_action(self, now: float, *, skill: bool = False) -> None:
         self.confirming_job_action = True
         self.wait_for_page(BasePage.BATTLE, now)
         self.pending_stage = 'battle_ready'
-        self.pending_skill_skip = True
+        self.pending_skill_skip = not (skill and self.skill_animation_skipped)
+        self.pending_skill_recovery = skill
 
     def fallback_tap(self, observation: Observation, now: float, control: str,
                      x: int, y: int, reason: str) -> bool:
@@ -655,12 +659,6 @@ class Runner:
             self.wait_for_job_action(now)
         return None
 
-    def wait_skill_interval(self, now: float) -> None:
-        if self.last_skill_at is not None:
-            remaining = JOB_ACTION_INTERVAL_SECONDS - (now - self.last_skill_at)
-            if remaining > 0:
-                time.sleep(remaining)
-
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
             if self.tap_action(observation, '攻击', now):
@@ -709,7 +707,7 @@ class Runner:
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
             if self.tap_action(observation, name, now):
-                self.last_skill_at = now
+                self.skill_animation_skipped = False
                 if action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
                     self.target_selection_since = now
@@ -726,9 +724,9 @@ class Runner:
                     if self.optional_target:
                         self.pending_stage = 'battle_ready'
                         self.pending_skill_skip = True
+                        self.pending_skill_recovery = True
                 else:
-                    self.wait_skill_interval(now)
-                    self.progress.action_index += 1
+                    self.wait_for_job_action(now, skill=True)
             return None
         if self.tap_action(observation, '攻击', now):
             self.attack_submitted_at = self.last_input_finished_at
@@ -1287,22 +1285,42 @@ class Runner:
                 if (self.pending_skill_skip and self.pending_stage == 'battle_ready'
                         and page is BasePage.BATTLE and not observation.overlays
                         and Variant.SKILL_TARGET not in observation.variants
-                        and observation.frame_hash != self.pending_frame_hash):
+                        and observation.frame_hash != self.pending_frame_hash
+                        and not (self.optional_target and self.battle_controls_ready(observation))):
                     x, y = BATTLE_SKIP_POINT
                     self.tap_point(observation, now, '战斗跳过', x, y, 'skill_animation_skip')
                     self.pending_skill_skip = False
+                    if self.pending_skill_recovery:
+                        self.skill_animation_skipped = True
                     time.sleep(self.options.poll_interval)
                     continue
+                if (self.pending_skill_recovery and self.optional_target and self.skill_animation_skipped
+                        and Variant.SKILL_TARGET in observation.variants):
+                    self.emit('failed', now, reason='skill_target_after_animation_skip',
+                              wave=self.progress.wave, turn=self.progress.turn,
+                              action_index=self.progress.action_index)
+                    return self.result(RunStatus.STOPPED, 'skill_target_after_animation_skip')
                 if (self.awaiting_attack_end and page is BasePage.BATTLE
                         and Variant.BATTLE_ANIMATION not in observation.variants):
                     observation = self.perception.read_fields(
                         frame, ('wave', 'turn'), timeout=self.options.page_timeout)
                     self.record_observation(frame, observation)
+                skill_recovery_confirmed = True
+                if (self.pending_skill_recovery and self.pending_stage == 'battle_ready'
+                        and not self.pending_skill_skip):
+                    if self.battle_ready(observation):
+                        skill_recovery_confirmed = self.pending_skill_ready_seen
+                        self.pending_skill_ready_seen = True
+                    else:
+                        self.pending_skill_ready_seen = False
                 confirmed = (page in self.pending_pages
                              and observation.frame_hash != self.pending_frame_hash
+                             and skill_recovery_confirmed
                              and (self.pending_variant is None or self.pending_variant in observation.variants)
                              and (self.pending_overlay is None or self.pending_overlay in observation.overlays)
                              and (self.pending_stage != 'battle_ready' or self.battle_ready(observation)
+                                  or (self.optional_target and Variant.SKILL_TARGET in observation.variants))
+                             and (not self.pending_skill_recovery or not self.pending_skill_skip
                                   or (self.optional_target and Variant.SKILL_TARGET in observation.variants))
                              and not (page is BasePage.BATTLE
                                       and Variant.BATTLE_ANIMATION in observation.variants))
@@ -1355,6 +1373,8 @@ class Runner:
                     self.pending_frame_hash = None
                     self.pending_stage = 'page'
                     self.pending_skill_skip = False
+                    self.pending_skill_recovery = False
+                    self.pending_skill_ready_seen = False
                     self.pending_recovery_control = None
                     self.pending_recovery_used = False
                     self.pending_variant = None
@@ -1373,8 +1393,6 @@ class Runner:
                         self.run_settled = False
                         self.starting_next_run = False
                         self.result_seen = False
-                    if self.optional_target:
-                        self.wait_skill_interval(now)
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False
@@ -1423,6 +1441,7 @@ class Runner:
                 if self.tap_action(observation, f'御主技能{action.skill + 1}', now):
                     self.master_action = None
                     self.pending_master_action = True
+                    self.skill_animation_skipped = False
                     if action.player_target_slot is not None:
                         self.job_target_slot = action.player_target_slot
                         self.target_selection_since = now
@@ -1434,11 +1453,7 @@ class Runner:
                         self.pending_recovery_used = False
                         self.pending_stage = 'skill_target'
                     else:
-                        time.sleep(JOB_ACTION_INTERVAL_SECONDS)
-                        self.progress.action_index += 1
-                        self.wait_for_page(BasePage.BATTLE, now)
-                        self.pending_stage = 'battle_ready'
-                        self.pending_skill_skip = True
+                        self.wait_for_job_action(now, skill=True)
             elif self.job_target_slot is not None:
                 if self.job_target_slot not in self.active_slots:
                     self.emit('failed', now, reason='target_unavailable', slot=self.job_target_slot)
@@ -1447,8 +1462,7 @@ class Runner:
                 if self.tap_action(observation, f'目标从者{position}', now):
                     self.job_target_slot = None
                     self.target_selection_since = None
-                    time.sleep(JOB_ACTION_INTERVAL_SECONDS)
-                    self.wait_for_job_action(now)
+                    self.wait_for_job_action(now, skill=True)
             elif page is BasePage.BATTLE:
                 result = self.handle_battle(observation, now)
                 if result is not None:

@@ -40,6 +40,7 @@ node scripts/check-references.mjs
 npm run fixtures:check
 npm run replay
 npm run issues:selftest
+python -m executor.session.summary <运行目录> [--job <作业.json>]
 ```
 
 Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scripts/python.exe`；macOS / Linux 使用 `cv/.venv/bin/python`。
@@ -51,6 +52,8 @@ Windows 下如未激活虚拟环境，把上述 `python` 替换为 `cv/.venv/Scr
 `battle_performance.py` 同时兼容旧逐卡日志和新批量日志：选卡间隔统计同回合相邻三卡提交（含宝具卡），攻击到首卡统计攻击输入到本次首张选卡输入；不统计选卡后的攻击动画或结算。中位数门槛为 450 ms、1000 ms，只有存在样本且两者都达标时 `timing_thresholds_pass` 才为真。初始批次若发生恢复或未确认，不计入无恢复成功数，报告保留逐批次结果。`--enforce-thresholds` 只把这两个时间门槛转为退出码，不代表完整实机验收或默认通道资格。
 
 `python scripts/live_action_audit.py <运行目录> <作业.json>` 使用与执行器相同的作业编译和卡请求展开结果，逐场逐面逐回合核对控件、固定普通卡身份/顺序与宝具槽位/卡位；旧日志若没有选卡身份字段，会因证据不足而不能通过固定卡序审计。
+
+每次运行自动生成 `summary.md`，上述 summary CLI 只为既有目录重新生成。测试覆盖正常完成、手动停止、非法作业与进程失败、真实 0.361 秒过早技能输入，以及动作名称、相对时间、画面确认、未执行动作和缺失事件；重新生成前后必须核对原始 `events.jsonl` 未改变。摘要只表述输入与画面证据，不作为技能或动作已在游戏内生效的验收证据。
 
 ### 有边界的冒烟与感知就绪检查
 

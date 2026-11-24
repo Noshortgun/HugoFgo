@@ -10,6 +10,7 @@ from executor.device.base import Device, DeviceError, Frame, FrameFormat
 from executor.domain import ExecutionPlan
 from executor.perception import Observation
 from executor.session.events import EventSink, JsonlEventSink, RunEvent
+from executor.session.summary import write_run_summary
 
 if TYPE_CHECKING:
     from executor.core.model import RunResult
@@ -128,4 +129,5 @@ class RunEvidence:
             'recent_events': self.recent_events,
         })
         self.close()
+        write_run_summary(self.directory, plan=self.plan)
         return replace(result, evidence_dir=str(self.directory))

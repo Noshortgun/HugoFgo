@@ -57,6 +57,10 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual('finished', types[-1])
             self.assertEqual(1, rows[-1]['data']['completed_runs'])
             self.assertTrue((run_dir / 'events.jsonl').is_file())
+            summary = (run_dir / 'summary.md').read_text(encoding='utf-8')
+            self.assertIn('运行状态：正常完成', summary)
+            self.assertIn('完成场数：1', summary)
+            self.assertIn('阿尔托莉雅', summary)
 
     def test_completed_run_appends_a_persistent_history_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -104,6 +108,9 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual('stopped', record['result'])
             self.assertEqual('manual_stop', record['reason'])
             self.assertIsNone(record['error'])
+            summary = (Path(directory) / 'logs/farm/run-stopped/summary.md').read_text(encoding='utf-8')
+            self.assertIn('运行状态：手动停止', summary)
+            self.assertIn('完成场数：0', summary)
 
     def test_scrcpy_start_failure_requires_explicit_visible_adb_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -134,6 +141,22 @@ class ExecutorProcessTest(unittest.TestCase):
             history = json.loads((root / 'logs' / 'run-history.jsonl').read_text(encoding='utf-8').splitlines()[-1])
             self.assertEqual('adb', history['channel'])
 
+    def test_invalid_job_writes_a_failed_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            job = root / 'invalid.json'
+            job.write_text('{}', encoding='utf-8')
+            run_dir = root / 'logs/farm/run-invalid'
+            result = subprocess.run(
+                [str(job) if arg == str(JOB) else arg for arg in command(run_dir)],
+                cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=20,
+            )
+
+            self.assertEqual(2, result.returncode)
+            summary = (run_dir / 'summary.md').read_text(encoding='utf-8')
+            self.assertIn('运行状态：失败停止', summary)
+            self.assertIn('`invalid_job`', summary)
+
     def test_failed_run_records_the_error_and_evidence_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -150,6 +173,9 @@ class ExecutorProcessTest(unittest.TestCase):
             self.assertEqual('process_error', record['reason'])
             self.assertTrue(record['error'])
             self.assertEqual(str(run_dir.resolve()), record['runDir'])
+            summary = (run_dir / 'summary.md').read_text(encoding='utf-8')
+            self.assertIn('运行状态：失败停止', summary)
+            self.assertIn('缺少 events.jsonl', summary)
 
 
 if __name__ == '__main__':
