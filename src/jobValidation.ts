@@ -1,3 +1,4 @@
+import jobSchema from '../schemas/job-v1.schema.json';
 import { invoke, isTauri } from './tauri';
 import type { HugoFgoJob } from './types';
 
@@ -14,6 +15,12 @@ export interface JobValidation {
   diagnostics: JobDiagnostic[];
 }
 
+type ActionSlotReferenceKey = 'memberSlot' | 'playerTargetSlot' | 'swapOutSlot' | 'swapInSlot';
+
+const slotReferenceRules = jobSchema['x-slot-reference-rules'];
+const actionSlotReferenceKeys = slotReferenceRules.actionReferenceKeys as ActionSlotReferenceKey[];
+const memberSlotRequiredActions = new Set<string>(slotReferenceRules.memberSlotRequiredActions);
+
 function locationLabel(diagnostic: JobDiagnostic) {
   if (diagnostic.wave !== undefined && diagnostic.turn !== undefined) return `第 ${diagnostic.wave} 面 · 回合 ${diagnostic.turn}`;
   if (diagnostic.wave !== undefined) return `第 ${diagnostic.wave} 面`;
@@ -22,6 +29,12 @@ function locationLabel(diagnostic: JobDiagnostic) {
 
 export function describeJobDiagnostic(diagnostic: JobDiagnostic) {
   return `${locationLabel(diagnostic)}：${diagnostic.message}${diagnostic.path ? `（${diagnostic.path}）` : ''}`;
+}
+
+export function dedupeJobDiagnostics(diagnostics: JobDiagnostic[]): JobDiagnostic[] {
+  return diagnostics.filter((diagnostic, index, all) => (
+    all.findIndex((item) => item.path === diagnostic.path && item.message === diagnostic.message) === index
+  ));
 }
 
 function inspectSlotReferences(job: HugoFgoJob): JobDiagnostic[] {
@@ -49,10 +62,10 @@ function inspectSlotReferences(job: HugoFgoJob): JobDiagnostic[] {
       const turnPath = `$.waves[${waveIndex}].turns[${turnIndex}]`;
       turn.actions.forEach((action, actionIndex) => {
         const actionPath = `${turnPath}.actions[${actionIndex}]`;
-        if ((action.kind === 'skill' || action.kind === 'attack') && action.memberSlot === undefined) {
+        if (memberSlotRequiredActions.has(action.kind) && action.memberSlot === undefined) {
           add(`${actionPath}.memberSlot`, action.kind === 'skill' ? '从者技能必须指定 memberSlot' : '宝具攻击必须指定 memberSlot', waveIndex + 1, turnIndex + 1);
         }
-        (['memberSlot', 'playerTargetSlot', 'swapOutSlot', 'swapInSlot'] as const).forEach((key) => {
+        actionSlotReferenceKeys.forEach((key) => {
           checkSlot(action[key], `${actionPath}.${key}`, '动作', waveIndex + 1, turnIndex + 1);
         });
       });
@@ -93,9 +106,7 @@ export async function validateJobFile(jobPath: string, job: HugoFgoJob): Promise
   if (isTauri) {
     remote = await invoke<JobValidation>('validate_job', { jobPath });
   }
-  const diagnostics = [...remote.diagnostics, ...local].filter((diagnostic, index, all) => (
-    all.findIndex((item) => item.path === diagnostic.path && item.message === diagnostic.message) === index
-  ));
+  const diagnostics = dedupeJobDiagnostics([...remote.diagnostics, ...local]);
   return {
     ok: remote.ok && diagnostics.length === 0,
     summary: remote.ok

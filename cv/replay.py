@@ -717,6 +717,23 @@ def check_empty_slot_rules():
                expected, actual, 'select', '身份未知但卡色确认的普通卡只进入最低层',
                actual == expected, simulated_ocr=True)
 
+    specified_plan = replace(plan, formation=tuple(
+        FormationSlotPlan(slot=slot, name=f'指定{slot}') for slot in range(3)))
+    specified_hand = Observation(base_page=BasePage.CARD, controls=(
+        normal('未知身份普通', -1, crit=100, affinity='advantage', x=0),
+        normal('指定普通1', 0, color='arts', crit=10, x=200),
+        normal('指定普通2', 1, color='quick', crit=20, x=400),
+    ))
+    specified_unknown = select_cards(specified_hand, replace(strategy, strategy_order=('crit', 'cards')),
+                                     specified_plan, 1)
+    actual = [control.name for control in specified_unknown.controls]
+    expected = '可用指令卡不足三张'
+    add_report('strategy:specified-formation-excludes-unknown-normal',
+               ROOT / 'captures/2026-11-20/key/card-select.png', expected,
+               specified_unknown.diagnostic or actual, 'stop',
+               '非空编队保持旧逻辑，已识别卡不足时不得用身份未知普通卡补齐',
+               not actual and specified_unknown.diagnostic == expected, simulated_ocr=True)
+
     empty_np = Control('空槽宝具', ControlKind.CARD, (330, 100, 510, 330), True,
                        card=CommandCardIdentity(1, 'unknown', noble_phantasm=True, affinity='neutral'))
     np_hand = Observation(base_page=BasePage.CARD, controls=(
@@ -734,6 +751,14 @@ def check_empty_slot_rules():
     expected = ['指定普通', '空槽宝具', '空槽普通1']
     add_report('strategy:empty-slot-np-after-specified', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', '空槽宝具不越过指定从者，轮到空槽时先于其普通卡',
+               actual == expected, simulated_ocr=True)
+
+    without_servant = select_cards(
+        np_hand, replace(np_strategy, allow_np=True, strategy_order=('crit', 'cards')), plan, 1)
+    actual = [control.name for control in without_servant.controls]
+    add_report('strategy:empty-slot-np-without-servant-criterion',
+               ROOT / 'captures/2026-11-20/key/card-select.png', expected, actual, 'select',
+               'strategyOrder 不含 servant 时，同从者宝具仍先于其普通卡',
                actual == expected, simulated_ocr=True)
 
 

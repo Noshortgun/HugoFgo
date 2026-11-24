@@ -33,6 +33,7 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
     reserved_names = {control.name for _, control in reserved}
     known_slots = {member.slot for member in plan.formation}
     specified_slots = {member.slot for member in plan.formation if member.name.strip()}
+    has_empty_slots = any(not member.name.strip() for member in plan.formation)
     affinity_ranks = {'resist': 0, 'disadvantage': 0, '抵抗': 0,
                       'neutral': 1, 'advantage': 2, '克制': 2}
     candidates = [control for control in observation.controls
@@ -40,8 +41,8 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
                   and control.kind is ControlKind.CARD and control.actionable
                   and control.card is not None
                   and (control.card.servant_slot in known_slots
-                       or (control.card.servant_slot == -1 and control.card.svt_id is None
-                           and not control.card.noble_phantasm))
+                       or (has_empty_slots and control.card.servant_slot == -1
+                           and control.card.svt_id is None and not control.card.noble_phantasm))
                   and (control.card.noble_phantasm
                        or control.card.card_type in {'buster', 'arts', 'quick'})
                   and ((not control.card.noble_phantasm and 450 < control.center[1] < 650)
@@ -124,6 +125,9 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
         if not available:
             return _empty('可用指令卡不足三张', source, tuple(warnings))
         chosen = min(enumerate(available), key=key)[1]
+        if not chosen.card.noble_phantasm:
+            chosen = next((control for control in noble_phantasm
+                           if control.card.servant_slot == chosen.card.servant_slot), chosen)
         positioned[positioned.index(None)] = chosen
         if chosen in normal:
             normal.remove(chosen)

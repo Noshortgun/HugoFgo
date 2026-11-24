@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import jobSchema from '../schemas/job-v1.schema.json' with { type: 'json' };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const bundle = await build({
   stdin: {
-    contents: "export * from './src/job.ts'; export { emptyServant, team, mysticCodes } from './src/data.ts'; export { inspectUnsupportedJob } from './src/jobValidation.ts'; export { frontlineEntries, normalizeServantOrder } from './src/servantOrder.ts';",
+    contents: "export * from './src/job.ts'; export { emptyServant, team, mysticCodes } from './src/data.ts'; export { dedupeJobDiagnostics, inspectUnsupportedJob } from './src/jobValidation.ts'; export { frontlineEntries, normalizeServantOrder } from './src/servantOrder.ts';",
     resolveDir: root,
     sourcefile: 'job-roundtrip.ts',
     loader: 'ts',
@@ -88,6 +89,16 @@ const fourWaveJob = structuredClone(longJob);
 fourWaveJob.waves.push(structuredClone(longJob.waves[0]));
 assert.throws(() => jobModule.parseJobFile(JSON.stringify(fourWaveJob)), /1～3 面/, '四面作业必须拒绝导入，不能静默截断');
 
+const duplicateDiagnostics = jobModule.dedupeJobDiagnostics([
+  { path: '$.waves[0]', message: '重复', wave: 1 },
+  { path: '$.waves[0]', message: '重复', wave: 2 },
+  { path: '$.waves[0]', message: '不同', wave: 1 },
+]);
+assert.deepEqual(duplicateDiagnostics, [
+  { path: '$.waves[0]', message: '重复', wave: 1 },
+  { path: '$.waves[0]', message: '不同', wave: 1 },
+], '远端与本地诊断按路径和消息去重，保留首次出现项');
+
 const unsupported = structuredClone(longJob);
 unsupported.waves[1].turns[2].actions = [{
   kind: 'skill',
@@ -104,6 +115,37 @@ assert.deepEqual(
   [{ wave: 2, turn: 3 }],
   '启动前检查必须定位二次选择所在的面与回合',
 );
+assert.deepEqual(jobSchema['x-slot-reference-rules'], {
+  actionReferenceKeys: ['memberSlot', 'playerTargetSlot', 'swapOutSlot', 'swapInSlot'],
+  memberSlotRequiredActions: ['skill', 'attack'],
+}, '前后端必须共用动作槽位引用与 memberSlot 规则入口');
+
+const slotRuleJob = structuredClone(job);
+slotRuleJob.formation = [slotRuleJob.formation[0]];
+slotRuleJob.waves[0].turns[0].actions = [
+  { kind: 'skill', title: '', detail: '', icon: '', skill: 0, memberSlot: 4, playerTargetSlot: 4 },
+  { kind: 'orderChange', title: '', detail: '', icon: '', swapOutSlot: 4, swapInSlot: 4 },
+];
+const slotRuleDiagnostics = jobModule.inspectUnsupportedJob(slotRuleJob);
+assert.deepEqual(slotRuleDiagnostics.map((diagnostic) => diagnostic.path)
+  .filter((path) => path.startsWith('$.waves[0].turns[0].actions')), [
+  '$.waves[0].turns[0].actions[0].memberSlot',
+  '$.waves[0].turns[0].actions[0].playerTargetSlot',
+  '$.waves[0].turns[0].actions[1].swapOutSlot',
+  '$.waves[0].turns[0].actions[1].swapInSlot',
+], '前端必须对契约中的每个动作槽位字段报告空槽引用');
+
+const missingMemberJob = structuredClone(slotRuleJob);
+missingMemberJob.waves[0].turns[0].actions = [
+  { kind: 'skill', title: '', detail: '', icon: '', skill: 0 },
+  { kind: 'attack', title: '', detail: '', icon: '' },
+];
+assert.deepEqual(jobModule.inspectUnsupportedJob(missingMemberJob).map((diagnostic) => diagnostic.message)
+  .filter((message) => message.endsWith('必须指定 memberSlot')), [
+  '从者技能必须指定 memberSlot',
+  '宝具攻击必须指定 memberSlot',
+], '从者技能与宝具攻击共用 memberSlot 必填规则');
+
 const sparseJob = structuredClone(job);
 sparseJob.formation = [
   { slot: 0, name: '娄希', svtId: 705000, role: 'Berserker', support: true, ceId: 9403520 },
