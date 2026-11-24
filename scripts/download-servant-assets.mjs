@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
 import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable, metadataSource } from './resource-utils.mjs';
+import { servantSkillTarget } from './skill-target.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = resourcePaths(root);
@@ -72,16 +73,6 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 
-function skillTarget(skill) {
-  const funcs = skill.functions ?? [];
-  const func = funcs.find((item) => ['ptOne', 'ptOneOther', 'enemy'].includes(item.funcTargetType)) ?? funcs[0];
-  const target = func?.funcTargetType;
-  const team = func?.funcTargetTeam ?? '';
-  // ptOne / ptOneOther 都需要先选择己方单体；ptOther 则是除自身外的己方全体。
-  if (target === 'ptOneOther') return 'ally';
-  if (target === 'ptOne') return team.includes('player') ? 'ally' : 'enemy';
-  return ({ self: 'self', ptOther: 'allAllies', ptAll: 'allAllies', ptOtherAll: 'allAllies', enemy: 'enemy', enemyAll: 'allEnemies' })[target] ?? 'allAllies';
-}
 function secondarySelection(skill) {
   const select = skill.script?.SelectAddInfo?.[0];
   if (select) {
@@ -136,7 +127,7 @@ const index = raw.map((servant) => {
       num: skill.num,
       name: skill.name,
       icon: skill.icon ? paths.webPath(`assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`) : null,
-      target: skillTarget(skill),
+      target: servantSkillTarget(skill),
       secondarySelection: secondarySelection(skill),
       condLimitCount: skill.condLimitCount,
       condQuestId: skill.condQuestId,
