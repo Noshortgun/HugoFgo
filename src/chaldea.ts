@@ -306,7 +306,7 @@ export function convertChaldeaTeam(
     }
     if (actionIndex < 0) {
       actionIndex = Math.min(selectionActionIndex, skillActions.length - 1);
-      warnings.push(`${skillActions[actionIndex]?.title ?? '技能'}：Chaldea 未提供选项文本，请核对二次选择`);
+      warnings.push(`${skillActions[actionIndex]?.title ?? '技能'}：Chaldea 未提供选项文本，请核对技能追加选择`);
     }
     const action = skillActions[actionIndex];
     if (!action) return;

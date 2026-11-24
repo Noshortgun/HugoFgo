@@ -79,6 +79,8 @@ def run_fake(plan, settings, run_dir: Path, interval: float,
                              wave=wave.number, turn=turn_number, action_index=action_index,
                              x=640, y=360, reason='fake_run')
             completed_runs += 1
+            emit(events, 'battle_completed', completed_runs=completed_runs,
+                 wave=len(plan.waves), turn=max((len(wave.turns) for wave in plan.waves), default=1))
         emit(events, 'finished', completed_runs=completed_runs,
              recovery_used={}, evidence_dir=str(run_dir))
         return 0
@@ -112,10 +114,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument('--run-dir', help='运行记录目录')
     result.add_argument('--battles', type=int, default=1, help='连续出击场数')
     result.add_argument('--recovery', nargs='*', choices=[item.value for item in RecoveryItem],
-                        help='AP 恢复白名单；显式给出空列表表示禁止使用')
+                        help='AP 恢复白名单与优先级；按参数顺序尝试，显式给出空列表表示禁止使用')
     result.add_argument('--drain-after-turns', action='store_true', help='场数完成后清空剩余 AP')
     result.add_argument('--adb', help='adb 路径')
-    result.add_argument('--channel', default='adb', help='设备通道，默认 adb；scrcpy 必须显式选择')
+    result.add_argument('--channel', default='scrcpy', help='设备通道，默认 scrcpy；ADB 作为启动失败保底')
     result.add_argument('--allow-adb-fallback', action='store_true',
                         help='用户已预先确认：仅 scrcpy 启动失败时可见回退 ADB；运行中断绝不回退')
     result.add_argument('--scrcpy-server', help='固定 scrcpy 服务端路径；其同目录 manifest.json 会校验版本与 SHA-256')
@@ -150,11 +152,12 @@ def main(argv: list[str] | None = None) -> int:
                             'wave': item.wave, 'turn': item.turn} for item in compiled.diagnostics]
             emit(events, 'failed', reason='invalid_job', diagnostics=diagnostics, evidence_dir=str(run_dir))
             return 2
-        allowed = frozenset(RecoveryItem(item) for item in
-                            (args.recovery if args.recovery is not None else [RecoveryItem.BRONZE.value]))
+        priority = tuple(RecoveryItem(item) for item in
+                         (args.recovery if args.recovery is not None else [RecoveryItem.BRONZE.value]))
         settings = RunOptions(
             run_count=args.battles,
-            recovery=RecoveryPolicy(allowed=allowed, drain_after_turns=args.drain_after_turns),
+            recovery=RecoveryPolicy(allowed=frozenset(priority), priority=priority,
+                                    drain_after_turns=args.drain_after_turns),
             run_dir=str(run_dir),
         )
         if args.fake_interval < 0:

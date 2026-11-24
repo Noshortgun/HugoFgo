@@ -72,8 +72,8 @@ impl Default for RunSettings {
         Self {
             battles: 1,
             recovery: RecoveryPolicy::default(),
-            device_channel: DeviceChannel::Adb,
-            allow_adb_fallback: false,
+            device_channel: DeviceChannel::Scrcpy,
+            allow_adb_fallback: true,
         }
     }
 }
@@ -124,7 +124,7 @@ mod tests {
         assert_eq!(1, settings.battles);
         assert_eq!(vec![RecoveryItem::Bronze], settings.recovery.allowed);
         assert!(!settings.recovery.drain_after_turns);
-        assert_eq!(settings.device_channel.as_str(), "adb");
-        assert!(!settings.allow_adb_fallback);
+        assert_eq!(settings.device_channel.as_str(), "scrcpy");
+        assert!(settings.allow_adb_fallback);
     }
 }

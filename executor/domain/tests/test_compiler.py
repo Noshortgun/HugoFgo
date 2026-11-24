@@ -34,6 +34,15 @@ class CompileJobTest(unittest.TestCase):
         self.assertEqual(3, len(result.plan.waves))
         self.assertEqual([1, 1, 1], [len(wave.turns) for wave in result.plan.waves])
 
+    def test_rejects_jobs_with_more_than_three_waves(self):
+        job = self.valid_job()
+        job['waves'].extend([job['waves'][0], job['waves'][0]])
+
+        result = compile_job(json.dumps(job))
+
+        self.assertIsNone(result.plan)
+        self.assertIn('$.waves', [diagnostic.path for diagnostic in result.diagnostics])
+
     def test_real_job_preserves_support_requirements(self):
         text = (ROOT / 'jobs/娄希、娄希、奥伯龙.json').read_text(encoding='utf-8')
 

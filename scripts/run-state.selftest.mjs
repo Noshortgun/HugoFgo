@@ -30,6 +30,17 @@ assert.equal(state.turn, 3);
 assert.equal(state.action, '从者1技能1');
 assert.deepEqual(state.recoveryUsed, { bronze: 2 });
 
+const battleDone = runState.applyRunEvent(state, {
+  run_id: 'run-1', type: 'battle_completed', timestamp: 3.5,
+  data: { completed_runs: 2, wave: 3, turn: 2 },
+});
+assert.equal(battleDone.completedRuns, 2, '逐场完成数必须在 finished 之前更新');
+const drain = runState.applyRunEvent(battleDone, {
+  run_id: 'run-1', type: 'drain_started', timestamp: 3.8,
+  data: { completed_runs: 2 },
+});
+assert.match(drain.notice, /清空剩余 AP/);
+
 const finished = runState.applyRunEvent(state, {
   run_id: 'run-1', type: 'finished', timestamp: 4,
   data: { completed_runs: 1 },

@@ -72,14 +72,25 @@ function resolveEquip(equips: Map<number, EquipInfo> | undefined, id?: number, n
   return undefined;
 }
 
+export function planWaveCount(snapshot: PlanSnapshot): number {
+  const fromCount = snapshot.waveCount ?? 0;
+  const keys = [
+    ...Object.keys(snapshot.turnCountByWave),
+    ...Object.keys(snapshot.targetByWave),
+    ...Object.keys(snapshot.actionsBySlot).map((key) => key.split('-')[0]),
+    ...Object.keys(snapshot.npPositionsBySlot).map((key) => key.split('-')[0]),
+  ];
+  return Math.max(1, fromCount, ...keys.map(Number).filter(Number.isFinite));
+}
+
 export function createEmptyPlanSnapshot(): PlanSnapshot {
   return {
+    waveCount: 3,
     turnCountByWave: { 1: 1, 2: 1, 3: 1 },
     enemyCount: 3,
     targetByWave: { 1: 3, 2: 3, 3: 3 },
     actionsBySlot: {},
     npPositionsBySlot: {},
-    attackBySlot: {},
     nextId: 1,
   };
 }
@@ -150,7 +161,10 @@ export function buildJobFile(input: {
   base?: HugoFgoJob;
 }): HugoFgoJob {
   const { members, mystic, fallback, fallbackByWave, snapshot } = input;
-  const waves: JobWave[] = [1, 2, 3].map((waveNumber) => {
+  const waveCount = planWaveCount(snapshot);
+  if (waveCount < 1 || waveCount > 3) throw new Error(`作业面数必须为 1～3 面；当前为 ${waveCount} 面`);
+  const waveNumbers = Array.from({ length: waveCount }, (_, index) => index + 1);
+  const waves: JobWave[] = waveNumbers.map((waveNumber) => {
     const turnCount = Math.max(1, snapshot.turnCountByWave[waveNumber] ?? 1);
     const turns: JobTurn[] = [];
     for (let turnNumber = 1; turnNumber <= turnCount; turnNumber++) {
@@ -164,21 +178,13 @@ export function buildJobFile(input: {
         if (slot !== undefined) npPositions[slot] = position;
       });
       if (Object.keys(npPositions).length) turn.npPositions = npPositions;
-      const attackPlan = snapshot.attackBySlot[key];
-      if (attackPlan) {
-        const cards = attackPlan.cards.flatMap((card) => {
-          const slot = memberSlotOf(members, card.memberInstanceId);
-          return slot === undefined ? [] : [{ slot, type: card.type, ...(card.deckIndex !== undefined ? { deckIndex: card.deckIndex } : {}) }];
-        });
-        turn.attack = { mode: attackPlan.mode, cards };
-      }
       turns.push(turn);
     }
     return { turnCount, target: snapshot.targetByWave[waveNumber] ?? 3, turns };
   });
 
   const strategyByWave: Record<number, FallbackStrategy | null> = {};
-  [1, 2, 3].forEach((waveNumber) => {
+  waveNumbers.filter((waveNumber) => waveNumber <= 3).forEach((waveNumber) => {
     if (fallbackByWave[waveNumber]) strategyByWave[waveNumber] = fallbackByWave[waveNumber];
   });
 
@@ -195,6 +201,11 @@ export function buildJobFile(input: {
   };
 }
 
+export function assertSupportedWaveCount(job: HugoFgoJob): void {
+  const count = job.waves.length;
+  if (count < 1 || count > 3) throw new Error(`作业面数必须为 1～3 面；当前为 ${count} 面`);
+}
+
 export function parseJobFile(text: string): HugoFgoJob {
   let raw: unknown;
   try {
@@ -207,6 +218,7 @@ export function parseJobFile(text: string): HugoFgoJob {
   if (job.version !== 1) throw new Error(`不支持的作业版本：${String(job.version ?? '未标注')}`);
   if (!Array.isArray(job.formation) || !Array.isArray(job.waves)) throw new Error('作业文件缺少编队或关卡数据');
   if (!job.strategy || !Array.isArray(job.strategy.servantOrder)) throw new Error('作业文件缺少选卡策略');
+  assertSupportedWaveCount(job as HugoFgoJob);
   return job as HugoFgoJob;
 }
 
@@ -272,12 +284,15 @@ function fromJobAction(
 export function jobToSnapshot(job: HugoFgoJob, members: Servant[], mystic: MysticCode): { snapshot: PlanSnapshot; warnings: string[] } {
   const warnings: string[] = [];
   const snapshot = createEmptyPlanSnapshot();
+  snapshot.waveCount = Math.max(1, job.waves.length);
   snapshot.enemyCount = job.enemyCount === 6 ? 6 : 3;
+  snapshot.turnCountByWave = {};
+  snapshot.targetByWave = {};
   let nextId = 1;
 
-  job.waves.slice(0, 3).forEach((wave, waveIndex) => {
+  job.waves.forEach((wave, waveIndex) => {
     const waveNumber = waveIndex + 1;
-    const turnCount = Math.min(9, Math.max(1, wave.turnCount ?? 1));
+    const turnCount = Math.max(1, wave.turnCount ?? 1, wave.turns?.length ?? 0);
     snapshot.turnCountByWave[waveNumber] = turnCount;
     snapshot.targetByWave[waveNumber] = wave.target ?? (snapshot.enemyCount === 6 ? 6 : 3);
 
@@ -306,15 +321,7 @@ export function jobToSnapshot(job: HugoFgoJob, members: Servant[], mystic: Mysti
       }
 
       if (jobTurn.attack && jobTurn.attack.mode !== 'strategy') {
-        const cards = (jobTurn.attack.cards ?? []).flatMap((card) => {
-          const member = members[card.slot];
-          if (!member || member.empty) {
-            warnings.push(`第 ${waveNumber} 面 · 回合 ${turnNumber}：固定卡序指向空位（${card.slot + 1} 号位），该卡已忽略`);
-            return [];
-          }
-          return [{ memberInstanceId: member.memberInstanceId, type: card.type, ...(card.deckIndex !== undefined ? { deckIndex: card.deckIndex } : {}) }];
-        });
-        if (cards.length) snapshot.attackBySlot[key] = { mode: jobTurn.attack.mode, cards };
+        warnings.push(`第 ${waveNumber} 面 · 回合 ${turnNumber}：固定卡序已移除，普通指令卡将按选卡策略执行`);
       }
     }
   });
@@ -415,7 +422,7 @@ export function applyFormation(
     if (!definition) return;
     definition.secondarySelection = {
       type: action.secondarySelection.type,
-      label: action.secondarySelection.type === 'noblePhantasmCardType' ? '选择宝具卡色' : '技能二次选择',
+      label: action.secondarySelection.type === 'noblePhantasmCardType' ? '选择宝具卡色' : '技能追加选择',
       options: action.secondarySelection.options ?? [],
     };
   })));

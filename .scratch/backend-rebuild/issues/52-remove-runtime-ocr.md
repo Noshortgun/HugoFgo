@@ -1,5 +1,7 @@
 # 52: 移除执行器 OCR，改用图像数字识别
 
+**Status:** ready-for-human
+
 Blocked by: #55
 
 ## What to build

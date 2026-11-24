@@ -5,7 +5,7 @@ import { favoriteServantKeys, isFavoriteServant, servantPreferenceKey, toggleFav
 import { resourceUrl } from '../resources';
 import AppIcon from './AppIcon.vue';
 
-const props = defineProps<{ type: 'servant' | 'ce' | 'mystic'; servants: Servant[]; mysticCodes: MysticCode[]; slot?: number }>();
+const props = defineProps<{ type: 'servant' | 'ce' | 'mystic'; servants: Servant[]; mysticCodes: MysticCode[]; gender: 'female' | 'male'; slot?: number }>();
 const emit = defineEmits<{ close: []; servant: [index: number, servant: Servant]; ce: [index: number, name: string, image: string]; mystic: [code: MysticCode] }>();
 const search = ref('');
 const classFilter = ref('全部');
@@ -21,7 +21,7 @@ const visibleServants = computed(() => props.servants
 
 <template>
   <div class="picker-backdrop" @click.self="emit('close')">
-    <section class="picker-dialog servant-picker-dialog">
+    <section class="picker-dialog servant-picker-dialog" :class="{ 'mystic-picker-dialog': type === 'mystic' }">
       <div class="picker-heading"><div><span class="picker-kicker">FORMATION</span><h2>{{ title }}</h2></div><button title="关闭" @click="emit('close')"><AppIcon name="close" /></button></div>
       <template v-if="type === 'servant'">
         <label class="picker-search"><AppIcon name="search" :size="16" /><input v-model="search" placeholder="搜索从者名称" /></label>
@@ -49,7 +49,7 @@ const visibleServants = computed(() => props.servants
         <button v-for="servant in props.servants" :key="servant.ce" @click="emit('ce', props.slot || 0, servant.ce, servant.ceImage)"><img :src="servant.ceImage" :alt="servant.ce" /><strong>{{ servant.ce }}</strong><small>概念礼装 · 满破</small></button>
       </div>
       <div v-else class="mystic-picker-grid">
-        <button v-for="code in props.mysticCodes" :key="code.id" :aria-label="code.name" :title="code.name" @click="emit('mystic', code)"><img class="mystic-item" :src="code.item" :alt="code.name" /></button>
+        <button v-for="code in props.mysticCodes" :key="code.id" :aria-label="code.name" :title="code.name" @click="emit('mystic', code)"><img class="mystic-item" :src="props.gender === 'female' ? code.item : code.maleItem" :alt="code.name" /><strong>{{ code.name.replace('魔术礼装·', '') }}</strong></button>
       </div>
       <p class="picker-footnote">{{ type === 'servant' ? '点击星标设置中意从者；中意从者优先显示并保存在本机。' : '选择后立即更新当前编队，不会跳转到其他页面。' }}</p>
     </section>

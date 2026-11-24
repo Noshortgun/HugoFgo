@@ -9,6 +9,7 @@ import { assetCategoryGaps, buildAssetJobs, countAssetCategories } from './asset
 import { migrateLegacyData } from './resource-migrate.mjs';
 import { metadataSource, readJsonOr } from './resource-utils.mjs';
 import { parseRegion, resourcePaths } from './resource-paths.mjs';
+import { servantSkillTarget } from './skill-target.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = resourcePaths(root);
@@ -351,6 +352,16 @@ if (command === 'self-test') {
   assert.equal(testPaths.regionRoot, path.join(testRoot, 'TW'));
   assert.equal(testPaths.absolute('data/assets/atlas/index.json'), path.join(testRoot, 'TW', 'assets/atlas/index.json'));
   assert.equal(testPaths.webPath('assets/atlas/index.json'), '/data/TW/assets/atlas/index.json');
+  const targetOf = (...funcTargetTypes) => servantSkillTarget({ functions: funcTargetTypes.map((funcTargetType) => ({ funcTargetType, funcTargetTeam: 'player' })) });
+  assert.equal(targetOf('ptOther', 'self'), 'allAllies', '希耶尔三技能作用于除自身外的己方全体，不应要求选择目标');
+  assert.equal(targetOf('self', 'ptOne'), 'ally', '两仪式三技能后续效果要求选择己方单体');
+  assert.equal(targetOf('self', 'ptOne'), 'ally', '帕尔瓦蒂三技能后续效果要求选择己方单体');
+  assert.equal(targetOf('self', 'enemy'), 'enemy', '忒修斯三技能后续效果要求选择敌方单体');
+  assert.equal(targetOf('ptAll', 'ptOneOther'), 'ally', '奥德修斯一技能的 ptOneOther 需要先选择己方单体');
+  assert.equal(targetOf('ptAll', 'ptRandom'), 'allAllies', '难敌一技能的 ptRandom 是随机效果，不要求选择目标');
+  assert.equal(targetOf('self', 'ptFull'), 'self', '大和武尊一技能的 ptFull 是全体效果，不要求选择目标');
+  assert.equal(targetOf('self', 'fieldOther'), 'self', '美游三技能的 fieldOther 是场地效果，不要求选择目标');
+  assert.equal(targetOf('self', 'commandTypeSelfTreasureDevice'), 'self', '卫宫三技能只追加宝具卡色选择，不要求选择目标');
   console.log('资源管理器自检通过');
 } else if (command === 'check') {
   migrateLegacyData(paths);

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
 import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable, metadataSource } from './resource-utils.mjs';
+import { servantSkillTarget } from './skill-target.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = resourcePaths(root);
@@ -72,20 +73,12 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 
-function skillTarget(skill) {
-  const func = skill.functions?.[0];
-  const target = func?.funcTargetType;
-  const team = func?.funcTargetTeam ?? '';
-  // ptOne 是单体：对己方为 ally，对敌方为 enemy；playerAndEnemy 按己方单体处理。
-  if (target === 'ptOne') return team.includes('player') ? 'ally' : 'enemy';
-  return ({ self: 'self', ptOther: 'ally', ptAll: 'allAllies', ptOtherAll: 'allAllies', enemy: 'enemy', enemyAll: 'allEnemies' })[target] ?? 'allAllies';
-}
 function secondarySelection(skill) {
   const select = skill.script?.SelectAddInfo?.[0];
   if (select) {
     return {
       type: 'selectAddInfo',
-      label: select.title || '技能二次选择',
+      label: select.title || '技能追加选择',
       options: (select.btn ?? []).map((button, index) => ({ value: index, label: button.name || `选项 ${index + 1}`, ...(button.imageUrl ? { imageUrl: button.imageUrl } : {}) })),
     };
   }
@@ -134,7 +127,7 @@ const index = raw.map((servant) => {
       num: skill.num,
       name: skill.name,
       icon: skill.icon ? paths.webPath(`assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`) : null,
-      target: skillTarget(skill),
+      target: servantSkillTarget(skill),
       secondarySelection: secondarySelection(skill),
       condLimitCount: skill.condLimitCount,
       condQuestId: skill.condQuestId,
