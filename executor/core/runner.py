@@ -284,6 +284,7 @@ class Runner:
         self.startup = True
         self.battle_since: float | None = None
         self.team_since: float | None = None
+        self.formation_checked = False
         self.support_stage = 'idle'
         self.support_class_selected = False
         self.support_class_filter_pending = False
@@ -563,18 +564,29 @@ class Runner:
 
     def handle_team(self, observation: Observation, now: float) -> RunResult | None:
         members = {member.slot: member for member in self.plan.formation}
-        expected_servants = tuple(members[slot].svt_id for slot in self.active_slots[:3])
+
+        def servants_match(field_name: str, slots: tuple[int, ...]) -> bool:
+            required = [slot for slot in slots if members.get(slot) is not None and members[slot].name.strip()]
+            if not required:
+                return True
+            field = observation.field(field_name)
+            if field is None or not field.usable or not isinstance(field.value, tuple) or len(field.value) != 3:
+                return False
+            return all(field.value[slot % 3] == members[slot].svt_id for slot in required)
+
         support = next((member for member in self.plan.formation if member.support), None)
-        servants = observation.field('team_servants')
         support_ce = observation.field('team_support_ce')
         mystic = observation.field('team_mystic')
         support_valid = (support is None or support.ce_id is None
                          or (support_ce is not None and support_ce.usable
                              and support_ce.value == support.ce_id))
-        valid = (servants is not None and servants.usable and tuple(servants.value) == expected_servants
-                 and support_valid
-                 and mystic is not None and mystic.usable and mystic.value == self.plan.mystic_id)
+        valid = (self.formation_checked
+                 or (servants_match('team_servants', (0, 1, 2))
+                     and servants_match('team_backline_servants', (3, 4, 5))
+                     and support_valid
+                     and mystic is not None and mystic.usable and mystic.value == self.plan.mystic_id))
         if valid:
+            self.formation_checked = True
             self.team_since = None
             if self.tap_stable(observation, '开始任务', now):
                 self.wait_for_page(BasePage.BATTLE, now)

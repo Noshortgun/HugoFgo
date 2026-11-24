@@ -113,6 +113,28 @@ class RunnerTest(unittest.TestCase):
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual((565, 128), (device.actions[0]['x'], device.actions[0]['y']))
 
+    def test_team_checks_specified_backups_while_skipping_empty_slots(self) -> None:
+        base = single_wave_plan()
+        plan = replace(base, formation=(
+            base.formation[0],
+            FormationSlotPlan(slot=1, name=''),
+            FormationSlotPlan(slot=2, name=''),
+            FormationSlotPlan(slot=3, name='指定候补', svt_id=4),
+            FormationSlotPlan(slot=4, name=''),
+            FormationSlotPlan(slot=5, name=''),
+        ))
+        team = observe(BasePage.TEAM, button('开始任务', (1086, 635, 1248, 707))).with_fields({
+            'team_servants': Field(FieldStatus.CONFIRMED, (705000, None, None)),
+            'team_backline_servants': Field(FieldStatus.CONFIRMED, (999, None, None)),
+        })
+        device, perception = scripted([team, team, team], [0.0, 0.5, 30.5])
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('team_mismatch', result.reason)
+        self.assertEqual([], [action for action in device.actions if action['action'] == 'tap'])
+
     def test_support_uses_extra_tab_next_to_berserker(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='奥伯龙', support=True, support_required=True,
@@ -2036,6 +2058,38 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, controls.count('连续出击'))
         self.assertEqual(1, controls.count('开始任务'), controls)
         self.assertEqual(2, controls.count('攻击'), controls)
+
+    def test_repeat_does_not_recheck_formation(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        team = observe(BasePage.TEAM, button('开始任务', (1086, 635, 1248, 707)))
+        changed_team = team.with_fields({
+            'team_servants': Field(FieldStatus.CONFIRMED, (999, 999, 999)),
+        })
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        result_page = observe(BasePage.RESULT, button('结算推进', (0, 0, 1280, 720)))
+        drops = observe(BasePage.DROPS, button('下一步', (948, 606, 1272, 676)))
+        repeat = Observation(base_page=BasePage.DROPS,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击', (800, 540, 940, 610)),))
+        observations = [
+            team, team, battle, battle, card, card, card, card, card, card, animation,
+            result_page, result_page, drops, drops, repeat, repeat,
+            changed_team, changed_team, battle, battle, card, card, card, card, card, card, animation,
+            result_page, result_page, drops, drops, repeat,
+        ]
+        device, perception = scripted(observations, [index * 0.5 for index in range(len(observations))])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(run_count=2))
+
+        controls = [event.data['control'] for event in events.events if event.type == 'action']
+        self.assertEqual(RunStatus.COMPLETED, result.status)
+        self.assertEqual(2, result.progress.completed_runs)
+        self.assertEqual(2, controls.count('开始任务'), controls)
+        self.assertEqual(1, controls.count('连续出击'))
 
     def test_prefer_mode_uses_strategy_when_cards_do_not_match(self) -> None:
         base = single_wave_plan()

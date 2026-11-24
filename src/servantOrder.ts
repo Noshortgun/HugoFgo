@@ -5,14 +5,11 @@ export interface ServantOrderEntry {
   name: string;
 }
 
-/** 前排 = 前三个非空编队槽位，和操作序列保持一致。 */
+/** 前排使用物理 0–2 槽；空槽不补入后排，也不进入候选。 */
 export function frontlineEntries(members: Servant[]): ServantOrderEntry[] {
-  const entries: ServantOrderEntry[] = [];
-  members.forEach((member, slot) => {
-    if (entries.length >= 3) return;
-    if (!member.empty && member.name.trim()) entries.push({ slot, name: member.name.trim() });
-  });
-  return entries;
+  return members.slice(0, 3).flatMap((member, slot) => (
+    !member.empty && member.name.trim() ? [{ slot, name: member.name.trim() }] : []
+  ));
 }
 
 /** 解析顺序：优先按槽位还原；旧作业没有槽位时按名字依次匹配。最后补齐缺失的前排。 */
@@ -56,8 +53,19 @@ export function defaultFallbackStrategy(members: Servant[]): FallbackStrategy {
   };
 }
 
+export function emptyServantOrderEntries(strategy: FallbackStrategy, members: Servant[]): ServantOrderEntry[] {
+  const slots = strategy.servantOrderSlots;
+  if (!Array.isArray(slots) || slots.length !== strategy.servantOrder.length) return [];
+  return slots.flatMap((slot, index) => {
+    const member = members[slot];
+    return !member || member.empty || !member.name.trim()
+      ? [{ slot, name: strategy.servantOrder[index] }]
+      : [];
+  });
+}
+
 export function normalizeServantOrder(strategy: FallbackStrategy, members: Servant[]): FallbackStrategy {
-  const entries = resolveServantOrder(strategy, members);
+  const entries = [...resolveServantOrder(strategy, members), ...emptyServantOrderEntries(strategy, members)];
   return {
     ...strategy,
     servantOrder: entries.map((entry) => entry.name),

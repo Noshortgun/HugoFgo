@@ -497,6 +497,7 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'ap': frozenset({BasePage.AP_RECOVERY}),
     'support_class': frozenset({BasePage.SUPPORT}),
     'team_servants': frozenset({BasePage.TEAM}),
+    'team_backline_servants': frozenset({BasePage.TEAM}),
     'team_support_ce': frozenset({BasePage.TEAM}),
     'team_mystic': frozenset({BasePage.TEAM}),
 }

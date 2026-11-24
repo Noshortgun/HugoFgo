@@ -28,7 +28,7 @@ class ReadinessTest(unittest.TestCase):
     def test_real_frames_report_executor_gaps(self) -> None:
         cases = (
             ('captures/2026-11-20/key/support-select-correct-ce.png', 'support_identity', 0),
-            ('captures/2026-11-20/key/card-select.png', 'command_card_identity', 2),
+            ('captures/2026-11-20/key/card-select.png', 'command_card_identity', 0),
             ('captures/2026-11-20/key/battle-wave1.png', 'wave_turn', 2),
             ('captures/2026-11-20/key/result.png', 'result_control', 2),
         )

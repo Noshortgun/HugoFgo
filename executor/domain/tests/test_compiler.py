@@ -34,6 +34,24 @@ class CompileJobTest(unittest.TestCase):
         self.assertEqual(3, len(result.plan.waves))
         self.assertEqual([1, 1, 1], [len(wave.turns) for wave in result.plan.waves])
 
+    def test_sparse_formation_compiles_and_materializes_empty_slots(self):
+        job = self.valid_job()
+        specified = job['formation'][0]
+        job['formation'] = [specified]
+        job['strategy']['servantOrder'] = [specified['name']]
+        job['strategy'].pop('servantOrderSlots', None)
+        job['waves'][0]['turns'][0]['actions'] = []
+        job['waves'][0]['turns'][0]['npPositions'] = {}
+        job['waves'][0]['turns'][0]['attack'] = {'mode': 'strategy', 'cards': []}
+        job['waves'][0]['turns'][1]['actions'] = []
+        job['waves'][1]['turns'][0]['actions'] = []
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        self.assertEqual([(0, specified['name']), *((slot, '') for slot in range(1, 6))],
+                         [(member.slot, member.name) for member in result.plan.formation])
+
     def test_rejects_jobs_with_more_than_three_waves(self):
         job = self.valid_job()
         job['waves'].extend([job['waves'][0], job['waves'][0]])
@@ -131,6 +149,22 @@ class CompileJobTest(unittest.TestCase):
         self.assertEqual(1, len(result.diagnostics))
         self.assertIn('memberSlot', result.diagnostics[0].path)
         self.assertIn('空槽位', result.diagnostics[0].message)
+
+    def test_servant_skill_and_np_attack_require_member_slot(self):
+        job = self.valid_job()
+        actions = job['waves'][0]['turns'][0]['actions']
+        skill = next(action for action in actions if action['kind'] == 'skill')
+        attack = next(action for action in actions if action['kind'] == 'attack')
+        del skill['memberSlot']
+        del attack['memberSlot']
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(2, len(result.diagnostics))
+        self.assertTrue(all(diagnostic.path.endswith('.memberSlot') for diagnostic in result.diagnostics))
+        self.assertTrue(all(diagnostic.wave == 1 and diagnostic.turn == 1
+                            for diagnostic in result.diagnostics))
 
     def test_unknown_secondary_selection_type_is_diagnosed(self):
         job = self.valid_job()
