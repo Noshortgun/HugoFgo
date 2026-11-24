@@ -78,7 +78,7 @@ function toggleDrain() {
   emit('updateSettings', { ...props.settings, recovery: { ...props.settings.recovery, drain_after_turns: !props.settings.recovery.drain_after_turns } });
 }
 function displayName(member: Servant) {
-  if (member.empty) return '空位';
+  if (member.empty) return '不限制';
   return member.support && !member.supportRequired ? '任意助战' : member.name;
 }
 function ascensionLabel(member: Servant) {

@@ -46,6 +46,7 @@ class IdentityMatcher:
         self._command_templates: list[CommandTemplate] | None = None
         self._support_tag: np.ndarray | None = None
         self._formation_slots: dict[tuple[int, bool], int] = {}
+        self._specified_slots: frozenset[int] | None = None
         self._required_face_ids: frozenset[int] | None = None
         self._required_ce_ids: frozenset[int] | None = None
         self._required_command_ids: frozenset[int] | None = None
@@ -64,6 +65,7 @@ class IdentityMatcher:
             key = (member.svt_id, member.support)
             slots[key] = member.slot if key not in slots else -1
         self._formation_slots = slots
+        self._specified_slots = frozenset(member.slot for member in formation if member.name.strip())
         self._required_face_ids = frozenset(member.svt_id for member in formation
                                             if member.svt_id is not None)
         self._required_ce_ids = frozenset(member.ce_id for member in support
@@ -257,8 +259,6 @@ class IdentityMatcher:
         if self._command_templates is None:
             self._command_templates = self._load_commands()
             self._support_tag = self._read(cn.TEMPLATE_DIR / 'identities' / 'support-tag.png')
-        if not self._command_templates:
-            return None
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x1, y1, x2, _y2 = box
         support_score = 0.0
@@ -279,9 +279,6 @@ class IdentityMatcher:
             if len(support_slots) == 1 and (servant_id is None or servant_id == support_slots[0][0]):
                 servant_id, fallback_slot = support_slots[0]
                 support = True
-        if servant_id is None:
-            return None
-
         type_top, type_bottom = cn.COMMAND_TYPE_Y_OFFSETS
         hsv = cv2.cvtColor(image[y1 + type_top:y1 + type_bottom, x1:x2], cv2.COLOR_BGR2HSV)
         hue, saturation, value = hsv[..., 0], hsv[..., 1], hsv[..., 2]
@@ -296,7 +293,8 @@ class IdentityMatcher:
         if counts[card_type] < cn.COMMAND_TYPE_MIN_PIXELS:
             return None
 
-        slot = fallback_slot if fallback_slot is not None else self._formation_slots.get((servant_id, support), -1)
+        slot = (-1 if servant_id is None else
+                fallback_slot if fallback_slot is not None else self._formation_slots.get((servant_id, support), -1))
         return CommandCardIdentity(servant_slot=slot,
                                    card_type=card_type, svt_id=servant_id, support=support,
                                    affinity=self._command_affinity(image, box))
@@ -380,13 +378,23 @@ class IdentityMatcher:
     def team(self, image: np.ndarray) -> dict[str, Field]:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         faces = self._load_team('face')
+        regions = ((20, 240), (190, 390), (390, 590), (580, 780), (770, 970), (960, 1180))
         servants = [self._team_match(gray[120:350, x1:x2], faces, 'face')
-                    for x1, x2 in ((20, 240), (190, 390), (390, 590))]
+                    if self._specified_slots is None or slot in self._specified_slots else None
+                    for slot, (x1, x2) in enumerate(regions)]
+
+        def servant_field(slots: tuple[int, ...]) -> Field:
+            required = [slot for slot in slots
+                        if self._specified_slots is None or slot in self._specified_slots]
+            values = tuple(servants[slot] for slot in slots)
+            return (Field(FieldStatus.CONFIRMED, values)
+                    if all(servants[slot] is not None for slot in required) else Field(FieldStatus.UNCERTAIN))
+
         ce = self._team_match(gray[440:520, 20:240], self._load_team('ce'), 'ce')
         mystic = self._team_match(gray[630:710, 10:120], self._load_team('mystic'), 'mystic')
         return {
-            'team_servants': (Field(FieldStatus.CONFIRMED, tuple(servants))
-                              if all(item is not None for item in servants) else Field(FieldStatus.UNCERTAIN)),
+            'team_servants': servant_field((0, 1, 2)),
+            'team_backline_servants': servant_field((3, 4, 5)),
             'team_support_ce': (Field(FieldStatus.CONFIRMED, ce)
                                 if ce is not None else Field(FieldStatus.UNCERTAIN)),
             'team_mystic': (Field(FieldStatus.CONFIRMED, self._required_mystic_id)

@@ -4,14 +4,14 @@ import { atlasMysticCodes, atlasServants, loadAtlas, lookupAtlas, lookupAtlasByI
 import { equipsById, equipsList, loadEquips } from './equips';
 import type { FallbackScope, FallbackStrategy, HugoFgoJob, MysticCode, PlanSnapshot, Servant } from './types';
 import { emptyServant, mysticCodes, standardSkills, team } from './data';
-import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, assertSupportedWaveCount, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, parseJobFile } from './job';
+import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, assertSupportedWaveCount, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, parseJobFile, remapPlanMember } from './job';
 import { convertChaldeaTeam, fetchChaldeaTeam, loadChaldeaCatalog, loadSecondaryCatalog, parseChaldeaRef } from './chaldea';
 import { deleteJobFromLibrary, jobLibraryReadOnly, jobNameForMembers, listSavedJobs, readJobFromLibrary, saveJobToLibrary, type SavedJobEntry } from './jobLibrary';
 import { resourceRegion } from './resources';
 import { browserRunDisabledReason, fakeRunRequested, runApi } from './run';
 import { applyRunEvent, emptyRunState, type RunEvent } from './runState';
 import { applyRunSettings, loadRunSettings, runSettings, saveRunSettings, type RunSettings } from './runSettings';
-import { describeJobDiagnostic, validateJobFile, type JobDiagnostic } from './jobValidation';
+import { describeJobDiagnostic, inspectUnsupportedJob, validateJobFile, type JobDiagnostic } from './jobValidation';
 import { isTauri } from './device';
 import { defaultFallbackStrategy, normalizeServantOrder } from './servantOrder';
 import FormationHome from './components/FormationHome.vue';
@@ -110,6 +110,7 @@ const runDisabledReason = computed(() => {
   if (runActive.value) return '已有作业正在运行，不能重复启动';
   if (!selectedSerial.value && !fakeRunRequested) return '请先在“准备”中检测并选择设备';
   if (resourceRegion.value !== 'CN') return `执行器当前只支持国服；当前资源区服是 ${resourceRegion.value}`;
+  if (localJobDiagnostics.value.length) return `作业存在 ${localJobDiagnostics.value.length} 处空槽引用或不支持动作，请先在操作序列中修复`;
   return '';
 });
 const runStartLabel = computed(() => runStarting.value ? '启动中' : runActive.value ? '运行中' : '战斗');
@@ -174,10 +175,17 @@ async function reloadResources(force = false) {
 
 watch(resourceRegion, () => reloadResources());
 
+function remapSavedPlanMember(previousId: string, nextId: string) {
+  if (!savedPlan.value) return;
+  const snapshot = JSON.parse(savedPlan.value) as PlanSnapshot;
+  savedPlan.value = JSON.stringify(remapPlanMember(snapshot, previousId, nextId));
+}
 function selectServant(index: number, servant: Servant) {
   const current = members.value[index];
   const limitCount = current.svtId === servant.svtId ? current.limitCount ?? servant.limitCount ?? 4 : servant.limitCount ?? 4;
-  members.value[index] = { ...current, ...servant, limitCount, memberInstanceId: `member-${nextMemberInstanceId++}`, support: current.support, supportRequired: current.support ? true : false, grandRequired: current.grandRequired, empty: false };
+  const memberInstanceId = `member-${nextMemberInstanceId++}`;
+  members.value[index] = { ...current, ...servant, limitCount, memberInstanceId, support: current.support, supportRequired: current.support ? true : false, grandRequired: current.grandRequired, empty: false };
+  remapSavedPlanMember(current.memberInstanceId, memberInstanceId);
   picker.value = null;
   syncFallbackOrders();
 }
@@ -229,7 +237,10 @@ function reorderMembers(source: number, target: number) {
   syncFallbackOrders();
 }
 function removeMember(index: number) {
-  members.value[index] = emptyServant(members.value[index].support);
+  const previousId = members.value[index].memberInstanceId;
+  const empty = emptyServant();
+  members.value[index] = empty;
+  remapSavedPlanMember(previousId, empty.memberInstanceId);
   syncFallbackOrders();
 }
 function saveSupport(index: number, member: Servant) {
@@ -265,6 +276,13 @@ function currentJob(snapshot: PlanSnapshot) {
   );
   return buildJobFile({ members: members.value, mystic: mystic.value, fallback: strategy, fallbackByWave: strategyByWave, snapshot, name: jobName.value, base: loadedJob.value ?? undefined });
 }
+const localJobDiagnostics = computed(() => {
+  const snapshot = JSON.parse(currentPlanSnapshot()) as PlanSnapshot;
+  return inspectUnsupportedJob(currentJob(snapshot));
+});
+const visibleJobDiagnostics = computed(() => [...jobDiagnostics.value, ...localJobDiagnostics.value].filter((diagnostic, index, all) => (
+  all.findIndex((item) => item.path === diagnostic.path && item.message === diagnostic.message) === index
+)));
 async function refreshJobLibrary() {
   jobLibraryLoading.value = true;
   jobLibraryError.value = jobLibraryReadOnly
@@ -600,16 +618,16 @@ async function stopRun() {
       <main class="workspace-body">
         <div v-if="renderError" class="workspace-render-error" role="alert"><AppIcon name="help" :size="16" /><div><strong>界面渲染失败</strong><p>{{ renderError }}</p></div><button @click="renderError = ''">关闭</button></div>
         <div v-if="activeWorkspace === 'jobs'" class="workspace-jobs">
-          <div v-if="jobDiagnostics.length" class="app-job-diagnostics" role="alert">
+          <div v-if="visibleJobDiagnostics.length" class="app-job-diagnostics" role="alert">
             <AppIcon name="help" :size="15" />
-            <div><strong>当前作业保存成功，但启动前检查未通过</strong><p v-for="diagnostic in jobDiagnostics.slice(0, 3)" :key="`${diagnostic.path}-${diagnostic.message}`">{{ describeJobDiagnostic(diagnostic) }}</p><small>打开操作序列修改后重新保存，或前往运行页查看完整检查结果。</small></div>
+            <div><strong>当前作业启动前检查未通过</strong><p v-for="diagnostic in visibleJobDiagnostics.slice(0, 3)" :key="`${diagnostic.path}-${diagnostic.message}`">{{ describeJobDiagnostic(diagnostic) }}</p><small>打开操作序列修改后重新保存，或前往运行页查看完整检查结果。</small></div>
             <button @click="activeWorkspace = 'run'">查看详情</button>
           </div>
           <FormationHome :members="members" :mystic="currentMystic" :fallback="fallback" :gender="gender" :settings="runSettings" :job-name="jobName" :gallery-empty="!atlasServants.length" :resource-region="resourceRegion" @gender="gender = $event" @picker="openPicker" @plan="planOpen = true" @fallback="fallbackOpen = true" @support="supportSlot = $event" @reorder="reorderMembers" @remove="removeMember" @ascension="changeAscension" @update-settings="updateSharedSettings"
             @start="startRun" @library="openUtility('jobs')" @prepare="activeWorkspace = 'prepare'" :start-disabled="Boolean(runDisabledReason)" :start-disabled-reason="runDisabledReason" :start-label="runStartLabel" />
         </div>
         <PrepareWorkspace v-else-if="activeWorkspace === 'prepare'" v-model:selected-serial="selectedSerial" @device="deviceStatus = $event" @updated="reloadResources(true)" />
-        <RunWorkspace v-else-if="activeWorkspace === 'run'" :state="runState" :events="runEvents" :settings="runSettings" :job-name="jobName" :selected-serial="selectedSerial" :device-label="deviceStatus.label" :start-disabled-reason="runDisabledReason" :start-label="runStartLabel" :starting="runStarting" :diagnostics="jobDiagnostics" @start="startRun" @stop="stopRun" @history="activeWorkspace = 'history'" @prepare="activeWorkspace = 'prepare'" @jobs="activeWorkspace = 'jobs'" />
+        <RunWorkspace v-else-if="activeWorkspace === 'run'" :state="runState" :events="runEvents" :settings="runSettings" :job-name="jobName" :selected-serial="selectedSerial" :device-label="deviceStatus.label" :start-disabled-reason="runDisabledReason" :start-label="runStartLabel" :starting="runStarting" :diagnostics="visibleJobDiagnostics" @start="startRun" @stop="stopRun" @history="activeWorkspace = 'history'" @prepare="activeWorkspace = 'prepare'" @jobs="activeWorkspace = 'jobs'" />
         <HistoryWorkspace v-else />
       </main>
     </div>
@@ -623,7 +641,7 @@ async function stopRun() {
   <div v-if="utility" class="utility-backdrop">
     <section class="utility-dialog">
       <header><div><span class="picker-kicker">HUGOFGO</span><h2>作业库</h2></div><button title="关闭" @click="utility = null"><AppIcon name="close" /></button></header>
-      <div class="utility-content"><p v-if="jobLibraryReadOnly" class="job-file-message">浏览器预览为只读：作业可以导入、导出与查看，保存、打开、删除和资源任务请使用桌面版。</p><p v-else>作业保存在桌面应用数据目录的 jobs/ 文件夹（开发期为项目 jobs/），并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading || jobLibraryReadOnly" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><div class="job-library-actions"><button @click="openSavedJob(entry)">打开</button><button @click="removeSavedJob(entry)">删除</button></div></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 操作序列 + 选卡策略；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><p v-if="jobValidationMessage" class="job-file-message" :class="{ 'job-validation-failed': jobDiagnostics.length }">{{ jobValidationMessage }}</p><ul v-if="jobDiagnostics.length" class="job-file-warnings"><li v-for="(diagnostic, index) in jobDiagnostics" :key="`${diagnostic.path}-${index}`">{{ describeJobDiagnostic(diagnostic) }}</li></ul><ul v-else-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
+      <div class="utility-content"><p v-if="jobLibraryReadOnly" class="job-file-message">浏览器预览为只读：作业可以导入、导出与查看，保存、打开、删除和资源任务请使用桌面版。</p><p v-else>作业保存在桌面应用数据目录的 jobs/ 文件夹（开发期为项目 jobs/），并以首发三名队员命名。</p><div class="utility-import"><AppIcon name="link" :size="16" /><input v-model="importSource" :disabled="jobLoading" placeholder="粘贴 Chaldea 分享链接或 Team ID" @keydown.enter="importFromLink" /><button :disabled="jobLoading || !importSource.trim()" @click="importFromLink">{{ jobLoading ? '读取中…' : '读取' }}</button></div><div class="job-library-head"><div><strong>jobs 文件夹</strong><small>{{ jobName }}.json</small></div><button :disabled="jobLibraryLoading || jobLibraryReadOnly" @click="persistCurrentJob()"><AppIcon name="folder" :size="15" /> 保存当前作业</button></div><p v-if="jobLibraryError" class="job-file-message">{{ jobLibraryError }}</p><ul v-else class="job-library-list"><li v-for="entry in jobLibrary" :key="entry.file"><div><strong>{{ entry.file.replace(/\.json$/, '') }}</strong><small>{{ savedJobLineup(entry) }}</small><small>{{ formatSavedAt(entry.savedAt) }}</small></div><div class="job-library-actions"><button @click="openSavedJob(entry)">打开</button><button @click="removeSavedJob(entry)">删除</button></div></li><li v-if="!jobLibrary.length && !jobLibraryLoading" class="job-library-empty">还没有作业，点击“保存当前作业”写入 jobs/。</li></ul><div class="job-file-row"><div><strong>本地作业文件</strong><small>编队 + 操作序列 + 选卡策略；按编队槽位保存，可跨设备分享</small></div><div class="job-file-actions"><button @click="exportCurrentJob"><AppIcon name="folder" :size="15" /> 导出 JSON</button><button @click="jobFileInput?.click()"><AppIcon name="folder" :size="15" /> 导入 JSON</button></div></div><p v-if="jobMessage" class="job-file-message">{{ jobMessage }}</p><p v-if="jobValidationMessage" class="job-file-message" :class="{ 'job-validation-failed': visibleJobDiagnostics.length }">{{ jobValidationMessage }}</p><ul v-if="visibleJobDiagnostics.length" class="job-file-warnings"><li v-for="(diagnostic, index) in visibleJobDiagnostics" :key="`${diagnostic.path}-${index}`">{{ describeJobDiagnostic(diagnostic) }}</li></ul><ul v-else-if="jobWarnings.length" class="job-file-warnings"><li v-for="(warning, index) in jobWarnings" :key="index">{{ warning }}</li></ul><input ref="jobFileInput" class="job-file-input" type="file" accept="application/json,.json" @change="handleJobFileChange" /></div>
     </section>
   </div>
 </template>

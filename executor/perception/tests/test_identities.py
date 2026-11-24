@@ -165,6 +165,23 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(['resist'] * 5,
                          [resisted.control(f'卡{index}').card.affinity for index in range(1, 6)])
 
+    def test_team_skips_empty_slots_and_exposes_backline_check(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
+                              ce='迦勒底午茶时光', ce_id=9403520),
+            FormationSlotPlan(slot=1, name=''),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+            *(FormationSlotPlan(slot=slot, name='') for slot in range(3, 6)),
+        ))
+        self.perception.bind_mystic('atlas-260')
+
+        observation = self.perception.read(load_frame('captures/2026-11-23/key/manual-team-04.png'))
+
+        self.assertEqual((705000, None, 2800100), observation.field('team_servants').value)
+        self.assertEqual('confirmed', observation.field('team_servants').status.value)
+        self.assertEqual((None, None, None), observation.field('team_backline_servants').value)
+        self.assertEqual('confirmed', observation.field('team_backline_servants').status.value)
+
     def test_empty_team_match_results_are_uncertain_not_an_exception(self) -> None:
         self.perception.bind_formation((
             FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True,
@@ -217,13 +234,16 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual((705000, 1, False, 'quick'),
                          (own.svt_id, own.servant_slot, own.support, own.card_type))
 
-    def test_command_card_slot_is_not_guessed_without_formation(self) -> None:
+    def test_command_card_color_is_usable_without_formation_identity(self) -> None:
         observation = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
 
-        self.assertEqual(-1, observation.control('卡1').card.servant_slot)
-        self.assertIn('command_card_identity', readiness_gaps(observation))
+        self.assertEqual((2800100, -1, 'quick'),
+                         (observation.control('卡1').card.svt_id,
+                          observation.control('卡1').card.servant_slot,
+                          observation.control('卡1').card.card_type))
+        self.assertNotIn('command_card_identity', readiness_gaps(observation))
 
-    def test_obscured_command_art_stays_unknown(self) -> None:
+    def test_obscured_command_art_degrades_to_unknown_identity_with_color(self) -> None:
         frame = load_frame('captures/2026-11-20/key/card-select.png')
         image = cv2.imdecode(np.frombuffer(frame.image, dtype=np.uint8), cv2.IMREAD_COLOR)
         image[350:560, 26:246] = 0
@@ -236,7 +256,10 @@ class IdentityTest(unittest.TestCase):
 
         observation = self.perception.read(Frame(image=encoded, width=1280, height=720, captured_at=0.0))
 
-        self.assertIsNone(observation.control('卡1').card)
+        self.assertEqual((None, -1, 'quick'),
+                         (observation.control('卡1').card.svt_id,
+                          observation.control('卡1').card.servant_slot,
+                          observation.control('卡1').card.card_type))
         self.assertEqual(705000, observation.control('卡4').card.svt_id)
 
     def test_command_catalog_loads_non_builtin_servant_from_resource_root(self) -> None:
@@ -257,7 +280,10 @@ class IdentityTest(unittest.TestCase):
 
         self.assertEqual(100100, observation.control('卡2').card.svt_id)
         self.assertEqual(100100, observation.control('卡4').card.svt_id)
-        self.assertIsNone(observation.control('卡1').card)
+        self.assertEqual((None, -1, 'buster'),
+                         (observation.control('卡1').card.svt_id,
+                          observation.control('卡1').card.servant_slot,
+                          observation.control('卡1').card.card_type))
 
     def test_command_catalog_rebinding_is_scoped_to_the_current_formation(self) -> None:
         frame = load_frame('captures/2026-11-20/key/card-select.png')
@@ -266,14 +292,20 @@ class IdentityTest(unittest.TestCase):
         ))
         first = self.perception.read(frame)
         self.assertEqual(2800100, first.control('卡1').card.svt_id)
-        self.assertIsNone(first.control('卡4').card)
+        self.assertEqual((None, -1, 'quick'),
+                         (first.control('卡4').card.svt_id,
+                          first.control('卡4').card.servant_slot,
+                          first.control('卡4').card.card_type))
 
         self.perception.bind_formation((
             FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
         ))
         second = self.perception.read(frame)
 
-        self.assertIsNone(second.control('卡1').card)
+        self.assertEqual((None, -1, 'quick'),
+                         (second.control('卡1').card.svt_id,
+                          second.control('卡1').card.servant_slot,
+                          second.control('卡1').card.card_type))
         self.assertEqual(705000, second.control('卡4').card.svt_id)
 
     def test_atlas_command_assets_work_across_sessions(self) -> None:
