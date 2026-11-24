@@ -150,6 +150,27 @@ class CompileJobTest(unittest.TestCase):
         self.assertIn('memberSlot', result.diagnostics[0].path)
         self.assertIn('空槽位', result.diagnostics[0].message)
 
+    def test_all_action_slot_reference_keys_reject_empty_slots(self):
+        job = self.valid_job()
+        job['formation'] = [job['formation'][0]]
+        job['waves'][0]['turns'][0]['actions'] = [
+            {'kind': 'skill', 'title': '', 'detail': '', 'icon': '', 'skill': 0,
+             'memberSlot': 4, 'playerTargetSlot': 4},
+            {'kind': 'orderChange', 'title': '', 'detail': '', 'icon': '',
+             'swapOutSlot': 4, 'swapInSlot': 4},
+        ]
+
+        result = compile_job(json.dumps(job))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual({
+            '$.waves[0].turns[0].actions[0].memberSlot',
+            '$.waves[0].turns[0].actions[0].playerTargetSlot',
+            '$.waves[0].turns[0].actions[1].swapOutSlot',
+            '$.waves[0].turns[0].actions[1].swapInSlot',
+        }, {diagnostic.path for diagnostic in result.diagnostics
+            if diagnostic.path.startswith('$.waves[0].turns[0].actions')})
+
     def test_servant_skill_and_np_attack_require_member_slot(self):
         job = self.valid_job()
         actions = job['waves'][0]['turns'][0]['actions']

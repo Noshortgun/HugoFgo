@@ -11,7 +11,7 @@ import { resourceRegion } from './resources';
 import { browserRunDisabledReason, fakeRunRequested, runApi } from './run';
 import { applyRunEvent, emptyRunState, type RunEvent } from './runState';
 import { applyRunSettings, loadRunSettings, runSettings, saveRunSettings, type RunSettings } from './runSettings';
-import { describeJobDiagnostic, inspectUnsupportedJob, validateJobFile, type JobDiagnostic } from './jobValidation';
+import { dedupeJobDiagnostics, describeJobDiagnostic, inspectUnsupportedJob, validateJobFile, type JobDiagnostic } from './jobValidation';
 import { isTauri } from './device';
 import { defaultFallbackStrategy, normalizeServantOrder } from './servantOrder';
 import FormationHome from './components/FormationHome.vue';
@@ -280,9 +280,10 @@ const localJobDiagnostics = computed(() => {
   const snapshot = JSON.parse(currentPlanSnapshot()) as PlanSnapshot;
   return inspectUnsupportedJob(currentJob(snapshot));
 });
-const visibleJobDiagnostics = computed(() => [...jobDiagnostics.value, ...localJobDiagnostics.value].filter((diagnostic, index, all) => (
-  all.findIndex((item) => item.path === diagnostic.path && item.message === diagnostic.message) === index
-)));
+const visibleJobDiagnostics = computed(() => dedupeJobDiagnostics([
+  ...jobDiagnostics.value,
+  ...localJobDiagnostics.value,
+]));
 async function refreshJobLibrary() {
   jobLibraryLoading.value = true;
   jobLibraryError.value = jobLibraryReadOnly

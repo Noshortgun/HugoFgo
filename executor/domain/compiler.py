@@ -19,9 +19,7 @@ from executor.domain.model import (
     TurnPlan,
     WavePlan,
 )
-from executor.domain.schema import validate_job
-
-SLOT_KEYS = ('memberSlot', 'playerTargetSlot', 'swapOutSlot', 'swapInSlot')
+from executor.domain.schema import ACTION_SLOT_REFERENCE_KEYS, MEMBER_SLOT_REQUIRED_ACTIONS, validate_job
 
 
 def _diagnostic(diagnostics: list[Diagnostic], path: str, message: str,
@@ -96,10 +94,10 @@ def _check_slot(action: dict[str, Any], key: str, action_path: str, wave: int, t
 
 def _compile_action(action: dict[str, Any], action_path: str, wave: int, turn_no: int,
                     formation: dict[int, str], diagnostics: list[Diagnostic]) -> ActionPlan:
-    if action['kind'] in {'skill', 'attack'} and action.get('memberSlot') is None:
+    if action['kind'] in MEMBER_SLOT_REQUIRED_ACTIONS and action.get('memberSlot') is None:
         label = '从者技能' if action['kind'] == 'skill' else '宝具攻击'
         _diagnostic(diagnostics, f'{action_path}.memberSlot', f'{label}必须指定 memberSlot', wave, turn_no)
-    for key in SLOT_KEYS:
+    for key in ACTION_SLOT_REFERENCE_KEYS:
         _check_slot(action, key, action_path, wave, turn_no, formation, diagnostics)
     if action['kind'] == 'orderChange' and action['swapOutSlot'] == action['swapInSlot']:
         _diagnostic(diagnostics, f'{action_path}.swapInSlot', '换人动作的上下场槽位不能相同', wave, turn_no)
