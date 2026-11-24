@@ -1981,7 +1981,7 @@ def check_manual_key_frames():
     with TemporaryDirectory() as directory:
         for name in ('manual-full-loop', 'manual-team-mystic-mismatch',
                      'manual-team-servant-mismatch', 'manual-team-support-ce-mismatch',
-                     'support-unknown-rows-bottom'):
+                     'support-unknown-rows-bottom', 'costume-team-start'):
             case = get_case(name)
             try:
                 report = run_case(case, Path(directory))

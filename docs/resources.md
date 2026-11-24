@@ -40,6 +40,7 @@ npm run data:query -- counts
 | 字段 | 用途 | 本地路径 |
 | --- | --- | --- |
 | `extraAssets.faces.ascension` | 状态头像、助战头像 | `data/<区服>/assets/atlas/faces/<从者ID>-<再临>.png` |
+| `extraAssets.faces.costume` | 灵衣状态头像、助战与队伍身份核对 | `data/<区服>/assets/atlas/faces/<从者ID>-costume-<灵衣ID>.png` |
 | `extraAssets.commands.ascension` | 普通指令卡人物原图（透明 RGBA） | `data/<区服>/assets/atlas/commands/<从者ID>/<再临>.png` |
 | `extraAssets.commands.costume` | 灵衣指令卡原图 | `data/<区服>/assets/atlas/commands/<从者ID>/costume-<灵衣ID>.png` |
 | `extraAssets.charaGraph.ascension` | 卡面立绘 | `data/<区服>/assets/atlas/cards/<从者ID>-<再临>.png` |
@@ -56,7 +57,7 @@ npm run data:query -- counts
 | 类别 | 内容与条件 |
 | --- | --- |
 | `faces.base` / `faces.ascension` | 基础头像与各再临头像 |
-| `faces.costume` | 特殊从者的灵衣头像，仅对明确支持的特殊形态生成 |
+| `faces.costume` | 各从者的灵衣头像，身份归一到原从者；`800100` 另保留特殊形态别名。不作为全局非空强制类别 |
 | `cards.base` / `cards.ascension` | 基础卡面与再临卡面；后者目前只为 `800100`、`4000100` 下载 |
 | `cards.costume` | 特殊从者的灵衣卡面 |
 | `commands.ascension` / `commands.costume` | 各再临与灵衣的普通指令卡原图 |

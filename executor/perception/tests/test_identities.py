@@ -14,6 +14,7 @@ from executor.perception import BasePage, Perception
 from executor.perception.identity import CommandTemplate, default_identity_root
 from executor.domain import FormationSlotPlan
 from executor.perception.readiness import readiness_gaps
+from executor.perception.regions import cn
 from executor.perception.tests.fixtures import ROOT, isolated_perception, load_frame
 
 
@@ -104,6 +105,30 @@ class IdentityTest(unittest.TestCase):
 
         candidate = second.control('助战卡片第1行').support
         self.assertEqual((305900, 9300520), (candidate.svt_id, candidate.ce_id))
+
+    def test_support_costume_face_maps_to_base_servant(self) -> None:
+        """构造助战帧只验证灵衣身份归一，不作为实机验收证据。"""
+        frame = load_frame('captures/2026-11-20/key/support-select-correct-ce.png')
+        row = self.perception.read(frame).control('助战卡片第2行').box
+        image = cv2.imdecode(np.frombuffer(frame.image, dtype=np.uint8), cv2.IMREAD_COLOR)
+        costume_path = (ROOT / 'executor/perception/templates/cn/identities/faces'
+                        / '500800-costume-500830.png')
+        costume = cv2.imdecode(np.fromfile(str(costume_path), dtype=np.uint8), cv2.IMREAD_COLOR)
+        costume = cv2.resize(costume, cn.SUPPORT_FACE_SIZE)
+        x = cn.SUPPORT_FACE_SEARCH_X - cn.SUPPORT_FACE_TEMPLATE_BOX[0]
+        query_y = row[3] - cn.SUPPORT_FACE_BOTTOM_OFFSET + (
+            cn.SUPPORT_FACE_SEARCH_Y_OFFSET if row[3] >= cn.BASE_SIZE[1]
+            else cn.SUPPORT_FACE_TEMPLATE_BOX[1])
+        y = query_y - cn.SUPPORT_FACE_TEMPLATE_BOX[1]
+        image[y:y + cn.SUPPORT_FACE_SIZE[1], x:x + cn.SUPPORT_FACE_SIZE[0]] = costume
+        encoded = cv2.imencode('.png', image)[1].tobytes()
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+        ))
+
+        observation = self.perception.read(Frame(image=encoded, width=1280, height=720, captured_at=0.0))
+
+        self.assertEqual(500800, observation.control('助战卡片第2行').support.svt_id)
 
     def test_command_cards_include_servant_type_and_support_identity(self) -> None:
         self.perception.bind_formation((
