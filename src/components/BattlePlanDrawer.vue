@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { AttackCardPlan, MysticCode, NpPosition, PlanAction, PlanSnapshot, Servant, SkillDefinition, SkillSecondaryOption, SelectedSkillOption } from '../types';
+import type { MysticCode, NpPosition, PlanAction, PlanSnapshot, Servant, SkillDefinition, SkillSecondaryOption, SelectedSkillOption } from '../types';
 import AppIcon from './AppIcon.vue';
 import OrderChangeDialog from './OrderChangeDialog.vue';
 import { skillIcons, spellIcons } from '../data';
@@ -20,12 +20,13 @@ interface SkillWizard {
 }
 const wave = ref(1);
 const turn = ref(1);
+const waveCount = ref(3);
+const waveNumbers = computed(() => Array.from({ length: waveCount.value }, (_, index) => index + 1));
 const turnCountByWave = ref<Record<number, number>>({ 1: 1, 2: 1, 3: 1 });
 const enemyCount = ref<3 | 6>(3);
 const targetByWave = ref<Record<number, number>>({ 1: 3, 2: 3, 3: 3 });
 const actionsBySlot = ref<Record<string, PlanAction[]>>({});
 const npPositionsBySlot = ref<Record<string, Record<string, NpPosition>>>({});
-const attackBySlot = ref<Record<string, AttackCardPlan>>({});
 const usedSkillKeys = ref<Set<string>>(new Set());
 type PendingSelection =
   | { kind: 'spell'; skill: number; icon: string }
@@ -82,20 +83,7 @@ const targetPickerShowing = computed(() => skillWizard.value?.stage === 'target'
 const masterEnemyPickerShowing = computed(() => pendingSelection.value?.kind === 'master' && pendingSelection.value.target === 'enemy');
 const wizardSecondaryLabel = computed(() => skillWizard.value?.definition.secondarySelection?.label ?? '');
 const wizardSecondaryOptions = computed<SkillSecondaryOption[]>(() => skillWizard.value?.definition.secondarySelection?.options ?? []);
-const attackCardPlan = computed(() => attackBySlot.value[slotKey.value] ?? null);
-const attackCardModeLabel = computed(() => {
-  const mode = attackCardPlan.value?.mode ?? 'strategy';
-  if (mode === 'verify') return '必须匹配';
-  if (mode === 'prefer') return '尽量照此出卡';
-  return '按选卡策略';
-});
-const attackCardModeHint = computed(() => {
-  const mode = attackCardPlan.value?.mode ?? 'strategy';
-  if (mode === 'verify') return '运行时校验发牌；不匹配时中止并提示，不会静默改卡';
-  if (mode === 'prefer') return '发牌不符时回落到选卡策略，仅作优先参考';
-  return '由补刀策略按实际发牌选择，不预先固定手牌';
-});
-const cardColorLabel: Record<string, string> = { buster: '红', arts: '蓝', quick: '绿' };
+const unsupportedSecondaryActions = computed(() => orderedActionEntries().filter((entry) => entry.action.secondarySelection));
 function memberNameFor(memberInstanceId: string) {
   return props.members.find((member) => member.memberInstanceId === memberInstanceId)?.name ?? '未知从者';
 }
@@ -312,15 +300,10 @@ function hasOrderChangeDependents(action: PlanAction) {
   const index = entries.findIndex((entry) => entry.action.id === action.id);
   if (index < 0 || entries.length > index + 1) return true;
   const [actionWave, actionTurn] = slotKey.value.split('-').map(Number);
-  const hasCards = Object.entries(attackBySlot.value).some(([key, plan]) => {
-    const [waveNumber, turnNumber] = key.split('-').map(Number);
-    return plan.cards.length && (waveNumber > actionWave || (waveNumber === actionWave && turnNumber >= actionTurn));
-  });
-  const hasNp = Object.entries(npPositionsBySlot.value).some(([key, positions]) => {
+  return Object.entries(npPositionsBySlot.value).some(([key, positions]) => {
     const [waveNumber, turnNumber] = key.split('-').map(Number);
     return Object.keys(positions).length && (waveNumber > actionWave || (waveNumber === actionWave && turnNumber >= actionTurn));
   });
-  return hasCards || hasNp;
 }
 function canRemoveAction(action: PlanAction) {
   if (action.kind === 'orderChange') return !hasOrderChangeDependents(action);
@@ -340,7 +323,7 @@ function removeAction(id: number) {
   const action = actions.value.find((item) => item.id === id);
   if (!action) return;
   if (!canRemoveAction(action)) {
-    if (action.kind === 'orderChange') editWarning.value = '请先删除此换人之后的动作、宝具卡序和指令卡，再删除换人。';
+    if (action.kind === 'orderChange') editWarning.value = '请先删除此换人之后的动作和宝具卡序，再删除换人。';
     return;
   }
   editWarning.value = '';
@@ -353,18 +336,17 @@ function clearTurn() {
   if (actions.value.some((action) => action.kind === 'orderChange')) {
     const [currentWave, currentTurn] = slotKey.value.split('-').map(Number);
     const hasLaterActions = orderedActionEntries().some((entry) => entry.waveNumber > currentWave || (entry.waveNumber === currentWave && entry.turnNumber > currentTurn));
-    const hasLaterCards = [...Object.keys(attackBySlot.value), ...Object.keys(npPositionsBySlot.value)].some((key) => {
+    const hasLaterNpPositions = Object.keys(npPositionsBySlot.value).some((key) => {
       const [waveNumber, turnNumber] = key.split('-').map(Number);
       return waveNumber > currentWave || (waveNumber === currentWave && turnNumber > currentTurn);
     });
-    if (hasLaterActions || hasLaterCards) {
+    if (hasLaterActions || hasLaterNpPositions) {
       editWarning.value = '请先清空后续回合，再清空包含换人的回合，避免后续动作失去上场从者。';
       return;
     }
   }
   editWarning.value = '';
   actionsBySlot.value[slotKey.value] = [];
-  delete attackBySlot.value[slotKey.value];
   delete npPositionsBySlot.value[slotKey.value];
   editingSecondaryId.value = null;
   restoreTargetFromActions();
@@ -392,7 +374,6 @@ function removeTurn() {
   if (count <= 1) return;
   delete actionsBySlot.value[`${wave.value}-${count}`];
   delete npPositionsBySlot.value[`${wave.value}-${count}`];
-  delete attackBySlot.value[`${wave.value}-${count}`];
   turnCountByWave.value[wave.value] -= 1;
   turn.value = Math.min(turn.value, turnCountByWave.value[wave.value]);
   restoreTargetFromActions();
@@ -402,26 +383,56 @@ function addTurn() {
   turnCountByWave.value[wave.value] += 1;
   turn.value = turnCountByWave.value[wave.value];
 }
+function addWave() {
+  if (waveCount.value >= 3) return;
+  waveCount.value += 1;
+  turnCountByWave.value[waveCount.value] = 1;
+  targetByWave.value[waveCount.value] = enemyCount.value === 6 ? 6 : 3;
+  wave.value = waveCount.value;
+  turn.value = 1;
+}
+function removeWave() {
+  if (waveCount.value <= 1) return;
+  const last = waveCount.value;
+  const hasContent = Object.keys(actionsBySlot.value).some((key) => Number(key.split('-')[0]) === last)
+    || Object.keys(npPositionsBySlot.value).some((key) => Number(key.split('-')[0]) === last);
+  if (hasContent && !window.confirm(`删除第 ${last} 面及其动作和宝具卡序？`)) return;
+  delete turnCountByWave.value[last];
+  delete targetByWave.value[last];
+  Object.keys(actionsBySlot.value).forEach((key) => { if (Number(key.split('-')[0]) === last) delete actionsBySlot.value[key]; });
+  Object.keys(npPositionsBySlot.value).forEach((key) => { if (Number(key.split('-')[0]) === last) delete npPositionsBySlot.value[key]; });
+  waveCount.value -= 1;
+  wave.value = Math.min(wave.value, waveCount.value);
+  turn.value = Math.min(turn.value, turnCountByWave.value[wave.value] ?? 1);
+  rebuildUsedSkills();
+}
 function captureState(): string {
   const snapshot: PlanSnapshot = {
+    waveCount: waveCount.value,
     turnCountByWave: turnCountByWave.value,
     enemyCount: enemyCount.value,
     targetByWave: targetByWave.value,
     actionsBySlot: actionsBySlot.value,
     npPositionsBySlot: npPositionsBySlot.value,
-    attackBySlot: attackBySlot.value,
     nextId: nextId.value,
   };
   return JSON.stringify(snapshot);
 }
 function restoreState(serialized: string) {
   const snapshot = JSON.parse(serialized) as PlanSnapshot;
-  turnCountByWave.value = snapshot.turnCountByWave;
+  const countKeys = [
+    ...Object.keys(snapshot.turnCountByWave ?? {}),
+    ...Object.keys(snapshot.targetByWave ?? {}),
+    ...Object.keys(snapshot.actionsBySlot ?? {}).map((key) => key.split('-')[0]),
+  ].map(Number).filter(Number.isFinite);
+  waveCount.value = Math.max(1, snapshot.waveCount ?? 3, ...countKeys);
+  turnCountByWave.value = { ...(snapshot.turnCountByWave ?? {}) };
+  for (let item = 1; item <= waveCount.value; item++) turnCountByWave.value[item] ||= 1;
   enemyCount.value = snapshot.enemyCount;
-  targetByWave.value = snapshot.targetByWave;
+  targetByWave.value = { ...(snapshot.targetByWave ?? {}) };
+  for (let item = 1; item <= waveCount.value; item++) targetByWave.value[item] ||= snapshot.enemyCount === 6 ? 6 : 3;
   actionsBySlot.value = snapshot.actionsBySlot;
   npPositionsBySlot.value = snapshot.npPositionsBySlot || {};
-  attackBySlot.value = snapshot.attackBySlot || {};
   nextId.value = snapshot.nextId;
   pendingSelection.value = null;
   skillWizard.value = null;
@@ -457,7 +468,8 @@ defineExpose({ getSnapshot: captureState, markSaved });
       <header class="plan-header"><div><span class="plan-kicker">BATTLE PROGRAM</span><h2>操作序列</h2><p>默认每面一个回合，需要时可在右侧增加回合。</p></div><div class="plan-header-right"><span class="plan-save-status" :class="{ dirty }"><AppIcon :name="dirty ? 'edit' : 'check'" :size="14" />{{ dirty ? '有未保存修改' : '已保存' }}</span><button class="reset-plan-button" :disabled="!dirty" title="恢复到最近保存的操作序列与选卡策略" @click="resetPlan">重置</button><button class="save-plan-button" :disabled="!dirty || props.saving" @click="savePlan"><AppIcon name="check" :size="14" /> {{ props.saving ? '保存中…' : '保存' }}</button><button title="关闭" @click="emit('close')"><AppIcon name="close" /></button></div></header>
       <div v-if="props.importWarnings?.length && warningsVisible" class="plan-import-warnings"><AppIcon name="edit" :size="15" /><div><strong>导入时有 {{ props.importWarnings.length }} 处需要留意</strong><ul><li v-for="(warning, index) in props.importWarnings" :key="index">{{ warning }}</li></ul></div><button title="关闭提示" @click="warningsVisible = false"><AppIcon name="close" :size="14" /></button></div>
       <div v-if="editWarning" class="plan-import-warnings" role="alert"><AppIcon name="edit" :size="15" /><div><strong>{{ editWarning }}</strong></div><button title="关闭提示" @click="editWarning = ''"><AppIcon name="close" :size="14" /></button></div>
-      <div class="plan-wave-tabs"><button v-for="item in 3" :key="item" :class="{ active: wave === item }" @click="selectWave(item)"><span>BATTLE {{ item }}/3</span><strong>第 {{ item }} 面</strong><small>{{ turnCountByWave[item] }} 个回合</small></button></div>
+      <div v-if="unsupportedSecondaryActions.length" class="plan-import-warnings plan-capability-warning" role="alert"><AppIcon name="edit" :size="15" /><div><strong>此作业包含需要技能追加选择的动作</strong><p>{{ unsupportedSecondaryActions.map((entry) => `第 ${entry.waveNumber} 面 · 回合 ${entry.turnNumber}：${entry.action.title}`).join('；') }}</p><small>技能使用后还需要额外选择，当前无法自动执行；动作会保留，启动前会被拦截。</small></div></div>
+      <div class="plan-wave-row"><div class="plan-wave-tabs" :style="{ gridTemplateColumns: `repeat(${waveCount}, minmax(120px, 1fr))` }"><button v-for="item in waveNumbers" :key="item" :class="{ active: wave === item }" @click="selectWave(item)"><span>BATTLE {{ item }}/{{ waveCount }}</span><strong>第 {{ item }} 面</strong><small>{{ turnCountByWave[item] }} 个回合</small></button></div><div class="plan-wave-controls"><button :disabled="waveCount >= 3" title="游戏关卡最多三面" @click="addWave"><AppIcon name="plus" :size="12" /> 增加一面</button><button :disabled="waveCount <= 1" title="游戏关卡最少一面" @click="removeWave">删除最后一面</button></div></div>
       <div class="plan-content">
         <div class="battle-editor-stage">
           <div class="battlefield">
@@ -487,7 +499,7 @@ defineExpose({ getSnapshot: captureState, markSaved });
           <div class="master-command-bar"><div class="master-command-title"><img :src="props.mystic.item" :alt="props.mystic.name" /><span><strong>{{ props.mystic.name }}</strong><small>右键技能可刷新冷却</small></span></div><button v-for="(skill, index) in props.mystic.skills" :key="index" :class="{ used: usedSkillKeys.has(`master-${index}`) }" :title="props.mystic.orderChangeSkill === index ? '换人：选择交换双方' : `御主技能 ${index + 1}`" @click="useMaster(index)" @contextmenu.prevent="openRefresh(`master-${index}`, `御主技能 ${index + 1}`)"><img :src="props.mystic.skillIconUrls?.[index] || `/assets/skills/${skill}.png`" alt="御主技能" /><span>技能 {{ index + 1 }}</span></button><i></i><span class="spell-label">令咒 · 选择对象</span><button v-for="(spell, index) in spellIcons" :key="spell" @click="useSpell(index)"><img :src="`/assets/skills/${spell}.png`" alt="令咒" /><span>{{ index === 0 ? '宝具解放' : '灵基修复' }}</span></button><button class="command-fallback-button" @click="emit('fallback')"><AppIcon name="cards" :size="16" /> 后续回合与选卡策略</button></div>
         </div>
 
-        <aside class="sequence-panel"><div class="turn-selector"><button v-for="item in turnCountByWave[wave]" :key="item" :class="{ active: turn === item }" @click="turn = item">回合 {{ item }}</button><button class="add-turn-inline" title="增加回合" @click="addTurn"><AppIcon name="plus" :size="13" /></button><button class="remove-turn-inline" title="删除最后一个回合" :disabled="turnCountByWave[wave] <= 1" @click="removeTurn">−</button></div><div class="sequence-panel-heading"><div><span>CURRENT TURN</span><h3>第 {{ wave }} 面 · 回合 {{ turn }}</h3></div><button @click="clearTurn">清空</button></div><div class="sequence-target">攻击目标：<strong>敌方 {{ target }}</strong><small>{{ enemyCount }} 敌人阵型 · 无血量预设</small></div><div class="sequence-card-plan" :class="attackCardPlan?.mode ?? 'strategy'"><div class="sequence-card-plan-head"><span>本回合卡序</span><strong>{{ attackCardModeLabel }}</strong></div><div v-if="attackCardPlan" class="sequence-card-chips"><span v-for="(card, index) in attackCardPlan.cards" :key="index" :class="card.type">{{ memberNameFor(card.memberInstanceId) }} · {{ cardColorLabel[card.type] }}</span></div><small>{{ attackCardModeHint }}</small></div><div class="sequence-list"><div v-if="actions.length === 0" class="sequence-empty"><AppIcon name="cards" :size="27" /><strong>点击技能或从者宝具</strong><p>普通指令卡由补刀策略按实际发牌处理</p></div><div v-for="(action, index) in actions" :key="action.id" class="sequence-item"><span>{{ index + 1 }}</span><img :src="actionIconSrc(action)" alt="" /><div><strong>{{ action.title }}</strong><small>{{ action.detail }}</small><div v-if="action.secondarySelection" class="sequence-secondary"><button class="secondary-value" @click="toggleSecondaryEdit(action)"><img v-if="action.secondarySelection.imageUrl" class="skill-secondary-image" :src="action.secondarySelection.imageUrl" :alt="action.secondarySelection.label" /><span v-else>{{ action.secondarySelection.label }}</span> <AppIcon name="chevron" :size="11" /></button><div v-if="editingSecondaryId === action.id" class="secondary-option-list"><button v-for="(option, optionIndex) in secondaryOptionsFor(action)" :key="optionIndex" :class="{ active: action.secondarySelection.index === optionIndex }" @click="updateSecondary(action, option, optionIndex)"><img v-if="option.imageUrl" class="skill-secondary-image" :src="option.imageUrl" :alt="option.label" /><span v-else>{{ option.label }}</span></button></div></div></div><button :disabled="!canRemoveAction(action)" :title="action.kind === 'orderChange' && !canRemoveAction(action) ? '请先删除此换人之后的动作、宝具卡序和指令卡' : action.kind === 'target' && !canRemoveAction(action) ? '只能删除最新的选敌动作' : '删除'" @click="removeAction(action.id)"><AppIcon name="close" :size="14" /></button></div></div><div class="np-position-note"><AppIcon name="check" :size="13" /> 宝具卡序按从者、回合独立设置</div><div class="attack-count"><span>本回合动作</span><strong>{{ actions.length }}</strong><small>使用过的技能变灰；右键图标可刷新冷却</small></div></aside>
+        <aside class="sequence-panel"><div class="turn-selector"><button v-for="item in turnCountByWave[wave]" :key="item" :class="{ active: turn === item }" @click="turn = item">回合 {{ item }}</button><button class="add-turn-inline" title="增加回合" @click="addTurn"><AppIcon name="plus" :size="13" /></button><button class="remove-turn-inline" title="删除最后一个回合" :disabled="turnCountByWave[wave] <= 1" @click="removeTurn">−</button></div><div class="sequence-panel-heading"><div><span>CURRENT TURN</span><h3>第 {{ wave }} 面 · 回合 {{ turn }}</h3></div><button @click="clearTurn">清空</button></div><div class="sequence-target">攻击目标：<strong>敌方 {{ target }}</strong><small>{{ enemyCount }} 敌人阵型 · 无血量预设</small></div><div class="sequence-list"><div v-if="actions.length === 0" class="sequence-empty"><AppIcon name="cards" :size="27" /><strong>点击技能或从者宝具</strong><p>普通指令卡由补刀策略按实际发牌处理</p></div><div v-for="(action, index) in actions" :key="action.id" class="sequence-item"><span>{{ index + 1 }}</span><img :src="actionIconSrc(action)" alt="" /><div><strong>{{ action.title }}</strong><small>{{ action.detail }}</small><div v-if="action.secondarySelection" class="sequence-secondary"><button class="secondary-value" @click="toggleSecondaryEdit(action)"><img v-if="action.secondarySelection.imageUrl" class="skill-secondary-image" :src="action.secondarySelection.imageUrl" :alt="action.secondarySelection.label" /><span v-else>{{ action.secondarySelection.label }}</span> <AppIcon name="chevron" :size="11" /></button><div v-if="editingSecondaryId === action.id" class="secondary-option-list"><button v-for="(option, optionIndex) in secondaryOptionsFor(action)" :key="optionIndex" :class="{ active: action.secondarySelection.index === optionIndex }" @click="updateSecondary(action, option, optionIndex)"><img v-if="option.imageUrl" class="skill-secondary-image" :src="option.imageUrl" :alt="option.label" /><span v-else>{{ option.label }}</span></button></div></div></div><button :disabled="!canRemoveAction(action)" :title="action.kind === 'orderChange' && !canRemoveAction(action) ? '请先删除此换人之后的动作和宝具卡序' : action.kind === 'target' && !canRemoveAction(action) ? '只能删除最新的选敌动作' : '删除'" @click="removeAction(action.id)"><AppIcon name="close" :size="14" /></button></div></div><div class="np-position-note"><AppIcon name="check" :size="13" /> 宝具卡序按从者、回合独立设置</div><div class="attack-count"><span>本回合动作</span><strong>{{ actions.length }}</strong><small>使用过的技能变灰；右键图标可刷新冷却</small></div></aside>
       </div>
     </section>
 

@@ -71,7 +71,7 @@ impl Default for RunState {
             log_dir: String::new(),
             error: String::new(),
             notice: String::new(),
-            channel: "adb".to_string(),
+            channel: "scrcpy".to_string(),
             exit_code: None,
         }
     }
@@ -178,6 +178,101 @@ fn fake_requested() -> bool {
     matches!(env::var("HUGOFGO_FAKE_RUN").as_deref(), Ok("1") | Ok("true"))
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct JobDiagnostic {
+    pub path: String,
+    pub message: String,
+    pub wave: Option<u32>,
+    pub turn: Option<u32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct JobValidation {
+    pub ok: bool,
+    pub summary: String,
+    pub diagnostics: Vec<JobDiagnostic>,
+}
+
+fn resolve_job_path(app: &AppHandle, job_path: &str) -> Result<PathBuf, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
+    let requested = PathBuf::from(job_path);
+    let candidate = if requested.is_absolute() {
+        requested
+    } else if cfg!(debug_assertions) && project_root().join(&requested).is_file() {
+        project_root().join(&requested)
+    } else {
+        app_data.join(&requested)
+    };
+    let job = fs::canonicalize(&candidate)
+        .map_err(|error| format!("无法读取作业文件 {}：{error}", candidate.display()))?;
+    if !job.is_file() {
+        return Err(format!("作业路径不是文件：{}", job.display()));
+    }
+    Ok(job)
+}
+
+fn parse_job_diagnostic(line: &str) -> Option<JobDiagnostic> {
+    let rest = line.trim().strip_prefix("- [")?;
+    let (location, rest) = rest.split_once("] ")?;
+    let (path, message) = rest.split_once(": ")?;
+    let wave = location
+        .split("第 ")
+        .nth(1)
+        .and_then(|value| value.split(' ').next())
+        .and_then(|value| value.parse::<u32>().ok());
+    let turn = location
+        .split("回合 ")
+        .nth(1)
+        .and_then(|value| value.trim().parse::<u32>().ok());
+    Some(JobDiagnostic {
+        path: path.to_string(),
+        message: message.to_string(),
+        wave,
+        turn,
+    })
+}
+
+#[tauri::command]
+pub(crate) fn validate_job(app: AppHandle, job_path: String) -> Result<JobValidation, String> {
+    let job = resolve_job_path(&app, &job_path)?;
+    let root = executor_root(&app)?;
+    let python = python_path(&app)?;
+    let output = Command::new(&python)
+        .args(["-m", "executor.domain", &job.to_string_lossy()])
+        .current_dir(&root)
+        .env("PYTHONUTF8", "1")
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .output()
+        .map_err(|error| format!("无法启动作业检查器 {}：{error}", python.display()))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if output.status.success() {
+        return Ok(JobValidation {
+            ok: true,
+            summary: stdout,
+            diagnostics: Vec::new(),
+        });
+    }
+    let diagnostics = stderr
+        .lines()
+        .filter_map(parse_job_diagnostic)
+        .collect::<Vec<_>>();
+    let summary = if diagnostics.is_empty() {
+        if stderr.is_empty() { stdout } else { stderr }
+    } else {
+        format!("作业不可执行，共 {} 个问题", diagnostics.len())
+    };
+    Ok(JobValidation {
+        ok: false,
+        summary,
+        diagnostics,
+    })
+}
+
 fn executor_args(
     job: &Path,
     serial: &str,
@@ -279,6 +374,10 @@ impl RunManager {
                     state.recovery_used.insert(item, count);
                 }
             }
+            "battle_completed" => {
+                state.completed_runs =
+                    value_u32(&event.data, "completed_runs").unwrap_or(state.completed_runs);
+            }
             "finished" => {
                 state.running = false;
                 state.status = RunPhase::Completed;
@@ -329,19 +428,7 @@ impl RunManager {
             .path()
             .app_data_dir()
             .map_err(|error| format!("无法定位应用数据目录：{error}"))?;
-        let requested = PathBuf::from(&job_path);
-        let candidate = if requested.is_absolute() {
-            requested
-        } else if cfg!(debug_assertions) && project_root().join(&requested).is_file() {
-            project_root().join(&requested)
-        } else {
-            app_data.join(&requested)
-        };
-        let job = fs::canonicalize(&candidate)
-            .map_err(|error| format!("无法读取作业文件 {}：{error}", candidate.display()))?;
-        if !job.is_file() {
-            return Err(format!("作业路径不是文件：{}", job.display()));
-        }
+        let job = resolve_job_path(&app, &job_path)?;
         let fake = fake_requested();
         let serial = if fake && serial.trim().is_empty() {
             "fake".to_string()
@@ -349,14 +436,14 @@ impl RunManager {
             serial.trim().to_string()
         };
         if serial.is_empty() {
-            return Err("请先在“设置与资源”中选择设备".to_string());
+            return Err("请先在“准备”中选择设备".to_string());
         }
         if !fake {
             crate::device::ensure_device(&serial)?;
         }
         let region = region.trim().to_string();
         if region != "CN" {
-            return Err("执行器当前仅支持 CN；请在“设置与资源”中选择国服后再运行".to_string());
+            return Err("执行器当前仅支持 CN；请在“准备”中选择国服后再运行".to_string());
         }
         let run_id = format!("run-{}-{}", now_ms(), std::process::id());
         let log_root = if cfg!(debug_assertions) {
@@ -684,6 +771,8 @@ mod tests {
                 allowed: vec![],
                 drain_after_turns: true,
             },
+            device_channel: crate::settings::DeviceChannel::Adb,
+            allow_adb_fallback: false,
             ..RunSettings::default()
         };
         let args = executor_args(
@@ -750,5 +839,17 @@ mod tests {
                                  &settings, false);
         assert!(args.windows(2).any(|pair| pair == ["--channel", "scrcpy"]));
         assert!(args.contains(&"--allow-adb-fallback".to_string()));
+    }
+
+    #[test]
+    fn job_domain_diagnostic_is_parsed_with_wave_and_turn() {
+        let diagnostic = parse_job_diagnostic(
+            "- [第 2 面 · 回合 3] $.waves[1].turns[2].attack.cards: 固定卡序需要三张卡",
+        )
+        .unwrap();
+        assert_eq!(diagnostic.wave, Some(2));
+        assert_eq!(diagnostic.turn, Some(3));
+        assert_eq!(diagnostic.path, "$.waves[1].turns[2].attack.cards");
+        assert_eq!(diagnostic.message, "固定卡序需要三张卡");
     }
 }

@@ -20,6 +20,7 @@ class RunSettingsPersistenceTest(unittest.TestCase):
             battles=3,
             recovery=RecoveryPolicy(
                 allowed=frozenset({RecoveryItem.GOLD, RecoveryItem.SAINT_QUARTZ}),
+                priority=(RecoveryItem.GOLD, RecoveryItem.SAINT_QUARTZ),
                 drain_after_turns=True,
             ),
         )

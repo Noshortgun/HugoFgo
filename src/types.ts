@@ -94,27 +94,16 @@ export type CardColor = 'buster' | 'arts' | 'quick';
 export type StrategyCriterion = 'servant' | 'cards' | 'crit' | 'affinity';
 export type NpPosition = 'auto' | 1 | 2 | 3;
 
-/** 固定卡序仅作为策略之上的可选约束，运行时按发牌校验。 */
+/** 旧版作业文件的固定卡序字段；导入时忽略并改用选卡策略。 */
 export type AttackCardMode = 'strategy' | 'prefer' | 'verify';
 
-export interface AttackCard {
-  memberInstanceId: string;
-  type: CardColor;
-  deckIndex?: number;
-}
-
-export interface AttackCardPlan {
-  mode: AttackCardMode;
-  cards: AttackCard[];
-}
-
 export interface PlanSnapshot {
+  waveCount?: number;
   turnCountByWave: Record<number, number>;
   enemyCount: 3 | 6;
   targetByWave: Record<number, number>;
   actionsBySlot: Record<string, PlanAction[]>;
   npPositionsBySlot: Record<string, Record<string, NpPosition>>;
-  attackBySlot: Record<string, AttackCardPlan>;
   nextId: number;
 }
 

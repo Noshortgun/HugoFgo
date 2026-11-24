@@ -16,6 +16,7 @@ def load_settings(path: str | Path) -> RunSettings:
         battles=data['battles'],
         recovery=RecoveryPolicy(
             allowed=frozenset(RecoveryItem(item) for item in recovery['allowed']),
+            priority=tuple(RecoveryItem(item) for item in recovery['allowed']),
             drain_after_turns=recovery['drain_after_turns'],
         ),
     )
@@ -27,7 +28,7 @@ def save_settings(path: str | Path, settings: RunSettings) -> None:
     data = {
         'battles': settings.battles,
         'recovery': {
-            'allowed': sorted(item.value for item in settings.recovery.allowed),
+            'allowed': [item.value for item in settings.recovery.priority or sorted(settings.recovery.allowed, key=lambda item: item.value)],
             'drain_after_turns': settings.recovery.drain_after_turns,
         },
     }

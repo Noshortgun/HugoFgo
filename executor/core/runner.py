@@ -933,8 +933,7 @@ class Runner:
     def handle_ap_recovery(self, observation: Observation, now: float) -> RunResult | None:
         if Overlay.AP_RECOVERY_CONFIRM in observation.overlays:
             item = self.pending_recovery
-            if (item is None or item not in self.options.recovery.allowed
-                    or item is RecoveryItem.SAINT_QUARTZ):
+            if item is None or item not in self.options.recovery.allowed:
                 self.emit('failed', now, reason='ap_recovery_confirm_not_allowed')
                 return self.result(RunStatus.STOPPED, 'ap_recovery_confirm_not_allowed')
             items = {control.name for control in observation.controls
@@ -979,6 +978,9 @@ class Runner:
             if not self.run_settled:
                 self.progress.completed_runs += 1
                 self.run_settled = True
+                self.emit('battle_completed', now,
+                          completed_runs=self.progress.completed_runs,
+                          wave=self.progress.wave, turn=self.progress.turn)
             if not self.draining and self.progress.completed_runs >= self.options.run_count:
                 if not self.options.recovery.drain_after_turns:
                     self.emit('finished', now, completed_runs=self.progress.completed_runs)

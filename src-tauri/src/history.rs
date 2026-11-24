@@ -13,6 +13,8 @@ pub(crate) struct RunRecord {
     pub job_file: String,
     pub serial: String,
     pub region: String,
+    #[serde(default)]
+    pub channel: String,
     pub started_at: u64,
     pub finished_at: u64,
     pub duration_ms: u64,
@@ -30,7 +32,12 @@ pub(crate) struct RunRecord {
 pub(crate) struct RunArtifacts {
     pub directory: String,
     pub log_file: String,
+    pub result_file: String,
+    pub observation_file: Option<String>,
     pub screenshots: Vec<String>,
+    pub result: Option<serde_json::Value>,
+    pub events: Vec<serde_json::Value>,
+    pub event_count: usize,
 }
 
 fn history_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -76,17 +83,64 @@ pub(crate) fn run_artifacts_at(path: &Path, id: &str) -> Result<RunArtifacts, St
     if !directory.is_dir() {
         return Err(format!("运行证据目录不存在：{}", directory.display()));
     }
-    let screenshots = ["failure.png", "failure.bgr24"]
+    let screenshots = ["failure.png", "failure.bgr24", "final.png", "final.bgr24"]
         .iter()
         .map(|name| directory.join(name))
         .filter(|path| path.is_file())
         .map(|path| path.to_string_lossy().to_string())
         .collect();
+    let result_path = directory.join("result.json");
+    let result = fs::read_to_string(&result_path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+    let observation_file = directory
+        .join("observation.json")
+        .is_file()
+        .then(|| directory.join("observation.json").to_string_lossy().to_string());
+    let log_path = directory.join("events.jsonl");
+    let mut events = Vec::new();
+    let mut event_count = 0;
+    if let Ok(text) = fs::read_to_string(&log_path) {
+        for line in text.lines().filter(|line| !line.trim().is_empty()) {
+            event_count += 1;
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+                events.push(value);
+            }
+        }
+    }
+    let keep_from = events.len().saturating_sub(400);
+    events.drain(..keep_from);
     Ok(RunArtifacts {
-        log_file: directory.join("events.jsonl").to_string_lossy().to_string(),
+        log_file: log_path.to_string_lossy().to_string(),
+        result_file: result_path.to_string_lossy().to_string(),
         directory: directory.to_string_lossy().to_string(),
+        observation_file,
         screenshots,
+        result,
+        events,
+        event_count,
     })
+}
+
+#[tauri::command]
+pub(crate) fn open_run_directory(app: AppHandle, id: String) -> Result<(), String> {
+    let artifacts = run_artifacts_at(&history_path(&app)?, &id)?;
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg(&artifacts.directory)
+            .spawn()
+            .map_err(|error| format!("无法打开证据目录：{error}"))?;
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&artifacts.directory)
+            .spawn()
+            .map_err(|error| format!("无法打开证据目录：{error}"))?;
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -123,7 +177,7 @@ mod tests {
         fs::create_dir_all(root.join("logs/farm").join(id)).unwrap();
         let record = json!({
             "id": id, "jobName": "测试作业", "jobFile": "jobs/test.json",
-            "serial": "emulator-5554", "region": "CN", "startedAt": 1000,
+            "serial": "emulator-5554", "region": "CN", "channel": "scrcpy", "startedAt": 1000,
             "finishedAt": 2500, "durationMs": 1500, "result": result,
             "reason": result, "battlesCompleted": 2, "recoveryUsed": {"bronze": 1},
             "runDir": root.join("logs/farm").join(id).to_string_lossy(), "error": null
@@ -146,6 +200,7 @@ mod tests {
         assert_eq!(1, records.len());
         assert_eq!("run-new", records[0].id);
         assert_eq!("stopped", get_run_record_at(&path, "run-new").unwrap().result);
+        assert_eq!("scrcpy", get_run_record_at(&path, "run-new").unwrap().channel);
         assert_eq!(1, get_run_record_at(&path, "run-old").unwrap().recovery_used["bronze"]);
         fs::remove_dir_all(root).unwrap();
     }

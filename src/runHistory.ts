@@ -8,6 +8,7 @@ export interface RunRecord {
   jobFile: string;
   serial: string;
   region: string;
+  channel?: string;
   startedAt: number;
   finishedAt: number;
   durationMs: number;
@@ -19,10 +20,21 @@ export interface RunRecord {
   error: string | null;
 }
 
+export interface RunArtifactEvent {
+  type: string;
+  timestamp: number;
+  data: Record<string, unknown>;
+}
+
 export interface RunArtifacts {
   directory: string;
   logFile: string;
+  resultFile: string;
+  observationFile: string | null;
   screenshots: string[];
+  result: Record<string, unknown> | null;
+  events: RunArtifactEvent[];
+  eventCount: number;
 }
 
 export const browserHistoryMessage = '浏览器预览不保存或读取运行记录；请使用 Tauri 桌面版查看真实历史。';
@@ -39,6 +51,10 @@ export const runHistoryApi = {
   artifacts: async (id: string): Promise<RunArtifacts> => {
     if (!isTauri) throw new Error(browserHistoryMessage);
     return invoke<RunArtifacts>('open_run_artifacts', { id });
+  },
+  openDirectory: async (id: string): Promise<void> => {
+    if (!isTauri) throw new Error(browserHistoryMessage);
+    await invoke<void>('open_run_directory', { id });
   },
 };
 

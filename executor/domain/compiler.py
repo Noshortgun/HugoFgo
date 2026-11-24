@@ -183,6 +183,9 @@ def compile_job(text: str) -> CompileResult:
     diagnostics = validate_job(raw)
     if diagnostics:
         return CompileResult(None, diagnostics)
+    if not 1 <= len(raw['waves']) <= 3:
+        _diagnostic(diagnostics, '$.waves', f'作业面数必须为 1～3 面；当前为 {len(raw["waves"])} 面')
+        return CompileResult(None, diagnostics)
 
     formation = _formation_slots(raw, diagnostics)
     _check_strategy_slots(raw['strategy'], '$.strategy', formation, diagnostics)

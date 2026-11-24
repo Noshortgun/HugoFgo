@@ -80,9 +80,11 @@
 
 ### 2.7 前端 UI
 
-- 编队、编排、导入和作业库界面。
-- 运行面板消费真实 `run-event`；历史页读取壳返回的真实记录。
-- 浏览器预览没有桌面命令、真实运行、资源任务或历史能力。
+- 按准备、作业、运行、记录四个工作区组织：准备管理设备、区服、资源、默认通道与回退；作业管理编队、操作序列、选卡策略、刷本次数、AP 白名单和作业库；运行显示启动控制与事件时间线；记录读取真实历史与证据。
+- 编队页与启动流程共用同一份持久化运行设置；AP 恢复按用户勾选顺序解释，勾选圣晶石时弹出显式消耗确认。
+- 作业编辑按 Schema 保留完整数据；启动前执行编译与运行能力检查，诊断定位到面与回合。能保存不等于能运行。
+- 运行面板消费真实 `run-event`，区分已发送动作、画面确认、警告、通道变化与终端结果；历史页读取壳返回的真实记录和证据摘要。
+- 运行状态在全局可见；浏览器预览没有桌面命令、真实运行、资源任务或历史能力。
 
 ## 3. 当前接口契约
 
@@ -104,7 +106,7 @@ python -m executor <job.json> \
   [--fake]
 ```
 
-- `--region` 必填，当前只接受 `CN`。
+- `--region` 必填，当前只接受 `CN`。`--channel` 默认 `scrcpy`，ADB 作为启动失败保底。
 - 省略 `--recovery` 时默认仅允许 `bronze`；单独写 `--recovery` 且不带值表示空白名单。
 - `--drain-after-turns` 在固定场数完成后清 AP，此阶段禁用恢复道具。
 - `--fake --serial fake` 不接触设备，仅用于联调。
@@ -156,6 +158,7 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | `action_confirmed` | 动作后画面确认；`stage` 标识等待阶段，`wait_ms` 记录该阶段耗时 |
 | `warning` | 可恢复等待、字段降级等非终端警告；有限动作恢复记录控件与次数 |
 | `recovery_used` | 后续画面确认后的恢复消耗 |
+| `battle_completed` | 单场结算完成及累计场数；前端在 `finished` 前逐场更新，只用于进度观测 |
 | `drain_started` | 固定场数完成，进入清 AP |
 | `finished` / `stopped` / `failed` | 完成、停止、失败终端事件 |
 
@@ -177,7 +180,9 @@ stdout 与 `events.jsonl` 每行一个 JSON 对象：
 | 作业 | `list_jobs` / `read_job` | 列表；`read_job` 接收 `{ file }` |
 | 作业 | `save_job` / `delete_job` | 分别接收 `{ name, job }`、`{ file }` |
 | 历史 | `list_run_history` | `{ limit? }`；默认 100、最多 500 |
-| 历史 | `get_run_record` / `open_run_artifacts` | 均接收 `{ id }`；后者只返回证据路径，不打开文件管理器 |
+| 历史 | `get_run_record` / `open_run_artifacts` | 均接收 `{ id }`；后者返回证据路径、`result.json`、最近事件和画面文件 |
+| 历史 | `open_run_directory` | `{ id }`；在系统文件管理器中打开证据目录 |
+| 运行 | `validate_job` | `{ jobPath }`；调用领域编译器返回摘要与带面/回合的诊断 |
 | 资源 | `check_resources` / `verify_resources` | `{ region }` |
 | 资源 | `update_resources` | `{ region, refresh }`；`refresh=true` 表示完整校准 |
 | 设置 | `get_run_settings` / `save_run_settings` | 读取；保存接收 `{ settings }` |
@@ -200,7 +205,7 @@ const state = await invoke('start_run', {
 });
 ```
 
-恢复项为 `saint_quartz | gold | silver | bronze | copper`。`RunState` 使用 snake_case：`running/run_id/serial/job_name/job_path/started_at_ms/status/screen/wave/turn/action/completed_runs/recovery_used/log_dir/error/notice/channel/exit_code`。
+恢复项为 `saint_quartz | gold | silver | bronze | copper`；圣晶石只有在用户白名单内且确认弹窗道具一致时才允许确认。新设置的默认通道是 `scrcpy`，启动失败可回退 `adb`；已保存的显式通道值保持不变。`RunState` 使用 snake_case：`running/run_id/serial/job_name/job_path/started_at_ms/status/screen/wave/turn/action/completed_runs/recovery_used/log_dir/error/notice/channel/exit_code`。
 
 前端还使用：
 
@@ -216,12 +221,12 @@ const state = await invoke('start_run', {
 {
   "battles": 1,
   "recovery": { "allowed": ["bronze"], "drain_after_turns": false },
-  "device_channel": "adb",
-  "allow_adb_fallback": false
+  "device_channel": "scrcpy",
+  "allow_adb_fallback": true
 }
 ```
 
-`device_channel` 默认为 `adb`，`scrcpy` 只能显式选择；`allow_adb_fallback` 仅控制启动失败后的可见回退，运行中中断不会跨通道续跑。
+`device_channel` 的新配置默认为 `scrcpy`；已保存的显式 `adb` 选择保持不变。`allow_adb_fallback` 仅控制启动失败后的可见回退，运行中中断不会跨通道续跑。
 
 每次运行目录可包含：
 

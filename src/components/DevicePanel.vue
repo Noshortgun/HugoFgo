@@ -5,7 +5,10 @@ import { deviceApi, isTauri } from '../device';
 import type { CapturedFrame, DeviceInfo, DeviceMetrics } from '../device';
 
 const props = withDefaults(defineProps<{ modelValue?: string }>(), { modelValue: '' });
-const emit = defineEmits<{ 'update:modelValue': [serial: string] }>();
+const emit = defineEmits<{
+  'update:modelValue': [serial: string];
+  device: [value: { serial: string; label: string; online: boolean }];
+}>();
 const devices = ref<DeviceInfo[]>([]);
 const serial = computed({ get: () => props.modelValue, set: (value: string) => emit('update:modelValue', value) });
 const metrics = ref<DeviceMetrics | null>(null);
@@ -27,8 +30,17 @@ function describe(errorValue: unknown) {
 }
 
 async function loadInfo() {
-  if (!serial.value) return;
+  if (!serial.value) {
+    emit('device', { serial: '', label: '未选择设备', online: false });
+    return;
+  }
   metrics.value = await deviceApi.getDeviceInfo(serial.value);
+  const device = devices.value.find((item) => item.serial === serial.value);
+  emit('device', {
+    serial: serial.value,
+    label: [device?.model || metrics.value.model || serial.value, metrics.value.width ? `${metrics.value.width}×${metrics.value.height}` : ''].filter(Boolean).join(' · '),
+    online: device?.state === 'device',
+  });
 }
 
 async function task(label: string, action: () => Promise<void>) {
@@ -57,6 +69,7 @@ function detect() {
       await loadInfo();
       message.value = `发现 ${list.length} 台设备`;
     } else {
+      emit('device', { serial: '', label: '未选择设备', online: false });
       message.value = '没有发现设备，请先启动模拟器并确认 adb 可用';
     }
   });

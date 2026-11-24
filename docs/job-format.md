@@ -15,7 +15,7 @@
 | `formation` | 数组 | 编队槽位，必填 |
 | `strategy` | 对象 | 全局补刀策略，必填 |
 | `strategyByWave` | 对象 | 可选的按面补刀策略覆盖 |
-| `waves` | 非空数组 | 面和回合定义，必填 |
+| `waves` | 1～3 项数组 | 面和回合定义，必填 |
 | `warnings` | 字符串数组 | 可选警告信息 |
 | `provenance` | 任意 JSON | 可选来源信息，不作为执行动作 |
 
@@ -46,6 +46,8 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 
 ## 3. 面、回合与动作
 
+`waves` 必须包含 1～3 面。游戏关卡最少一面、最多三面；导入超过三面的作业会报错，编辑器与执行器都不会静默截断。
+
 每个 `waves` 元素包含：
 
 - `turnCount`：回合数，必须与 `turns` 数组长度一致。
@@ -58,12 +60,12 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 | --- | --- | --- |
 | `skill` | 从者技能 | `memberSlot`、`skill`、`playerTargetSlot`、`secondarySelection` |
 | `master` | 御主技能 | `skill`、`playerTargetSlot` |
-| `spell` | 令咒 | 目标或二次选择字段 |
+| `spell` | 令咒 | 目标或追加选择字段 |
 | `attack` | 从者宝具攻击 | `memberSlot` |
 | `target` | 切换敌方目标 | `enemyTarget` 或 `fromTarget`、`toTarget` |
 | `orderChange` | 换人 | `swapOutSlot`、`swapInSlot` |
 
-`skill` 从 0 开始计数，0 表示一技能。换人上下场槽位不能相同。`secondarySelection` 保存技能或宝具的二次选择，例如暴击星消耗和宝具卡色；当前执行器会拒绝包含该字段的作业，不能仅凭 Schema 通过就认定可以运行。
+`skill` 从 0 开始计数，0 表示一技能。换人上下场槽位不能相同。`secondarySelection` 保存技能或宝具的追加选择，旧文档称二次选择，例如暴击星消耗和宝具卡色；当前执行器会拒绝包含该字段的作业，不能仅凭 Schema 通过就认定可以运行。
 
 ## 4. 宝具卡序与指令卡
 
@@ -76,7 +78,7 @@ Schema 不允许未列出的顶层字段。桌面编辑器显式保存时会保�
 "npPositions": { "0": 1, "3": "auto" }
 ```
 
-回合中的 `attack` 描述普通指令卡选择：
+回合中的 `attack` 描述旧版普通指令卡选择。当前前端不提供固定卡序编辑；导入时会忽略该字段并提示改用选卡策略，再次保存时移除。
 
 | `mode` | 行为语义 |
 | --- | --- |

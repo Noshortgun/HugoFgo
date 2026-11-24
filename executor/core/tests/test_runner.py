@@ -2169,6 +2169,39 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, len(used))
         self.assertEqual({'item': 'bronze', 'count': 1}, used[0].data)
 
+    def test_saint_quartz_recovery_confirmation_is_allowed_when_whitelisted(self) -> None:
+        recovery = observe(BasePage.AP_RECOVERY,
+                           Control('圣晶石', ControlKind.ITEM, (315, 120, 981, 265), True))
+        confirm = Observation(
+            base_page=BasePage.AP_RECOVERY,
+            overlays=frozenset({Overlay.AP_RECOVERY_CONFIRM}),
+            controls=(
+                Control('圣晶石', ControlKind.ITEM, (315, 100, 981, 240), True),
+                button('决定', (708, 550, 972, 614)),
+                button('取消', (307, 550, 572, 614)),
+            ),
+        )
+        team = observe(BasePage.TEAM, button('开始任务'))
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [recovery, recovery, confirm, confirm, team, team, battle, battle, wrong_cards],
+            [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events,
+                     options=RunOptions(recovery=RecoveryPolicy(
+                         allowed=frozenset({RecoveryItem.SAINT_QUARTZ}))))
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, event.data) for event in events.events])
+        self.assertEqual(['圣晶石', '决定', '开始任务', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        used = [event for event in events.events if event.type == 'recovery_used']
+        self.assertEqual(1, len(used))
+        self.assertEqual({'item': 'saint_quartz', 'count': 1}, used[0].data)
+
     def test_empty_whitelist_recovery_confirmation_does_not_tap_decision(self) -> None:
         confirm = Observation(
             base_page=BasePage.AP_RECOVERY,
@@ -2282,7 +2315,8 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual(RunStatus.COMPLETED, result.status)
         self.assertEqual((1130, 660), (device.actions[0]['x'], device.actions[0]['y']))
-        self.assertEqual('drops_fallback', events.events[-2].data['reason'])
+        last_action = next(event for event in reversed(events.events) if event.type == 'action')
+        self.assertEqual('drops_fallback', last_action.data['reason'])
 
     def test_result_page_can_resume_and_finish(self) -> None:
         result_page = observe(BasePage.RESULT, button('结算推进', (0, 0, 1280, 720)))

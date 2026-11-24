@@ -9,7 +9,7 @@ from executor.session.events import EventSink, RunEvent
 
 class RunHistoryRecorder(EventSink):
     def __init__(self, run_dir: str | Path, *, job_name: str, job_file: str | Path,
-                 serial: str, region: str, channel: str = 'adb') -> None:
+                 serial: str, region: str, channel: str = 'scrcpy') -> None:
         self.run_dir = Path(run_dir).resolve()
         self.history_path = self.run_dir.parent.parent / 'run-history.jsonl'
         self.job_name = job_name

@@ -73,19 +73,21 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
 }));
 
 function skillTarget(skill) {
-  const func = skill.functions?.[0];
+  const funcs = skill.functions ?? [];
+  const func = funcs.find((item) => ['ptOne', 'ptOneOther', 'enemy'].includes(item.funcTargetType)) ?? funcs[0];
   const target = func?.funcTargetType;
   const team = func?.funcTargetTeam ?? '';
-  // ptOne 是单体：对己方为 ally，对敌方为 enemy；playerAndEnemy 按己方单体处理。
+  // ptOne / ptOneOther 都需要先选择己方单体；ptOther 则是除自身外的己方全体。
+  if (target === 'ptOneOther') return 'ally';
   if (target === 'ptOne') return team.includes('player') ? 'ally' : 'enemy';
-  return ({ self: 'self', ptOther: 'ally', ptAll: 'allAllies', ptOtherAll: 'allAllies', enemy: 'enemy', enemyAll: 'allEnemies' })[target] ?? 'allAllies';
+  return ({ self: 'self', ptOther: 'allAllies', ptAll: 'allAllies', ptOtherAll: 'allAllies', enemy: 'enemy', enemyAll: 'allEnemies' })[target] ?? 'allAllies';
 }
 function secondarySelection(skill) {
   const select = skill.script?.SelectAddInfo?.[0];
   if (select) {
     return {
       type: 'selectAddInfo',
-      label: select.title || '技能二次选择',
+      label: select.title || '技能追加选择',
       options: (select.btn ?? []).map((button, index) => ({ value: index, label: button.name || `选项 ${index + 1}`, ...(button.imageUrl ? { imageUrl: button.imageUrl } : {}) })),
     };
   }

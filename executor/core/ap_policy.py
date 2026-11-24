@@ -25,9 +25,11 @@ CONTROL_NAMES = {
 class RecoveryPolicy:
     allowed: frozenset[RecoveryItem] = frozenset({RecoveryItem.BRONZE})
     drain_after_turns: bool = False
+    priority: tuple[RecoveryItem, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, 'allowed', frozenset(self.allowed))
+        object.__setattr__(self, 'priority', tuple(item for item in self.priority if item in self.allowed))
 
 
 @dataclass(frozen=True)
@@ -42,5 +44,5 @@ class RunSettings:
 
 def select_recovery(policy: RecoveryPolicy, available: tuple[str, ...] | list[str]) -> RecoveryItem | None:
     visible = set(available)
-    return next((item for item in RecoveryItem
+    return next((item for item in (*policy.priority, *RecoveryItem)
                  if item in policy.allowed and CONTROL_NAMES[item] in visible), None)

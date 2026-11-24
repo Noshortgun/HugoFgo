@@ -82,10 +82,10 @@ function toMysticCode(code: AtlasMystic): MysticCode {
   return {
     id: `atlas-${code.id}`,
     name: code.name,
-    figure: mapUrl(code.figure ?? code.item) ?? '',
-    maleFigure: mapUrl(code.maleFigure ?? code.figure ?? code.item) ?? '',
-    item: mapUrl(code.item) ?? '',
-    maleItem: mapUrl(code.maleItem ?? code.item) ?? '',
+    figure: mapUrl(code.figure ?? code.maleFigure ?? code.item ?? code.maleItem) ?? '',
+    maleFigure: mapUrl(code.maleFigure ?? code.figure ?? code.maleItem ?? code.item) ?? '',
+    item: mapUrl(code.item ?? code.maleItem ?? code.figure ?? code.maleFigure) ?? '',
+    maleItem: mapUrl(code.maleItem ?? code.item ?? code.maleFigure ?? code.figure) ?? '',
     skills: code.skills.map(() => 'skill_00400'),
     skillIconUrls: icons,
     skillTargets: code.skills.map((skill) => skill.target ?? 'allAllies'),
@@ -132,7 +132,7 @@ export async function loadAtlas(region: Region = resourceRegion.value, force = f
     }
     try {
       const data = await fetchResourceJson<{ mysticCodes: AtlasMystic[] }>('assets/atlas/mystic/index.json');
-      atlasMysticCodes.value = data.mysticCodes.filter((code) => code.figure || code.item).map(toMysticCode);
+      atlasMysticCodes.value = data.mysticCodes.filter((code) => code.figure || code.maleFigure || code.item || code.maleItem).map(toMysticCode);
     } catch {
       atlasMysticCodes.value = [];
     } finally {

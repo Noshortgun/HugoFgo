@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from executor.core import RunOptions, RunStatus, run
-from executor.core.ap_policy import RecoveryPolicy
+from executor.core.ap_policy import RecoveryItem, RecoveryPolicy
 from executor.core.model import RunResult
 from executor.core.smoke import ConfirmedStartPerception
 from executor.device import FakeDevice
@@ -426,7 +426,8 @@ CASES = (
         actions=('结算推进', '结算推进', '下一步', '连续出击', '开始任务', '攻击',
                  '卡1', '卡2', '卡4', '战斗跳过', '结算推进', '结算推进', '下一步'),
         states=('result', 'drops', 'battle', 'team', 'battle', 'card', 'result', 'drops', 'battle'),
-        event_types=('action', 'action', 'action', 'action', 'action', 'finished'),
+        event_types=('action', 'action', 'action', 'battle_completed',
+                     'action', 'battle_completed', 'finished'),
         options=RunOptions(run_count=2, write_evidence=False),
         completed_runs=2,
     ),
@@ -511,6 +512,40 @@ CASES = (
         reason='unknown_timeout',
         states=('ap_recovery', 'team', 'unknown'),
         event_types=('action', 'recovery_used', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='ap-saint-quartz-confirm-mismatch',
+        frames=(
+            FULL_LOOP + 'ap-recovery.png', FULL_LOOP + 'ap-recovery.png',
+            'captures/2026-11-22/key/ap-recovery-confirm-bronze.png',
+        ),
+        times=(0.0, 0.5, 1.0),
+        actions=('圣晶石',),
+        status=RunStatus.STOPPED,
+        reason='ap_recovery_confirm_mismatch',
+        states=('ap_recovery',),
+        event_types=('state_changed', 'action', 'failed'),
+        options=RunOptions(recovery=RecoveryPolicy(
+            allowed=frozenset({RecoveryItem.SAINT_QUARTZ})), write_evidence=False),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='ap-user-priority-order',
+        frames=(
+            FULL_LOOP + 'ap-recovery.png', FULL_LOOP + 'ap-recovery.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 31.0),
+        actions=('白银果实',),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('ap_recovery', 'unknown'),
+        event_types=('state_changed', 'action', 'failed'),
+        options=RunOptions(recovery=RecoveryPolicy(
+            allowed=frozenset({RecoveryItem.SILVER, RecoveryItem.GOLD}),
+            priority=(RecoveryItem.SILVER, RecoveryItem.GOLD)), write_evidence=False),
         completed_runs=0,
     ),
     ReplayCase(

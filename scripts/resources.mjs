@@ -351,6 +351,17 @@ if (command === 'self-test') {
   assert.equal(testPaths.regionRoot, path.join(testRoot, 'TW'));
   assert.equal(testPaths.absolute('data/assets/atlas/index.json'), path.join(testRoot, 'TW', 'assets/atlas/index.json'));
   assert.equal(testPaths.webPath('assets/atlas/index.json'), '/data/TW/assets/atlas/index.json');
+  const atlas = readJsonOr(paths.regionFile('assets/atlas/index.json'), { servants: [] });
+  const generatedTarget = (servantId, skillNumber, skillName) => atlas.servants.find((servant) => servant.id === servantId)?.skills.find((skill) => skill.num === skillNumber && (!skillName || skill.name === skillName))?.target;
+  assert.equal(generatedTarget(2300900, 3), 'allAllies', '希耶尔三技能作用于除自身外的己方全体，不应要求选择目标');
+  assert.equal(generatedTarget(102800, 3, '阴阳鱼 A+'), 'ally', '两仪式三技能后续效果要求选择己方单体');
+  assert.equal(generatedTarget(303000, 3, '女神的恩惠 A+'), 'ally', '帕尔瓦蒂三技能后续效果要求选择己方单体');
+  assert.equal(generatedTarget(105800, 3), 'enemy', '忒修斯三技能后续效果要求选择敌方单体');
+  assert.equal(generatedTarget(403800, 1), 'ally', '奥德修斯一技能的 ptOneOther 需要先选择己方单体');
+  assert.equal(generatedTarget(704600, 1), 'allAllies', '难敌一技能的 ptRandom 是随机效果，不要求选择目标');
+  assert.equal(generatedTarget(105900, 1), 'self', '大和武尊一技能的 ptFull 是全体效果，不要求选择目标');
+  assert.equal(generatedTarget(306000, 3), 'self', '美游三技能的 fieldOther 是场地效果，不要求选择目标');
+  assert.equal(generatedTarget(200100, 3), 'self', '卫宫三技能只追加宝具卡色选择，不要求选择目标');
   console.log('资源管理器自检通过');
 } else if (command === 'check') {
   migrateLegacyData(paths);

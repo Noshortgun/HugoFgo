@@ -84,18 +84,18 @@ const index = raw.map((code) => {
   }));
   const orderChangeSkill = skills.findIndex((skill) => orderChangePattern.test(skill.name) || orderChangePattern.test(skill.detail));
   const has = (relative) => fs.existsSync(paths.regionFile(relative));
-  const femaleItem = paths.webPath(`assets/atlas/mystic/items/female-${code.id}.png`);
-  const maleItem = paths.webPath(`assets/atlas/mystic/items/male-${code.id}.png`);
-  const femaleFigure = paths.webPath(`assets/atlas/mystic/figures/female-${code.id}.png`);
-  const maleFigure = paths.webPath(`assets/atlas/mystic/figures/male-${code.id}.png`);
+  const femaleItem = `assets/atlas/mystic/items/female-${code.id}.png`;
+  const maleItem = `assets/atlas/mystic/items/male-${code.id}.png`;
+  const femaleFigure = `assets/atlas/mystic/figures/female-${code.id}.png`;
+  const maleFigure = `assets/atlas/mystic/figures/male-${code.id}.png`;
   return {
     id: code.id,
     name: code.name,
     shortName: code.shortName,
-    item: has(femaleItem) ? femaleItem : null,
-    maleItem: has(maleItem) ? maleItem : null,
-    figure: has(femaleFigure) ? femaleFigure : null,
-    maleFigure: has(maleFigure) ? maleFigure : null,
+    item: has(femaleItem) ? paths.webPath(femaleItem) : null,
+    maleItem: has(maleItem) ? paths.webPath(maleItem) : null,
+    figure: has(femaleFigure) ? paths.webPath(femaleFigure) : null,
+    maleFigure: has(maleFigure) ? paths.webPath(maleFigure) : null,
     skills,
     ...(orderChangeSkill >= 0 ? { orderChangeSkill } : {}),
   };
