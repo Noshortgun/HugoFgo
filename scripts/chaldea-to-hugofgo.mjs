@@ -209,7 +209,7 @@ function convert(team) {
       servantOrder: formation.slice(0, 3).map((entry) => entry.name),
       cards: 'buster',
       colorPriority: ['buster', 'arts', 'quick'],
-      strategyOrder: ['servant', 'cards', 'crit'],
+      strategyOrder: ['servant', 'cards', 'affinity', 'crit'],
     },
     waves,
     provenance: {

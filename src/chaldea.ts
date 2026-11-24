@@ -374,7 +374,7 @@ export function convertChaldeaTeam(
     servantOrder: formation.slice(0, 3).map((entry) => entry.name).filter(Boolean),
     cards: 'buster',
     colorPriority: ['buster', 'arts', 'quick'],
-    strategyOrder: ['servant', 'cards', 'crit'],
+    strategyOrder: ['servant', 'cards', 'affinity', 'crit'],
   };
 
   return {

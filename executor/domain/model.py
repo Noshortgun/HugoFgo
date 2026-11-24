@@ -81,7 +81,7 @@ class FallbackStrategy:
     servant_order_slots: tuple[int, ...] | None = None
     cards: str = 'buster'
     color_priority: tuple[str, ...] = ('buster', 'arts', 'quick')
-    strategy_order: tuple[str, ...] = ('servant', 'cards', 'crit')
+    strategy_order: tuple[str, ...] = ('servant', 'cards', 'affinity', 'crit')
 
 
 @dataclass(frozen=True)

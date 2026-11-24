@@ -273,10 +273,10 @@ class IdentityMatcher:
         query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
         servant_id = self._command_servant(query)
         fallback_slot = None
-        if servant_id is None and support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
+        if support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
             support_slots = [(entity_id, slot) for (entity_id, is_support), slot
                              in self._formation_slots.items() if is_support and slot >= 0]
-            if len(support_slots) == 1:
+            if len(support_slots) == 1 and (servant_id is None or servant_id == support_slots[0][0]):
                 servant_id, fallback_slot = support_slots[0]
                 support = True
         if servant_id is None:
