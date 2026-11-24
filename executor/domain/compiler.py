@@ -199,6 +199,19 @@ def compile_job(text: str) -> CompileResult:
     for wave_text, strategy in (raw.get('strategyByWave') or {}).items():
         if strategy is not None:
             _check_strategy_slots(strategy, f'$.strategyByWave.{wave_text}', formation, diagnostics, int(wave_text))
+    order_change_seen = False
+    for wave_index, wave in enumerate(raw['waves']):
+        for turn_index, turn in enumerate(wave['turns']):
+            for action_index, action in enumerate(turn['actions']):
+                if action['kind'] != 'orderChange':
+                    continue
+                if order_change_seen:
+                    _diagnostic(
+                        diagnostics,
+                        f'$.waves[{wave_index}].turns[{turn_index}].actions[{action_index}].kind',
+                        '每场战斗最多一次换人服主动换人', wave_index + 1, turn_index + 1,
+                    )
+                order_change_seen = True
     waves = tuple(
         _compile_wave(wave, index, formation, diagnostics)
         for index, wave in enumerate(raw['waves'])

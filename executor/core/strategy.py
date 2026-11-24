@@ -20,9 +20,33 @@ def _empty(reason: str, source: str, warnings: tuple[str, ...] = ()) -> CardSele
     return CardSelection((), (), reason, source, warnings, reason)
 
 
+def strategy_servant_ranks(strategy: FallbackStrategy, plan: ExecutionPlan) -> dict[int, int]:
+    ranks: dict[int, int] = {}
+    used: set[int] = set()
+    slots = strategy.servant_order_slots
+    if slots is not None and len(slots) == len(strategy.servant_order):
+        for name, slot in zip(strategy.servant_order, slots):
+            member = next((item for item in plan.formation if item.slot == slot), None)
+            if member is not None and member.name == name and slot not in used:
+                used.add(slot)
+                ranks[slot] = len(ranks)
+    for name in strategy.servant_order:
+        member = next((item for item in plan.formation
+                       if item.slot not in used and item.name == name), None)
+        if member is not None:
+            used.add(member.slot)
+            ranks[member.slot] = len(ranks)
+    for member in plan.formation:
+        if member.name.strip():
+            ranks.setdefault(member.slot, len(ranks))
+    return ranks
+
+
 def select_cards(observation: Observation, strategy: FallbackStrategy,
                  plan: ExecutionPlan, wave: int,
-                 reserved: tuple[tuple[int | None, Control], ...] = ()) -> CardSelection:
+                 reserved: tuple[tuple[int | None, Control], ...] = (), *,
+                 current_order: tuple[int, ...] | None = None,
+                 active_slots: tuple[int, ...] | None = None) -> CardSelection:
     override = plan.strategy_by_wave.get(wave)
     effective = override or strategy
     source = 'wave' if override is not None else 'global'
@@ -32,15 +56,18 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
 
     reserved_names = {control.name for _, control in reserved}
     known_slots = {member.slot for member in plan.formation}
+    selectable_slots = (known_slots if current_order is None and active_slots is None else
+                        set(active_slots if active_slots is not None else current_order or ()))
     specified_slots = {member.slot for member in plan.formation if member.name.strip()}
-    has_empty_slots = any(not member.name.strip() for member in plan.formation)
+    empty_slots = {member.slot for member in plan.formation if not member.name.strip()}
+    has_empty_slots = any(slot in empty_slots for slot in selectable_slots)
     affinity_ranks = {'resist': 0, 'disadvantage': 0, '抵抗': 0,
                       'neutral': 1, 'advantage': 2, '克制': 2}
     candidates = [control for control in observation.controls
                   if control.name not in reserved_names
                   and control.kind is ControlKind.CARD and control.actionable
                   and control.card is not None
-                  and (control.card.servant_slot in known_slots
+                  and (control.card.servant_slot in selectable_slots
                        or (has_empty_slots and control.card.servant_slot == -1
                            and control.card.svt_id is None and not control.card.noble_phantasm))
                   and (control.card.noble_phantasm
@@ -63,25 +90,12 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
     if any(control.card.affinity not in affinity_ranks for control in ranked):
         warnings.append('缺少克制信息，按中立处理')
 
-    ranks: dict[int, int] = {}
-    used: set[int] = set()
     slots = effective.servant_order_slots
-    if slots is not None and len(slots) == len(effective.servant_order):
-        for name, slot in zip(effective.servant_order, slots):
-            member = next((item for item in plan.formation if item.slot == slot), None)
-            if member is not None and member.name == name and slot not in used:
-                used.add(slot)
-                ranks[slot] = len(ranks)
-    elif effective.servant_order:
+    if effective.servant_order and (slots is None or len(slots) != len(effective.servant_order)):
         warnings.append('补刀策略缺少槽位信息，按从者名称匹配')
-    for name in effective.servant_order:
-        member = next((item for item in plan.formation
-                       if item.slot not in used and item.name == name), None)
-        if member is not None:
-            used.add(member.slot)
-            ranks[member.slot] = len(ranks)
-    for member in plan.formation:
-        ranks.setdefault(member.slot, len(ranks))
+    ranks = strategy_servant_ranks(effective, plan)
+    if current_order is not None:
+        ranks = {slot: rank for rank, slot in enumerate(dict.fromkeys(current_order))}
 
     color_ranks = {color: rank for rank, color in enumerate(effective.color_priority)}
     selected_normal = []

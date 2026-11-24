@@ -148,6 +148,90 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual([2, 0, 0, 1, 1], [card.servant_slot for card in cards])
         self.assertNotIn('command_card_identity', readiness_gaps(observation))
 
+    def test_battle_frontline_maps_faces_to_original_formation_slots(self) -> None:
+        perception = self.perception
+        perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+            FormationSlotPlan(slot=3, name='候补', svt_id=500800),
+        ))
+
+        frame = load_frame('captures/2026-11-20/key/battle-wave1.png')
+        observation = perception.read(frame)
+        cached = perception.read(frame)
+
+        field = observation.field('battle_servants')
+        self.assertIsNotNone(field)
+        self.assertTrue(field.usable)
+        self.assertEqual((0, 1, 2), field.value)
+        self.assertEqual(field, cached.field('battle_servants'))
+        self.assertEqual(1, perception.stats()['cache_hits'])
+
+    def test_battle_frontline_recognizes_order_change_result(self) -> None:
+        perception = self.perception
+        perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+            FormationSlotPlan(slot=3, name='玛修', svt_id=800100),
+        ))
+
+        observation = perception.read(load_frame('captures/2026-11-20/key/64-order-change-done.png'))
+
+        field = observation.field('battle_servants')
+        self.assertTrue(field.usable)
+        self.assertEqual((0, 1, 3), field.value)
+
+    def test_battle_support_mismatch_is_uncertain_not_an_empty_slot(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name=''),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        ))
+
+        observation = self.perception.read(load_frame('captures/2026-11-20/key/battle-wave1.png'))
+
+        field = observation.field('battle_servants')
+        self.assertFalse(field.usable)
+        self.assertIsNone(field.value)
+
+    def test_battle_all_empty_slots_do_not_turn_unknown_faces_into_confirmations(self) -> None:
+        self.perception.bind_formation(tuple(FormationSlotPlan(slot=slot, name='') for slot in range(3)))
+
+        observation = self.perception.read(load_frame('captures/2026-11-20/key/battle-wave1.png'))
+
+        field = observation.field('battle_servants')
+        self.assertFalse(field.usable)
+        self.assertIsNone(field.value)
+
+    def test_empty_slot_command_cards_keep_color_without_guessing_identity(self) -> None:
+        self.perception.bind_formation(tuple(FormationSlotPlan(slot=slot, name='') for slot in range(3)))
+
+        observation = self.perception.read(load_frame('captures/2026-11-20/key/card-select.png'))
+
+        cards = [observation.control(f'卡{index}').card for index in range(1, 6)]
+        self.assertTrue(all(card is not None for card in cards))
+        self.assertEqual([-1] * 5, [card.servant_slot for card in cards])
+        self.assertEqual([None] * 5, [card.svt_id for card in cards])
+        self.assertEqual(['quick', 'quick', 'quick', 'quick', 'arts'],
+                         [card.card_type for card in cards])
+
+    def test_faded_battle_portraits_are_uncertain_and_never_empty_replacements(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+            FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+            FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+            *(FormationSlotPlan(slot=slot, name='') for slot in range(3, 6)),
+        ))
+
+        observation = self.perception.read(
+            load_frame('captures/2026-11-25/key/battle-faded-no-auto-fill.png'))
+
+        field = observation.field('battle_servants')
+        self.assertFalse(field.usable)
+        self.assertIsNone(field.value)
+
     def test_command_cards_read_advantage_resist_and_neutral_markers(self) -> None:
         self.perception.bind_formation((
             FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),

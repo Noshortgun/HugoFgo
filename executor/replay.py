@@ -20,8 +20,8 @@ from executor.core.model import RunResult
 from executor.core.smoke import ConfirmedStartPerception
 from executor.device import FakeDevice
 from executor.device.base import Frame
-from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
-                             TurnPlan, WavePlan, compile_job)
+from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy,
+                             FormationSlotPlan, TurnPlan, WavePlan, compile_job)
 from executor.perception import Observation, Perception
 from executor.session import MemoryEventSink, RunEvent
 
@@ -150,6 +150,23 @@ def skill_plan() -> ExecutionPlan:
     skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
     turn = replace(plan.waves[0].turns[0], actions=(skill,))
     return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
+
+
+def order_change_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    order_change = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
+                              swap_out_slot=0, swap_in_slot=3)
+    turn = TurnPlan(actions=(order_change,), attack=AttackPlan(mode='strategy', cards=()))
+    formation = (FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+                 *plan.formation[1:], FormationSlotPlan(slot=3, name='玛修', svt_id=800100))
+    strategy = FallbackStrategy(
+        servant_order=('奥伯龙', '梅林', '娄希', '玛修'),
+        servant_order_slots=(2, 0, 1, 3),
+    )
+    return replace(plan,
+                   waves=(replace(plan.waves[0], turns=(turn,)),),
+                   formation=formation,
+                   strategy=strategy)
 
 
 def target_plan() -> ExecutionPlan:
@@ -327,6 +344,29 @@ CASES = (
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'action', 'finished'),
         plan_factory=skill_plan,
+    ),
+    ReplayCase(
+        name='order-change-priority',
+        frames=(
+            'captures/2026-11-19-mystic/key/03-battle-combat.png',
+            'captures/2026-11-19-mystic/key/04-master-skills.png',
+            'captures/2026-11-19-mystic/key/05-order-change-select.png',
+            'captures/2026-11-19-mystic/key/06-swap-out-selected.png',
+            'captures/2026-11-19-mystic/key/07-swap-in-selected.png',
+            'captures/2026-11-19-mystic/key/08-swap-result.png',
+            'captures/2026-11-19-mystic/key/09-target-switched.png',
+            'captures/2026-11-19-mystic/key/09-target-switched.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
+        actions=('御主技能', '御主技能3', '先发第1位', '候补第1位', '进行更替', '战斗跳过', '攻击'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'unknown'),
+        event_types=('order_change_confirmed', 'failed'),
+        plan_factory=order_change_plan,
+        completed_runs=0,
     ),
     ReplayCase(
         name='drops-fallback',

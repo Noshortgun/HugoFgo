@@ -1022,6 +1022,124 @@ def check_strategy_executor():
                bool(ok), simulated_ocr=True)
 
 
+def check_order_change_auto_fill():
+    from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FallbackStrategy,
+                                 FormationSlotPlan, TurnPlan, WavePlan, compile_job)
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, Variant)
+
+    job = json.loads((ROOT / 'executor/domain/fixtures/valid-multi-turn.json').read_text(encoding='utf-8'))
+    second = dict(job['waves'][0]['turns'][0]['actions'][0])
+    second['swapOutSlot'] = 1
+    second['swapInSlot'] = 3
+    job['waves'][1]['turns'][0]['actions'].insert(0, second)
+    compiled = compile_job(json.dumps(job, ensure_ascii=False))
+    actual = [(item.path, item.wave, item.turn) for item in compiled.diagnostics]
+    expected = [('$.waves[1].turns[0].actions[0].kind', 2, 1)]
+    add_report('executor:second-order-change-rejected', TEAM_IMAGE, expected, actual, 'stop',
+               '同一场战斗最多一次主动换人', compiled.plan is None and actual == expected,
+               simulated_ocr=True)
+
+    formation = (
+        FormationSlotPlan(slot=0, name='娄希', svt_id=705000, support=True),
+        FormationSlotPlan(slot=1, name='娄希', svt_id=705000),
+        FormationSlotPlan(slot=2, name='奥伯龙', svt_id=2800100),
+        *(FormationSlotPlan(slot=slot, name='') for slot in range(3, 6)),
+    )
+    temporary = TemporaryDirectory()
+    perception = Perception(identity_root=Path(temporary.name))
+    try:
+        perception.bind_formation(formation)
+        ready = perception.read(Frame(
+            image=(ROOT / 'captures/2026-11-20/key/battle-wave1.png').read_bytes(),
+            width=1280, height=720, captured_at=0.0))
+        process_path = ROOT / 'captures/2026-11-25/key/battle-faded-no-auto-fill.png'
+        process = perception.read(Frame(image=process_path.read_bytes(), width=1280, height=720,
+                                        captured_at=0.0))
+    finally:
+        perception.close()
+        temporary.cleanup()
+    progress = {'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+                'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
+    ready = ready.with_fields(progress)
+    process = process.with_fields(progress)
+    actions = (
+        ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2),
+        ActionPlan(kind='skill', title='破灭的难题', detail='', icon='', member_slot=1, skill=2),
+    )
+    turn = TurnPlan(actions=actions, attack=AttackPlan(mode='verify', cards=tuple(
+        AttackCardPlan(slot=slot, type='arts') for slot in range(3))))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=2, turns=(turn,)),), formation=formation)
+    wrong = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
+                card=CommandCardIdentity(9, 'arts')) for index in range(1, 6)))
+    result, _device, events = run_core_scenario(
+        [ready, ready, process, ready, ready, wrong], [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    fills = [event for event in events.events if event.type == 'auto_fill_confirmed']
+    expected = ['敌方2', '从者2技能3', '战斗跳过', '攻击']
+    ok = (not process.field('battle_servants').usable and result.reason == 'card_mismatch'
+          and controls == expected and not fills)
+    add_report('executor:faded-skill-frame-no-auto-fill', process_path, expected, controls, 'tap',
+               f'field={process.field("battle_servants").status.value}; fills={len(fills)}', ok)
+
+    formation = (*formation[:3], FormationSlotPlan(slot=3, name='候补', svt_id=500800))
+    strategy = FallbackStrategy(
+        servant_order=('娄希', '娄希', '奥伯龙', '候补'), servant_order_slots=(0, 1, 2, 3))
+    turn = TurnPlan(attack=AttackPlan(mode='strategy', cards=()))
+    plan = ExecutionPlan(mystic_id='default', enemy_count=3,
+                         waves=(WavePlan(number=1, target=1, turns=(turn,)),),
+                         formation=formation, strategy=strategy)
+    battle = Observation(base_page=BasePage.BATTLE, fields=progress, controls=(
+        Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),
+        Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
+    )).with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
+    boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+             (811, 415, 976, 655), (1066, 415, 1231, 655))
+    cards = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                card=CommandCardIdentity(slot, 'arts', crit_rate=10, affinity='neutral'))
+        for index, slot in enumerate((3, 3, 1, 2, 2), start=1)))
+    unknown = Observation(base_page=BasePage.UNKNOWN)
+    result, _device, events = run_core_scenario(
+        [battle, battle, cards, unknown, unknown], [0.0, 0.1, 0.2, 0.3, 30.3], plan)
+    card_slots = [event.data['servant_slot'] for event in events.events
+                  if event.type == 'action' and event.data.get('reason') == 'command_card_batch']
+    fills = [event.data for event in events.events if event.type == 'auto_fill_confirmed']
+    actual = (card_slots, [(item['out_slot'], item['in_slot']) for item in fills])
+    expected = ([3, 3, 1], [(0, 3)])
+    add_report('executor:auto-fill-inherits-priority', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'tap', f'reason={result.reason}; two stable frames required',
+               result.reason == 'unknown_timeout' and actual == expected, simulated_ocr=True)
+
+    order_action = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
+                              swap_out_slot=0, swap_in_slot=3)
+    order_plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(actions=(order_action,)),)),),
+        formation=formation)
+    order_battle = ready.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (0, 1, 2))})
+    menu = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.MASTER_SKILLS}), controls=tuple(
+        Control(f'御主技能{index}', ControlKind.BUTTON, (850 + index * 90, 275, 920 + index * 90, 352), True)
+        for index in range(1, 4)))
+    order = Observation(base_page=BasePage.BATTLE, overlays=frozenset({Overlay.ORDER_CHANGE}), controls=(
+        *(Control(f'先发第{index}位', ControlKind.TARGET, (index * 200, 250, index * 200 + 180, 565), True)
+          for index in range(1, 4)),
+        *(Control(f'候补第{index}位', ControlKind.TARGET, (600 + index * 200, 250, 780 + index * 200, 565), True)
+          for index in range(1, 4)),
+        Control('进行更替', ControlKind.BUTTON, (478, 591, 803, 661), True)))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    result, _device, events = run_core_scenario(
+        [order_battle, menu, order, order, order, animation, order_battle, order_battle],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 30.6], order_plan)
+    confirmed = [event for event in events.events if event.type == 'order_change_confirmed']
+    add_report('executor:order-change-mismatch-keeps-pending', process_path,
+               ('action_confirmation_timeout', 0), (result.reason, len(confirmed)), 'stop',
+               '换后前排不符合预期时不得交换原始槽位映射',
+               result.reason == 'action_confirmation_timeout' and not confirmed, simulated_ocr=True)
+
+
 def check_executor_self_target():
     from executor.core import RunOptions, run
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
@@ -2339,6 +2457,7 @@ def run(output: Path, name_filter: str | None = None):
     check_empty_slot_formation_once()
     check_strategy_scope_slots_and_region()
     check_strategy_executor()
+    check_order_change_auto_fill()
     check_executor_self_target()
     check_executor_repeat_support()
     check_executor_recovery()
