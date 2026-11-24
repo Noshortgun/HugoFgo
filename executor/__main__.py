@@ -15,6 +15,7 @@ from executor.domain import compile_job
 from executor.perception import Perception
 from executor.session import JsonlEventSink, RunControl, RunEvent
 from executor.session.history import RunHistoryRecorder
+from executor.session.summary import write_run_summary
 
 
 class StdoutEventSink:
@@ -42,6 +43,13 @@ def listen_for_stop(control: RunControl) -> None:
 
 def emit(sink, event_type: str, **data: object) -> None:
     sink.emit(RunEvent(event_type, time.time(), data))
+
+
+def write_failure_result(run_dir: Path, reason: str, **data: object) -> None:
+    (run_dir / 'result.json').write_text(json.dumps({
+        'status': 'failed', 'reason': reason, **data,
+        'progress': {'completed_runs': 0}, 'evidence_dir': str(run_dir),
+    }, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def fake_sleep(control: RunControl, seconds: float) -> bool:
@@ -143,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         job_text = Path(args.job).read_text(encoding='utf-8')
+        (run_dir / 'job.json').write_text(job_text, encoding='utf-8')
         job_data = json.loads(job_text)
         if isinstance(job_data.get('name'), str) and job_data['name'].strip():
             history.job_name = job_data['name'].strip()
@@ -151,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             diagnostics = [{'path': item.path, 'message': item.message,
                             'wave': item.wave, 'turn': item.turn} for item in compiled.diagnostics]
             emit(events, 'failed', reason='invalid_job', diagnostics=diagnostics, evidence_dir=str(run_dir))
+            write_failure_result(run_dir, 'invalid_job', diagnostics=diagnostics)
             return 2
         priority = tuple(RecoveryItem(item) for item in
                          (args.recovery if args.recovery is not None else [RecoveryItem.BRONZE.value]))
@@ -187,8 +197,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result.status is RunStatus.COMPLETED else 1
     except Exception as error:
         emit(events, 'failed', reason='process_error', message=str(error), evidence_dir=str(run_dir))
+        write_failure_result(run_dir, 'process_error', message=str(error))
         print(f'执行器异常：{error}', file=sys.stderr)
         return 1
+    finally:
+        write_run_summary(run_dir)
 
 
 if __name__ == '__main__':

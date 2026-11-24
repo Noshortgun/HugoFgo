@@ -248,7 +248,8 @@ MANUAL_LOOP = 'captures/2026-11-23/key/'
 
 
 def manual_frames(*names: str) -> tuple[str, ...]:
-    return tuple(MANUAL_LOOP + name for name in names for _ in range(2))
+    return tuple(name if name.startswith('captures/') else MANUAL_LOOP + name
+                 for name in names for _ in range(2))
 
 
 def manual_job_plan() -> ExecutionPlan:
@@ -321,7 +322,7 @@ CASES = (
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
             FULL_LOOP + 'repeat-dialog.png',
         ),
-        actions=('助战卡片第2行', '开始任务', '从者1技能1', '攻击', '卡1', '卡2', '卡4',
+        actions=('助战卡片第2行', '开始任务', '从者1技能1', '战斗跳过', '攻击', '卡1', '卡2', '卡4',
                  '战斗跳过', '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'action', 'finished'),
@@ -687,14 +688,22 @@ CASES = (
         frames=manual_frames(
             'manual-support-01.png', 'manual-support-berserker-02.png', 'manual-support-berserker-03.png',
             'manual-team-04.png', 'manual-w1-t1-start-05.png', 'manual-w1-t1-target2-06.png',
-            'manual-w1-t1-after-s3-07.png', 'manual-w1-t1-after-s1-08.png', 'manual-w1-t1-cards-09.png',
-            'manual-w2-t1-start-10.png', 'manual-w2-t1-after-support-s3-11.png',
-            'manual-w2-t1-after-support-s1-12.png', 'manual-w2-t1-after-oberon-s1-13.png',
+            'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w1-t1-after-s3-07.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w1-t1-after-s1-08.png', 'manual-w1-t1-cards-09.png',
+            'manual-w2-t1-start-10.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w2-t1-after-support-s3-11.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w2-t1-after-support-s1-12.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w2-t1-after-oberon-s1-13.png',
             'manual-w2-t1-cards-14.png', 'manual-w3-t1-start-15.png',
-            'manual-w3-t1-oberon-s2-target-16.png', 'manual-w3-t1-after-oberon-s2-17.png',
-            'manual-w3-t1-oberon-s3-target-18.png', 'manual-w3-t1-after-oberon-s3-19.png',
-            'manual-w3-t1-master-menu-20.png', 'manual-w3-t1-after-master-s1-21.png',
+            'manual-w3-t1-oberon-s2-target-16.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w3-t1-after-oberon-s2-17.png',
+            'manual-w3-t1-oberon-s3-target-18.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w3-t1-after-oberon-s3-19.png',
+            'manual-w3-t1-master-menu-20.png', 'captures/2026-11-19-ember/key/05-skill.png',
+            'manual-w3-t1-after-master-s1-21.png',
             'manual-w3-t1-master-menu-s2-22.png', 'manual-w3-t1-master-s2-target-23.png',
+            'captures/2026-11-19-ember/key/05-skill.png',
             'manual-w3-t1-after-master-s2-24.png', 'manual-w3-t1-cards-25.png',
             'manual-result-26.png', 'manual-result-exp-27.png', 'manual-drops-28.png',
             'manual-repeat-dialog-29.png',

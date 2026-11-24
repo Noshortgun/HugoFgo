@@ -911,6 +911,24 @@ def check_executor_self_target():
     add_report('executor:self-target-direct-animation', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; progress={result.progress}', ok, simulated_ocr=True)
 
+    delayed_target = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.SKILL_TARGET}),
+                                 controls=tuple(Control(
+                                     f'目标从者{index}', ControlKind.TARGET,
+                                     (index * 300, 269, index * 300 + 200, 499), True)
+                                     for index in range(1, 4)))
+    result, _, events = run_core_scenario(
+        [battle, animation, delayed_target, animation, battle, battle, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6], plan)
+    actions = [event for event in events.events if event.type == 'action']
+    controls = [event.data['control'] for event in actions]
+    expected = ['从者2技能3', '战斗跳过']
+    ok = (result.status.value == 'stopped' and result.reason == 'skill_target_after_animation_skip'
+          and controls == expected
+          and sum(event.data.get('reason') == 'skill_animation_skip' for event in actions) == 1)
+    add_report('executor:self-target-after-skip-stops', LOADING_IMAGE,
+               'skill_target_after_animation_skip; no target selection', f'{result.reason}; {controls}',
+               'stop', '目标晚于加速出现时安全停止，不执行乱序目标选择或第二次加速', ok, simulated_ocr=True)
+
     targeted = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                           member_slot=0, skill=0, player_target_slot=1)
     targeted_battle = replace(battle, controls=(
@@ -926,8 +944,8 @@ def check_executor_self_target():
     targeted_turn = replace(turn, actions=(targeted,))
     targeted_plan = replace(plan, waves=(replace(plan.waves[0], turns=(targeted_turn,)),))
     result, _, events = run_core_scenario(
-        [targeted_battle, servant_target, targeted_battle, targeted_battle, wrong],
-        [0.0, 0.1, 0.2, 0.3, 0.4], targeted_plan)
+        [targeted_battle, servant_target, targeted_battle, targeted_battle, targeted_battle, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '目标从者2', '战斗跳过', '攻击']
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
@@ -936,8 +954,8 @@ def check_executor_self_target():
 
     result, _, events = run_core_scenario(
         [targeted_battle, targeted_battle, targeted_battle, servant_target,
-         targeted_battle, targeted_battle, wrong],
-        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5], targeted_plan)
+         targeted_battle, targeted_battle, targeted_battle, wrong],
+        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击']
     recoveries = [event for event in events.events
@@ -1208,13 +1226,18 @@ def check_executor_process():
         stopped_rows = [json.loads(line) for line in stdout.splitlines()]
         history = [json.loads(line) for line in
                    (Path(directory) / 'logs/run-history.jsonl').read_text(encoding='utf-8').splitlines()]
-        actual = f"complete={completed.returncode}:{finished_rows[-1]['type']}; stop={stopped.returncode}:{stopped_rows[-1]['type']}; history={[row['result'] for row in history]}"
+        complete_summary = (Path(directory) / 'logs/farm/complete/summary.md').read_text(encoding='utf-8')
+        stopped_summary = (Path(directory) / 'logs/farm/stop/summary.md').read_text(encoding='utf-8')
+        summaries_ok = ('运行状态：正常完成' in complete_summary and '完成场数：1' in complete_summary
+                        and '阿尔托莉雅' in complete_summary and '第 2 场' not in complete_summary
+                        and '运行状态：手动停止' in stopped_summary and '完成场数：0' in stopped_summary)
+        actual = f"complete={completed.returncode}:{finished_rows[-1]['type']}; stop={stopped.returncode}:{stopped_rows[-1]['type']}; history={[row['result'] for row in history]}; summaries={summaries_ok}"
         ok = (completed.returncode == 0 and finished_rows[-1]['type'] == 'finished'
               and stopped.returncode == 1 and stopped_rows[-1]['type'] == 'stopped'
               and not any(row['type'] == 'action' for row in stopped_rows)
-              and [row['result'] for row in history] == ['completed', 'stopped'])
+              and [row['result'] for row in history] == ['completed', 'stopped'] and summaries_ok)
         add_report('executor:process-jsonl-and-stop', LOADING_IMAGE, 'complete=0:finished; stop=1:stopped',
-                   actual, 'stop', 'UTF-8 JSON Lines；停止后无动作', ok, simulated_ocr=True)
+                   actual, 'stop', 'UTF-8 JSON Lines；停止后无动作；自动生成中文摘要', ok, simulated_ocr=True)
 
 
 def check_executor_safety():
@@ -1256,25 +1279,53 @@ def check_executor_safety():
     ready = replace(battle(), controls=(*battle().controls, Control(
         '战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True)))
     result, _, events = run_core_scenario(
-        [ready, ready, wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
+        [ready, animation, ready, ready, wrong], [0.0, 0.1, 0.2, 0.3, 0.4], make_plan((skill,)))
     actions = [event for event in events.events if event.type == 'action']
     controls = [event.data['control'] for event in actions]
-    expected = ['从者1技能1', '攻击']
+    expected = ['从者1技能1', '战斗跳过', '攻击']
     ok = (result.reason == 'card_mismatch' and controls == expected
-          and [event.timestamp for event in actions] == [0.0, 0.1]
+          and [event.timestamp for event in actions] == [0.0, 0.1, 0.3]
           and all(event.data.get('channel_ms', -1) >= 0 and event.data.get('wait_ms', -1) >= 0
                   and event.data.get('input_finished_at', 0) > 0 for event in actions)
-          and not any(event.data.get('reason') == 'skill_animation_skip' for event in actions))
-    add_report('executor:untargeted-skill-fixed-job-sequence', LOADING_IMAGE, expected, controls,
-               'stop', '固定作业直接推进，不用动画/冷却/图标变化推断技能是否生效', ok,
+          and sum(event.data.get('reason') == 'skill_animation_skip' for event in actions) == 1)
+    add_report('executor:untargeted-skill-battle-recovery', LOADING_IMAGE, expected, controls,
+               'stop', '无目标技能也加速一次，并等待两个连续战斗可操作新帧', ok,
                simulated_ocr=True)
 
     result, _, events = run_core_scenario(
-        [battle(), battle(), wrong], [0.0, 0.1, 0.2], make_plan((skill,)))
+        [battle(), animation, battle(), ready, ready, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], make_plan((skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = result.reason == 'card_mismatch' and controls == expected
-    add_report('executor:untargeted-skill-no-menu-wait', LOADING_IMAGE, expected, controls,
-               'stop', '普通技能不等待战斗菜单恢复；攻击仍必须进入选卡页', ok,
+    add_report('executor:untargeted-skill-menu-recovery', LOADING_IMAGE, expected, controls,
+               'stop', '攻击和战斗菜单均恢复后才推进；攻击仍必须进入选卡页', ok,
+               simulated_ocr=True)
+
+    first = ActionPlan(kind='skill', title='二技能', detail='', icon='', member_slot=0, skill=1)
+    second = ActionPlan(kind='skill', title='三技能', detail='', icon='', member_slot=0, skill=2)
+    consecutive = replace(ready, controls=(
+        *ready.controls,
+        Control('从者1技能2', ControlKind.SKILL, (130, 548, 190, 610), True),
+        Control('从者1技能3', ControlKind.SKILL, (217, 548, 278, 610), True),
+    ))
+    input_times = [1795498380.6858945, 1795498380.7996883, 1795498381.2,
+                   1795498381.3, 1795498381.5]
+    with mock.patch('executor.core.runner.time.time', side_effect=input_times):
+        result, _, events = run_core_scenario(
+            [consecutive, animation, consecutive, consecutive, animation,
+             consecutive, consecutive, wrong],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], make_plan((first, second)))
+    actions = [event for event in events.events if event.type == 'action']
+    controls = [event.data['control'] for event in actions]
+    expected = ['从者1技能2', '战斗跳过', '从者1技能3', '战斗跳过', '攻击']
+    interval = (actions[2].data['input_finished_at'] - actions[0].data['input_finished_at']
+                if len(actions) == 5 else -1)
+    ok = (result.reason == 'card_mismatch' and controls == expected and interval > 0.3613193
+          and actions[2].data['input_finished_at'] > 1795498381.0472138)
+    add_report('executor:skill-live-361ms-early-input-regression', LOADING_IMAGE,
+               '第二技能输入晚于实机 0.361 秒过早点击',
+               f'{controls}; input_interval={interval:.6f}', 'stop',
+               'run-1795498348917-18264 输入完成时间回归；不推断技能生效', ok,
                simulated_ocr=True)
 
     repeat = battle(overlays=(Overlay.REPEAT_DIALOG,))
