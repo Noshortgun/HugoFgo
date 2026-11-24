@@ -369,9 +369,11 @@ export function convertChaldeaTeam(
 
   const names = formation.filter((entry) => entry.name).map((entry) => entry.name).slice(0, 3);
   const mysticCodeId = data.team?.mysticCode?.mysticCodeId;
+  const orderedFrontline = formation.slice(0, 3).filter((entry) => entry.name.trim());
   const fallbackStrategy: FallbackStrategy = {
     allowNp: true,
-    servantOrder: formation.slice(0, 3).map((entry) => entry.name).filter(Boolean),
+    servantOrder: orderedFrontline.map((entry) => entry.name),
+    servantOrderSlots: orderedFrontline.map((entry) => entry.slot),
     cards: 'buster',
     colorPriority: ['buster', 'arts', 'quick'],
     strategyOrder: ['servant', 'cards', 'affinity', 'crit'],

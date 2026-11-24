@@ -126,8 +126,9 @@ function toJobAction(members: Servant[], action: PlanAction): JobAction {
 
 function toJobFormation(members: Servant[]): JobFormationSlot[] {
   return members.map((member, slot) => {
-    const entry: JobFormationSlot = { slot, name: member.empty ? '' : member.name, role: member.role };
-    if (!member.empty && member.svtId !== undefined) entry.svtId = member.svtId;
+    if (member.empty) return { slot, name: '', role: '' };
+    const entry: JobFormationSlot = { slot, name: member.name, role: member.role };
+    if (member.svtId !== undefined) entry.svtId = member.svtId;
     if (!member.empty) entry.limitCount = member.limitCount ?? 4;
     if (!member.empty && member.npId !== undefined) entry.npId = member.npId;
     if (member.support) entry.support = true;
@@ -149,6 +150,23 @@ function toJobFormation(members: Servant[]): JobFormationSlot[] {
     }
     return entry;
   });
+}
+
+export function remapPlanMember(snapshot: PlanSnapshot, previousId: string, nextId: string): PlanSnapshot {
+  const remapped = JSON.parse(JSON.stringify(snapshot)) as PlanSnapshot;
+  Object.values(remapped.actionsBySlot).forEach((actions) => actions.forEach((action) => {
+    if (action.memberInstanceId === previousId) action.memberInstanceId = nextId;
+    if (action.playerTarget === previousId) action.playerTarget = nextId;
+    if (action.swapOutMemberInstanceId === previousId) action.swapOutMemberInstanceId = nextId;
+    if (action.swapInMemberInstanceId === previousId) action.swapInMemberInstanceId = nextId;
+    if (action.skillKey) action.skillKey = action.skillKey.replaceAll(previousId, nextId);
+  }));
+  Object.entries(remapped.npPositionsBySlot).forEach(([key, positions]) => {
+    remapped.npPositionsBySlot[key] = Object.fromEntries(
+      Object.entries(positions).map(([memberId, position]) => [memberId === previousId ? nextId : memberId, position]),
+    );
+  });
+  return remapped;
 }
 
 export function buildJobFile(input: {
@@ -234,10 +252,11 @@ function fromJobAction(
   const memberAt = (slot: number | undefined, label: string): Servant | undefined => {
     if (slot === undefined) return undefined;
     const member = members[slot];
-    if (!member || member.empty) {
-      warnings.push(`${where}：${label}指向空位（${slot + 1} 号位），动作已跳过`);
+    if (!member) {
+      warnings.push(`${where}：${label}指向不存在的 ${slot + 1} 号位`);
       return undefined;
     }
+    if (member.empty) warnings.push(`${where}：${label}指向空槽位（${slot + 1} 号位），修复前无法战斗`);
     return member;
   };
 
@@ -247,8 +266,7 @@ function fromJobAction(
   const swapOut = memberAt(jobAction.swapOutSlot, '换人下场从者');
   const swapIn = memberAt(jobAction.swapInSlot, '换人上场从者');
   if (jobAction.kind === 'orderChange' && (!swapOut || !swapIn)) {
-    warnings.push(`${where}：换人动作缺少有效的双方，动作已跳过`);
-    return null;
+    warnings.push(`${where}：换人动作的槽位不存在，请修复后再运行`);
   }
 
   let skillKey: string | undefined;
@@ -311,10 +329,11 @@ export function jobToSnapshot(job: HugoFgoJob, members: Servant[], mystic: Mysti
         const positions: Record<string, NpPosition> = {};
         Object.entries(jobTurn.npPositions).forEach(([slotText, position]) => {
           const member = members[Number(slotText)];
-          if (!member || member.empty) {
-            warnings.push(`第 ${waveNumber} 面 · 回合 ${turnNumber}：宝具卡序指向不存在的 ${Number(slotText) + 1} 号位，已忽略`);
+          if (!member) {
+            warnings.push(`第 ${waveNumber} 面 · 回合 ${turnNumber}：宝具卡序指向不存在的 ${Number(slotText) + 1} 号位`);
             return;
           }
+          if (member.empty) warnings.push(`第 ${waveNumber} 面 · 回合 ${turnNumber}：宝具卡序指向空槽位（${Number(slotText) + 1} 号位），修复前无法战斗`);
           positions[member.memberInstanceId] = position;
         });
         if (Object.keys(positions).length) snapshot.npPositionsBySlot[key] = positions;
@@ -338,7 +357,7 @@ export function applyFormation(
   assets?: (name: string, role?: string) => AtlasServant | undefined,
   equips?: Map<number, EquipInfo>,
 ): { members: Servant[]; warnings: string[] } {
-  const members = current.map((member) => ({ ...member }));
+  const members = Array.from({ length: Math.max(6, current.length) }, () => emptyServant());
   const warnings: string[] = [];
   const grandSlot = (id?: number | null, name?: string | null) => {
     const equip = resolveEquip(equips, id ?? undefined, name ?? undefined);
@@ -347,12 +366,12 @@ export function applyFormation(
   };
   job.formation.forEach((entry) => {
     if (!Number.isInteger(entry.slot) || entry.slot < 0 || entry.slot >= members.length) return;
-    const previous = members[entry.slot];
-    if (!entry.name) {
-      members[entry.slot] = emptyServant(entry.support ?? false);
+    const name = entry.name.trim();
+    if (!name) {
+      members[entry.slot] = emptyServant();
     } else {
-      const known = catalog.find((servant) => servant.name === entry.name && (!entry.role || servant.role === entry.role));
-      const asset = assets?.(entry.name, entry.role);
+      const known = catalog.find((servant) => servant.name === name && (!entry.role || servant.role === entry.role));
+      const asset = assets?.(name, entry.role);
       const assetSkills = activeSkillsForLimitCount(asset?.skills ?? [], entry.limitCount ?? 4, entry.svtId);
       const ascension = asset?.ascensionAssets?.[entry.limitCount ?? 4];
       const noblePhantasm = asset?.noblePhantasms?.find((np) => np.id === entry.npId) ?? activeNoblePhantasmForLimitCount(asset?.noblePhantasms ?? [], entry.limitCount ?? 4, entry.svtId);
@@ -371,7 +390,7 @@ export function applyFormation(
           supportRequired: entry.support ? (entry.supportRequired ?? true) : false,
           grandRequired: entry.grandRequired ?? false,
         };
-      } else if (!(previous.name === entry.name && !previous.placeholder)) {
+      } else {
         const skills = assetSkills.length
           ? assetSkills.map((skill, index) => ({
               icon: fallbackIcons[index % fallbackIcons.length],
@@ -387,7 +406,7 @@ export function applyFormation(
           npId: noblePhantasm?.id ?? entry.npId,
           noblePhantasm,
 
-          name: entry.name,
+          name,
           role: entry.role ?? '',
           image: ascension?.face ?? asset?.face ?? '',
           art: ascension?.card ?? asset?.card ?? '',

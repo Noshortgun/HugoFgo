@@ -19,9 +19,7 @@ from executor.domain.model import (
     TurnPlan,
     WavePlan,
 )
-from executor.domain.schema import validate_job
-
-SLOT_KEYS = ('memberSlot', 'playerTargetSlot', 'swapOutSlot', 'swapInSlot')
+from executor.domain.schema import ACTION_SLOT_REFERENCE_KEYS, MEMBER_SLOT_REQUIRED_ACTIONS, validate_job
 
 
 def _diagnostic(diagnostics: list[Diagnostic], path: str, message: str,
@@ -53,10 +51,17 @@ def _compile_strategy(raw: dict[str, Any]) -> FallbackStrategy:
 
 
 def _compile_formation(raw: dict[str, Any]) -> tuple[FormationSlotPlan, ...]:
-    return tuple(
-        FormationSlotPlan(
-            slot=entry['slot'],
-            name=entry['name'].strip(),
+    entries = {entry['slot']: entry for entry in raw['formation']}
+    members = []
+    for slot in range(6):
+        entry = entries.get(slot, {'slot': slot, 'name': ''})
+        name = entry['name'].strip()
+        if not name:
+            members.append(FormationSlotPlan(slot=slot, name=''))
+            continue
+        members.append(FormationSlotPlan(
+            slot=slot,
+            name=name,
             svt_id=entry.get('svtId'),
             limit_count=entry.get('limitCount'),
             np_id=entry.get('npId'),
@@ -68,9 +73,8 @@ def _compile_formation(raw: dict[str, Any]) -> tuple[FormationSlotPlan, ...]:
             ce_id=entry.get('ceId'),
             grand_ce=entry.get('grandCe'),
             grand_ce_ids=entry.get('grandCeIds'),
-        )
-        for entry in raw['formation']
-    )
+        ))
+    return tuple(members)
 
 
 def _check_strategy_slots(strategy: dict[str, Any], path: str, formation: dict[int, str],
@@ -90,7 +94,10 @@ def _check_slot(action: dict[str, Any], key: str, action_path: str, wave: int, t
 
 def _compile_action(action: dict[str, Any], action_path: str, wave: int, turn_no: int,
                     formation: dict[int, str], diagnostics: list[Diagnostic]) -> ActionPlan:
-    for key in SLOT_KEYS:
+    if action['kind'] in MEMBER_SLOT_REQUIRED_ACTIONS and action.get('memberSlot') is None:
+        label = '从者技能' if action['kind'] == 'skill' else '宝具攻击'
+        _diagnostic(diagnostics, f'{action_path}.memberSlot', f'{label}必须指定 memberSlot', wave, turn_no)
+    for key in ACTION_SLOT_REFERENCE_KEYS:
         _check_slot(action, key, action_path, wave, turn_no, formation, diagnostics)
     if action['kind'] == 'orderChange' and action['swapOutSlot'] == action['swapInSlot']:
         _diagnostic(diagnostics, f'{action_path}.swapInSlot', '换人动作的上下场槽位不能相同', wave, turn_no)

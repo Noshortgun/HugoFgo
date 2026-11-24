@@ -10,6 +10,9 @@ from executor.domain.model import Diagnostic
 
 _SCHEMA_PATH = Path(__file__).resolve().parents[2] / 'schemas' / 'job-v1.schema.json'
 JOB_SCHEMA = json.loads(_SCHEMA_PATH.read_text(encoding='utf-8'))
+SLOT_REFERENCE_RULES = JOB_SCHEMA['x-slot-reference-rules']
+ACTION_SLOT_REFERENCE_KEYS = tuple(SLOT_REFERENCE_RULES['actionReferenceKeys'])
+MEMBER_SLOT_REQUIRED_ACTIONS = frozenset(SLOT_REFERENCE_RULES['memberSlotRequiredActions'])
 
 
 def _json_equal(left: Any, right: Any) -> bool:
@@ -67,7 +70,7 @@ def _constraint_error(diagnostics: list[Diagnostic], path: str, rule: str,
         message = f'不支持的动作：{value!r}'
     elif path.endswith('.secondarySelection.type'):
         message = f'不支持的二次选择类型：{value!r}'
-    elif path.endswith(('.slot', '.memberSlot', '.playerTargetSlot', '.swapOutSlot', '.swapInSlot')):
+    elif path.endswith(('.slot', *(f'.{key}' for key in ACTION_SLOT_REFERENCE_KEYS))):
         message = f'槽位越界：{value!r} 不在 0–5'
     else:
         message = f'不符合约束 {rule}={expected!r}，收到 {value!r}'

@@ -32,13 +32,19 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
 
     reserved_names = {control.name for _, control in reserved}
     known_slots = {member.slot for member in plan.formation}
+    specified_slots = {member.slot for member in plan.formation if member.name.strip()}
+    has_empty_slots = any(not member.name.strip() for member in plan.formation)
     affinity_ranks = {'resist': 0, 'disadvantage': 0, '抵抗': 0,
                       'neutral': 1, 'advantage': 2, '克制': 2}
     candidates = [control for control in observation.controls
                   if control.name not in reserved_names
                   and control.kind is ControlKind.CARD and control.actionable
-                  and control.card is not None and control.card.servant_slot in known_slots
-                  and control.card.card_type in {'buster', 'arts', 'quick'}
+                  and control.card is not None
+                  and (control.card.servant_slot in known_slots
+                       or (has_empty_slots and control.card.servant_slot == -1
+                           and control.card.svt_id is None and not control.card.noble_phantasm))
+                  and (control.card.noble_phantasm
+                       or control.card.card_type in {'buster', 'arts', 'quick'})
                   and ((not control.card.noble_phantasm and 450 < control.center[1] < 650)
                        or (effective.allow_np and control.card.noble_phantasm and control.center[1] < 450))]
     if not candidates and not reserved:
@@ -86,7 +92,8 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
         values = []
         for criterion in effective.strategy_order:
             if criterion == 'servant':
-                values.append(ranks.get(card.servant_slot, len(ranks)))
+                values.append((ranks.get(card.servant_slot, len(ranks)),
+                               0 if card.noble_phantasm else 1))
             elif criterion == 'cards':
                 if effective.cards == 'balanced':
                     preference = -len({item.card_type for item in (*selected_normal, card)})
@@ -99,7 +106,7 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
                 values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
         if 'affinity' not in effective.strategy_order:
             values.append(-affinity_ranks.get(card.affinity, affinity_ranks['neutral']))
-        return (*values, control.center[0], control.center[1])
+        return (0 if card.servant_slot in specified_slots else 1, *values, control.center[0], control.center[1])
 
     positioned: list[Control | None] = [None, None, None]
     automatic: list[Control] = []
@@ -114,10 +121,13 @@ def select_cards(observation: Observation, strategy: FallbackStrategy,
     normal = [control for control in candidates if not control.card.noble_phantasm]
     noble_phantasm = [control for control in candidates if control.card.noble_phantasm]
     while None in positioned:
-        available = normal or (noble_phantasm if effective.allow_np else [])
+        available = [*normal, *(noble_phantasm if effective.allow_np else [])]
         if not available:
             return _empty('可用指令卡不足三张', source, tuple(warnings))
         chosen = min(enumerate(available), key=key)[1]
+        if not chosen.card.noble_phantasm:
+            chosen = next((control for control in noble_phantasm
+                           if control.card.servant_slot == chosen.card.servant_slot), chosen)
         positioned[positioned.index(None)] = chosen
         if chosen in normal:
             normal.remove(chosen)

@@ -657,7 +657,7 @@ def check_strategy_np_and_short_hand():
     enabled_strategy = replace(strategy, allow_np=True)
     enabled = select_cards(observation, enabled_strategy, plan, 1)
     actual = [control.name for control in enabled.controls]
-    expected = ['卡1', '卡2', '宝具卡1']
+    expected = ['宝具卡1', '卡1', '卡2']
     add_report('strategy:np-allowed', ROOT / 'captures/2026-11-20/key/card-select.png',
                expected, actual, 'select', enabled.reason, actual == expected, simulated_ocr=True)
 
@@ -665,6 +665,165 @@ def check_strategy_np_and_short_hand():
     add_report('strategy:empty-hand-stops', ROOT / 'captures/2026-11-20/key/card-select.png',
                'diagnostic', empty.diagnostic or 'selected', 'stop', empty.reason,
                not empty.controls and empty.diagnostic is not None, simulated_ocr=True)
+
+
+def check_empty_slot_rules():
+    from executor.core.strategy import select_cards
+    from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
+    from executor.perception import BasePage, CommandCardIdentity, Control, ControlKind, Observation
+
+    formation = (
+        FormationSlotPlan(slot=0, name='指定0'),
+        *(FormationSlotPlan(slot=slot, name='') for slot in range(1, 6)),
+    )
+    strategy = FallbackStrategy(
+        allow_np=False, servant_order=('指定0',), servant_order_slots=(0,), cards='buster',
+        color_priority=('buster', 'arts', 'quick'), strategy_order=('cards', 'crit', 'affinity'),
+    )
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1, turns=(TurnPlan(),)),),
+        formation=formation, strategy=strategy,
+    )
+
+    def normal(name, slot, color='buster', crit=10, affinity='neutral', x=0):
+        return Control(name, ControlKind.CARD, (x, 415, x + 160, 655), True,
+                       card=CommandCardIdentity(slot, color, crit_rate=crit, affinity=affinity))
+
+    tier_hand = Observation(base_page=BasePage.CARD, controls=(
+        normal('空槽优质卡', 1, crit=100, affinity='advantage', x=0),
+        normal('指定普通1', 0, color='arts', crit=0, affinity='resist', x=200),
+        normal('指定普通2', 0, color='quick', crit=0, affinity='resist', x=400),
+        normal('空槽普通2', 1, crit=90, affinity='advantage', x=600),
+        normal('空槽普通3', 1, crit=80, affinity='advantage', x=800),
+    ))
+    tiered = select_cards(tier_hand, strategy, plan, 1)
+    actual = [control.name for control in tiered.controls]
+    expected = ['指定普通1', '指定普通2', '空槽优质卡']
+    add_report('strategy:empty-slots-hard-two-tiers', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '卡色、暴击和克制不得跨层', actual == expected, simulated_ocr=True)
+
+    unknown_hand = Observation(base_page=BasePage.CARD, controls=(
+        normal('指定普通1', 0, color='arts', crit=0, affinity='resist', x=0),
+        normal('指定普通2', 0, color='quick', crit=0, affinity='resist', x=200),
+        normal('未知身份普通1', -1, crit=100, affinity='advantage', x=400),
+        normal('未知身份普通2', -1, color='arts', x=600),
+        normal('未知身份普通3', -1, color='quick', x=800),
+    ))
+    unknown = select_cards(unknown_hand, strategy, plan, 1)
+    actual = [control.name for control in unknown.controls]
+    expected = ['指定普通1', '指定普通2', '未知身份普通1']
+    add_report('strategy:empty-slots-unknown-normal-color', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '身份未知但卡色确认的普通卡只进入最低层',
+               actual == expected, simulated_ocr=True)
+
+    specified_plan = replace(plan, formation=tuple(
+        FormationSlotPlan(slot=slot, name=f'指定{slot}') for slot in range(3)))
+    specified_hand = Observation(base_page=BasePage.CARD, controls=(
+        normal('未知身份普通', -1, crit=100, affinity='advantage', x=0),
+        normal('指定普通1', 0, color='arts', crit=10, x=200),
+        normal('指定普通2', 1, color='quick', crit=20, x=400),
+    ))
+    specified_unknown = select_cards(specified_hand, replace(strategy, strategy_order=('crit', 'cards')),
+                                     specified_plan, 1)
+    actual = [control.name for control in specified_unknown.controls]
+    expected = '可用指令卡不足三张'
+    add_report('strategy:specified-formation-excludes-unknown-normal',
+               ROOT / 'captures/2026-11-20/key/card-select.png', expected,
+               specified_unknown.diagnostic or actual, 'stop',
+               '非空编队保持旧逻辑，已识别卡不足时不得用身份未知普通卡补齐',
+               not actual and specified_unknown.diagnostic == expected, simulated_ocr=True)
+
+    empty_np = Control('空槽宝具', ControlKind.CARD, (330, 100, 510, 330), True,
+                       card=CommandCardIdentity(1, 'unknown', noble_phantasm=True, affinity='neutral'))
+    np_hand = Observation(base_page=BasePage.CARD, controls=(
+        normal('指定普通', 0, color='arts', x=0), empty_np,
+        normal('空槽普通1', 1, x=200), normal('空槽普通2', 1, x=400), normal('空槽普通3', 1, x=600),
+    ))
+    np_strategy = replace(strategy, strategy_order=('servant', 'cards', 'crit'))
+    disabled = select_cards(np_hand, np_strategy, plan, 1)
+    actual = [control.name for control in disabled.controls]
+    expected = ['指定普通', '空槽普通1', '空槽普通2']
+    add_report('strategy:empty-slot-np-disabled', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '空槽宝具同样受 allowNp 控制', actual == expected, simulated_ocr=True)
+    enabled = select_cards(np_hand, replace(np_strategy, allow_np=True), plan, 1)
+    actual = [control.name for control in enabled.controls]
+    expected = ['指定普通', '空槽宝具', '空槽普通1']
+    add_report('strategy:empty-slot-np-after-specified', ROOT / 'captures/2026-11-20/key/card-select.png',
+               expected, actual, 'select', '空槽宝具不越过指定从者，轮到空槽时先于其普通卡',
+               actual == expected, simulated_ocr=True)
+
+    without_servant = select_cards(
+        np_hand, replace(np_strategy, allow_np=True, strategy_order=('crit', 'cards')), plan, 1)
+    actual = [control.name for control in without_servant.controls]
+    add_report('strategy:empty-slot-np-without-servant-criterion',
+               ROOT / 'captures/2026-11-20/key/card-select.png', expected, actual, 'select',
+               'strategyOrder 不含 servant 时，同从者宝具仍先于其普通卡',
+               actual == expected, simulated_ocr=True)
+
+
+def check_empty_slot_formation_once():
+    from executor.core import RunOptions
+    from executor.domain import (AttackPlan, ExecutionPlan, FallbackStrategy, FormationSlotPlan,
+                                 TurnPlan, WavePlan)
+    from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
+                                     FieldStatus, Observation, Overlay, Variant)
+
+    team = Observation(base_page=BasePage.TEAM, fields={
+        'team_servants': Field(FieldStatus.CONFIRMED, (705000, None, None)),
+        'team_backline_servants': Field(FieldStatus.CONFIRMED, (4, None, None)),
+        'team_mystic': Field(FieldStatus.CONFIRMED, 'default'),
+    }, controls=(Control('开始任务', ControlKind.BUTTON, (1086, 635, 1248, 707), True),))
+    changed_team = team.with_fields({
+        'team_servants': Field(FieldStatus.CONFIRMED, (999, 999, 999)),
+        'team_backline_servants': Field(FieldStatus.CONFIRMED, (999, 999, 999)),
+    })
+    battle = Observation(base_page=BasePage.BATTLE, fields={
+        'wave': Field(FieldStatus.CONFIRMED, 1), 'turn': Field(FieldStatus.CONFIRMED, 1),
+        'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+    }, controls=(Control('攻击', ControlKind.BUTTON, (1069, 564, 1196, 637), True),))
+    boxes = ((46, 415, 211, 655), (301, 415, 466, 655), (556, 415, 721, 655),
+             (811, 415, 976, 655), (1066, 415, 1231, 655))
+    card = Observation(base_page=BasePage.CARD, controls=tuple(
+        Control(f'卡{index}', ControlKind.CARD, boxes[index - 1], True,
+                card=CommandCardIdentity(slot, 'arts', crit_rate=10, affinity='neutral'))
+        for index, slot in enumerate((0, 1, 2, 0, 1), start=1)))
+    animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+    result_page = Observation(base_page=BasePage.RESULT, controls=(
+        Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
+    drops = Observation(base_page=BasePage.DROPS, controls=(
+        Control('下一步', ControlKind.BUTTON, (948, 606, 1272, 676), True),))
+    repeat = Observation(base_page=BasePage.DROPS, overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                         controls=(Control('连续出击', ControlKind.BUTTON, (800, 540, 940, 610), True),))
+    observations = [
+        team, team, battle, battle, card, card, card, card, card, card, animation,
+        result_page, result_page, drops, drops, repeat, repeat,
+        changed_team, changed_team, battle, battle, card, card, card, card, card, card, animation,
+        result_page, result_page, drops, drops, repeat,
+    ]
+    formation = (
+        FormationSlotPlan(slot=0, name='指定0', svt_id=705000),
+        FormationSlotPlan(slot=1, name=''), FormationSlotPlan(slot=2, name=''),
+        FormationSlotPlan(slot=3, name='指定候补', svt_id=4),
+        FormationSlotPlan(slot=4, name=''), FormationSlotPlan(slot=5, name=''),
+    )
+    strategy = FallbackStrategy(servant_order=('指定0',), servant_order_slots=(0,))
+    plan = ExecutionPlan(
+        mystic_id='default', enemy_count=3,
+        waves=(WavePlan(number=1, target=1,
+                        turns=(TurnPlan(attack=AttackPlan(mode='strategy', cards=())),)),),
+        formation=formation, strategy=strategy,
+    )
+    result, _device, events = run_core_scenario(
+        observations, [index * 0.5 for index in range(len(observations))], plan,
+        options=RunOptions(run_count=2, write_evidence=False))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['开始任务', '开始任务']
+    actual = [control for control in controls if control == '开始任务']
+    ok = result.status.value == 'completed' and result.progress.completed_runs == 2 and actual == expected
+    add_report('executor:empty-slots-one-formation-check', TEAM_IMAGE, expected, actual, 'tap',
+               f'reason={result.reason}; 指定候补已核对，后续队伍变化不再核对；controls={controls}',
+               ok, simulated_ocr=True)
 
 
 def check_strategy_scope_slots_and_region():
@@ -2176,6 +2335,8 @@ def run(output: Path, name_filter: str | None = None):
     check_strategy_balanced_cards()
     check_strategy_affinity_and_degraded_data()
     check_strategy_np_and_short_hand()
+    check_empty_slot_rules()
+    check_empty_slot_formation_once()
     check_strategy_scope_slots_and_region()
     check_strategy_executor()
     check_executor_self_target()

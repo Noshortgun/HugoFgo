@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import type { CardColor, FallbackScope, FallbackStrategy, Servant, StrategyCriterion } from '../types';
 import AppIcon from './AppIcon.vue';
 import { servantLabel } from '../servantLabel';
-import { resolveServantOrder } from '../servantOrder';
+import { emptyServantOrderEntries, resolveServantOrder } from '../servantOrder';
 
 const props = defineProps<{ fallback: FallbackStrategy; fallbackByWave: Record<number, FallbackStrategy | null>; members: Servant[]; dirty?: boolean }>();
 const emit = defineEmits<{ close: []; update: [payload: { scope: FallbackScope; value: FallbackStrategy }]; reset: [wave: number]; resetAll: []; save: [] }>();
@@ -20,6 +20,7 @@ const servantEntries = computed(() => resolveServantOrder(activeFallback.value, 
   const member = props.members[entry.slot];
   return { ...entry, index, label: member ? servantLabel(member) : entry.name };
 }));
+const emptyOrderEntries = computed(() => emptyServantOrderEntries(activeFallback.value, props.members));
 const criterionMeta: Record<StrategyCriterion, { title: string; icon: string }> = {
   servant: { title: '从者顺序', icon: 'cards' },
   cards: { title: '选卡倾向', icon: 'cards' },
@@ -29,7 +30,7 @@ const criterionMeta: Record<StrategyCriterion, { title: string; icon: string }> 
 const colorNames: Record<CardColor, string> = { buster: '红', arts: '蓝', quick: '绿' };
 
 function update(value: Partial<FallbackStrategy>) {
-  const entries = resolveServantOrder(activeFallback.value, props.members);
+  const entries = [...resolveServantOrder(activeFallback.value, props.members), ...emptyOrderEntries.value];
   emit('update', {
     scope: scope.value,
     value: {
@@ -59,7 +60,8 @@ function moveServant(index: number, delta: number) {
   const destination = index + delta;
   if (destination < 0 || destination >= entries.length) return;
   [entries[index], entries[destination]] = [entries[destination], entries[index]];
-  update({ servantOrder: entries.map((entry) => entry.name), servantOrderSlots: entries.map((entry) => entry.slot) });
+  const preserved = [...entries, ...emptyOrderEntries.value];
+  update({ servantOrder: preserved.map((entry) => entry.name), servantOrderSlots: preserved.map((entry) => entry.slot) });
 }
 function moveColor(color: CardColor, delta: number) {
   const order = [...activeFallback.value.colorPriority];
@@ -84,7 +86,7 @@ function moveColor(color: CardColor, delta: number) {
           <section v-for="criterion in criterionOrder" :key="criterion" class="strategy-config-card">
             <header><AppIcon :name="criterionMeta[criterion].icon" :size="17" /><strong>{{ criterionMeta[criterion].title }}</strong><div class="criterion-arrows"><button :disabled="criterionOrder[0] === criterion" :title="`${criterionMeta[criterion].title}左移`" @click="moveCriterion(criterion, -1)">←</button><button :disabled="criterionOrder.at(-1) === criterion" :title="`${criterionMeta[criterion].title}右移`" @click="moveCriterion(criterion, 1)">→</button></div></header>
             <p class="strategy-current">{{ criterionDetail(criterion) }}</p>
-            <div v-if="criterion === 'servant'" class="strategy-card-content"><div class="ordered-chip-list"><div v-for="entry in servantEntries" :key="`${entry.name}-${entry.index}`"><span>{{ entry.label }}</span><div><button :disabled="entry.index === 0" :title="`${entry.label} 左移`" @click="moveServant(entry.index, -1)">←</button><button :disabled="entry.index === activeFallback.servantOrder.length - 1" :title="`${entry.label} 右移`" @click="moveServant(entry.index, 1)">→</button></div></div></div></div>
+            <div v-if="criterion === 'servant'" class="strategy-card-content"><div class="ordered-chip-list"><div v-for="entry in servantEntries" :key="`${entry.name}-${entry.index}`"><span>{{ entry.label }}</span><div><button :disabled="entry.index === 0" :title="`${entry.label} 左移`" @click="moveServant(entry.index, -1)">←</button><button :disabled="entry.index === servantEntries.length - 1" :title="`${entry.label} 右移`" @click="moveServant(entry.index, 1)">→</button></div></div></div><p v-if="emptyOrderEntries.length" class="strategy-current" role="alert">空槽从者优先级引用已保留：{{ emptyOrderEntries.map((entry) => `${entry.slot} 号位（${entry.name || '未命名'}）`).join('、') }}。请重新选择从者或移除引用。</p></div>
             <div v-else-if="criterion === 'cards'" class="strategy-card-content"><div class="fallback-segment card-preference"><button v-for="item in ([['buster','3 红'],['quick','3 绿'],['arts','3 蓝'],['balanced','3 色卡']] as const)" :key="item[0]" :class="{ active: activeFallback.cards === item[0] }" @click="update({ cards: item[0] })">{{ item[1] }}</button></div><label>无法组成倾向时</label><div class="ordered-chip-list color-order"><div v-for="color in activeFallback.colorPriority" :key="color" :class="color"><span>{{ colorNames[color] }}</span><div><button :disabled="activeFallback.colorPriority[0] === color" :title="`${colorNames[color]}卡左移`" @click="moveColor(color, -1)">←</button><button :disabled="activeFallback.colorPriority.at(-1) === color" :title="`${colorNames[color]}卡右移`" @click="moveColor(color, 1)">→</button></div></div></div></div>
             <div v-else-if="criterion === 'crit'" class="strategy-card-content"><div class="crit-always"><AppIcon name="bolt" :size="17" /><strong>暴击率更高者优先</strong></div></div>
             <div v-else class="strategy-card-content"><div class="crit-always"><AppIcon name="shield" :size="17" /><strong>克制 > 中立 > 抵抗</strong></div></div>
