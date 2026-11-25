@@ -195,12 +195,14 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他人', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 574, 1216, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
+        changed = [replace(wrong, controls=(replace(wrong.controls[0], visual_hash=str(index)),
+                                           *wrong.controls[1:])) for index in range(5)]
         device, perception = scripted(
-            [wrong, wrong, wrong, wrong, wrong, wrong],
-            [0.0, 0.5, 1.0, 1.5, 2.0, 31.0],
+            [wrong, *changed, changed[-1]],
+            [0.0, 0.5, 1.0, 1.5, 2.0, 31.0, 31.5],
         )
         events = MemoryEventSink()
 

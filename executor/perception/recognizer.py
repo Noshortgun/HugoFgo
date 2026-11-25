@@ -70,6 +70,13 @@ def _classify(evidence: Evidence):
     return page, frozenset(variants), overlays, confidence
 
 
+def _row_visual_hash(gray: np.ndarray, box: tuple[int, int, int, int]) -> str:
+    x1, y1, x2, y2 = box
+    crop = gray[y1:y2, x1:x2]
+    small = cv2.resize(crop, (16, 16), interpolation=cv2.INTER_AREA)
+    return ''.join('1' if value else '0' for value in (small > small.mean()).flatten())
+
+
 def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
     """助战列表可滚动：用 Sobel 水平边缘找每张卡片的上下边界，再切成行。"""
     x1, y1, x2, y2 = cn.SUPPORT_ROW_REGION
@@ -165,7 +172,8 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
         if page is BasePage.SUPPORT:
             for index, box in enumerate(_support_rows(gray), start=1):
                 controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected',
-                                        support=identities.support(image, box)))
+                                        support=identities.support(image, box),
+                                        visual_hash=_row_visual_hash(gray, box)))
 
         if page is BasePage.BATTLE:
             for slot in (1, 2, 3):

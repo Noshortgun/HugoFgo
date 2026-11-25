@@ -120,6 +120,7 @@ class Control:
     support: SupportCandidate | None = None
     on_cooldown: bool | None = None
     """技能冷却测量：True 冷却中，False 可用，None 表示这一帧没有测量。"""
+    visual_hash: str = ''
 
     @property
     def center(self) -> tuple[int, int]:

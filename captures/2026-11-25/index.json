@@ -104,6 +104,21 @@
         "canRefresh": true
       },
       "match": true
+    },
+    {
+      "file": "key/support-partial-row.png",
+      "state": "实机助战列表非末页；第三行只有 146 像素高，是截断卡片，不能刷新",
+      "expectedObservation": {
+        "basePage": "support",
+        "lastRowHeight": 146,
+        "canRefresh": false
+      },
+      "observedObservation": {
+        "basePage": "support",
+        "lastRowHeight": 146,
+        "canRefresh": false
+      },
+      "match": true
     }
   ]
 }

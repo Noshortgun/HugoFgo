@@ -306,7 +306,6 @@ class Runner:
         self.support_search_signature: tuple | None = None
         self.support_search_since: float | None = None
         self.support_previous_rows: tuple | None = None
-        self.support_bottom_since: float | None = None
         self.fallback_signature: tuple | None = None
         self.fallback_since: float | None = None
         self.skill_confirmation: tuple[str, int, int] | None = None
@@ -576,7 +575,8 @@ class Runner:
             return None
         rows = tuple((item.name, item.box,
                       item.support.svt_id if item.support else None,
-                      item.support.ce_id if item.support else None)
+                      item.support.ce_id if item.support else None,
+                      item.visual_hash)
                      for item in observation.controls if item.kind is ControlKind.ROW)
         if self.support_stage == 'idle':
             if self.support_search_stable(observation, rows, now):
@@ -601,20 +601,11 @@ class Runner:
                     return self.result(RunStatus.STOPPED, 'support_candidates_unavailable')
                 return None
             if rows == self.support_previous_rows:
-                if rows[-1][1][3] < 650:
-                    if self.support_bottom_since is None:
-                        self.support_bottom_since = now
-                    if now - self.support_bottom_since >= self.options.action_timeout:
-                        self.emit('failed', now, reason='support_not_found')
-                        return self.result(RunStatus.STOPPED, 'support_not_found')
-                    self.support_swipe(observation, now, down=True)
-                elif self.tap_stable(observation, '列表更新', now):
+                if self.tap_stable(observation, '列表更新', now):
                     self.support_stage = 'refresh_confirm'
-                    self.support_bottom_since = None
                     self.reset_support_search()
                     self.wait_for_overlay(now, Overlay.SUPPORT_CONFIRM, BasePage.SUPPORT)
             elif self.support_search_stable(observation, rows, now):
-                self.support_bottom_since = None
                 self.support_previous_rows = rows
                 self.support_scrolls += 1
                 self.support_swipe(observation, now, down=True)
