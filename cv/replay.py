@@ -177,7 +177,7 @@ def check_perception_identities():
         perception.bind_formation((
             FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900),
             FormationSlotPlan(slot=1, name='梅林', svt_id=500800),
-            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True),
+            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True, ce_id=9403520),
         ))
         ciel = perception.read(Frame(image=ciel_path.read_bytes(), width=1280, height=720, captured_at=0.0))
         actual = [(ciel.control(f'卡{index}').card.svt_id,
@@ -197,6 +197,12 @@ def check_perception_identities():
                     (2300900, 0, 'quick'), (2300900, 0, 'buster')]
         add_report('perception:identity:ciel-right-edge-orb', right_path, expected, actual, 'observe',
                    'SIFT 不足时 ORB 兜底，不降低匹配阈值', actual == expected)
+
+        team_path = ROOT / 'captures/2026-11-25/key/team-ce-limit-break.png'
+        team = perception.read(Frame(image=team_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = team.field('team_support_ce').value
+        add_report('perception:identity:team-support-ce-slot', team_path, 9403520, actual, 'observe',
+                   '按实际助战槽位读取礼装，不固定读取第一列', actual == 9403520)
 
         affinity = [old.control(f'卡{index}').card.affinity for index in range(1, 6)]
         resisted_path = ROOT / 'captures/2026-11-19-ember/key/10-np-card-select.png'

@@ -50,6 +50,7 @@ class IdentityMatcher:
         self._formation_slots: dict[tuple[int, bool], int] = {}
         self._specified_slots: frozenset[int] | None = None
         self._has_empty_slots = False
+        self._support_slot = 0
         self._required_face_ids: frozenset[int] | None = None
         self._required_ce_ids: frozenset[int] | None = None
         self._required_command_ids: frozenset[int] | None = None
@@ -72,6 +73,7 @@ class IdentityMatcher:
         self._formation_slots = slots
         self._specified_slots = frozenset(member.slot for member in formation if member.name.strip())
         self._has_empty_slots = any(not member.name.strip() for member in formation)
+        self._support_slot = next((member.slot for member in formation if member.support), 0)
         self._required_face_ids = frozenset(member.svt_id for member in formation
                                             if member.svt_id is not None)
         self._required_ce_ids = frozenset(member.ce_id for member in support
@@ -490,7 +492,8 @@ class IdentityMatcher:
             return (Field(FieldStatus.CONFIRMED, values)
                     if all(servants[slot] is not None for slot in required) else Field(FieldStatus.UNCERTAIN))
 
-        ce = self._team_match(gray[440:520, 20:240], self._load_team('ce'), 'ce')
+        ce_x1, ce_x2 = regions[self._support_slot]
+        ce = self._team_match(gray[440:520, ce_x1:ce_x2], self._load_team('ce'), 'ce')
         mystic = self._team_match(gray[630:710, 10:120], self._load_team('mystic'), 'mystic')
         return {
             'team_servants': servant_field((0, 1, 2)),

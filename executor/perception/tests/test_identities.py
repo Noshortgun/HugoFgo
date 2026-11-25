@@ -229,6 +229,17 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(['arts', 'arts', 'buster', 'quick', 'buster'],
                          [card.card_type for card in cards])
 
+    def test_team_support_ce_uses_the_actual_support_slot(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900),
+            FormationSlotPlan(slot=1, name='梅林', svt_id=500800),
+            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True, ce_id=9403520),
+        ))
+
+        observation = self.perception.read(load_frame('captures/2026-11-25/key/team-ce-limit-break.png'))
+
+        self.assertEqual(9403520, observation.field('team_support_ce').value)
+
     def test_battle_frontline_maps_faces_to_original_formation_slots(self) -> None:
         perception = self.perception
         perception.bind_formation((
