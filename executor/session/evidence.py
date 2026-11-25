@@ -67,6 +67,12 @@ class RunEvidence:
                              {**event.data, 'evidence_dir': str(self.directory)})
         self.downstream.emit(event)
         self.jsonl.emit(event)
+        if event.type == 'card_batch_submitted' and self.latest is not None:
+            frame, observation = self.latest
+            suffix = 'png' if frame.format is FrameFormat.PNG else 'bgr24'
+            stem = f'card-batch-{event.data["batch_id"]}-attempt-{event.data["batch_attempt"]}'
+            (self.directory / f'{stem}.{suffix}').write_bytes(frame.image)
+            write_json(self.directory / f'{stem}.json', observation_data(observation))
         self.recent_events.append({'type': event.type, 'timestamp': event.timestamp, 'data': dict(event.data)})
         self.recent_events = self.recent_events[-20:]
 

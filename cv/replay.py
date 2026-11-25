@@ -285,6 +285,17 @@ def check_executor_core():
                'stop', '实机故障回归：攻击和菜单已恢复时不得再点跳过区，避免误开御主技能',
                ok, simulated_ocr=True)
 
+    next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
+    result, _device, events = run_core_scenario(
+        [battle, card, card, animation, animation, animation, next_battle, unknown, unknown],
+        [0.0, 0.1, 0.2, 35.0, 35.1, 91.0, 91.5, 122.0, 122.1], plan)
+    ok = (result.reason != 'action_confirmation_timeout'
+          and any(event.type == 'turn_started' and event.data.get('turn') == 2
+                  for event in events.events))
+    add_report('executor:attack-animation-long-confirmation', LOADING_IMAGE,
+               '35 秒动画不停止，后续推进回合', result.reason, 'stop',
+               'run-1795620454593-23360：战斗动画等待与选卡恢复超时分离', ok, simulated_ocr=True)
+
     result, device, events = run_core_scenario(
         [battle, card, card, card, card, card, card, card, card, card],
         [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.9, 31.9], plan)

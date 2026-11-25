@@ -1382,6 +1382,8 @@ class RunnerTest(unittest.TestCase):
             payload = json.loads((Path(directory) / 'result.json').read_text(encoding='utf-8'))
             self.assertEqual(RunStatus.COMPLETED, result.status)
             self.assertTrue((Path(directory) / 'final.png').is_file())
+            self.assertTrue((Path(directory) / 'card-batch-1-attempt-0.png').is_file())
+            self.assertTrue((Path(directory) / 'card-batch-1-attempt-0.json').is_file())
             self.assertEqual(str(Path(directory) / 'final.png'), payload['final_frame'])
 
     def test_tap_device_error_becomes_a_failed_run_result(self) -> None:
@@ -1969,6 +1971,25 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(1, len([event for event in events.events
                                  if event.type == 'warning'
                                  and event.data.get('reason') == 'action_recovery']))
+
+    def test_attack_animation_confirmation_waits_past_thirty_seconds(self) -> None:
+        battle = observe(BasePage.BATTLE, button('攻击'))
+        card = observe(BasePage.CARD, *(command_card(index, index - 1) for index in range(1, 6)))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
+        unknown = observe(BasePage.UNKNOWN)
+        device, perception = scripted(
+            [battle, card, card, animation, animation, animation, next_battle, unknown, unknown],
+            [0.0, 0.1, 0.2, 35.0, 35.1, 91.0, 91.5, 122.0, 122.1],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan(), device, perception, events)
+
+        self.assertNotEqual('action_confirmation_timeout', result.reason)
+        self.assertTrue(any(event.type == 'turn_started' and event.data.get('turn') == 2
+                            for event in events.events))
 
     def test_card_recovery_wait_still_confirms_attack_end_before_next_turn(self) -> None:
         battle = observe(BasePage.BATTLE, button('攻击'))

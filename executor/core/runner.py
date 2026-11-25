@@ -22,6 +22,7 @@ NP_CARD_CENTERS = (420, 635, 855)
 NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
+ATTACK_END_TIMEOUT_SECONDS = 90.0
 JOB_ACTION_INTERVAL_SECONDS = 1.0
 COMMAND_CARD_INTERVAL_SECONDS = 0.35
 SUPPORT_CLASS_TAB_POINTS = {
@@ -1636,7 +1637,11 @@ class Runner:
                         self.pending_master_action = False
                         self.pending_order_action = False
                         self.pending_spell_action = False
-                elif self.pending_since is not None and now - self.pending_since >= self.options.action_timeout:
+                elif (self.pending_since is not None
+                      and now - self.pending_since >= (ATTACK_END_TIMEOUT_SECONDS
+                                                     if self.pending_stage == 'attack_end'
+                                                     and page is BasePage.BATTLE
+                                                     else self.options.action_timeout)):
                     self.emit('failed', now, reason='action_confirmation_timeout', stage=self.pending_stage,
                               wait_ms=(now - self.pending_since) * 1000,
                               expected=sorted(item.value for item in self.pending_pages), actual=page.value)
