@@ -17,6 +17,7 @@ from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPl
                              FormationSlotPlan, TurnPlan, WavePlan)
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
                                  FieldStatus, Observation, Overlay, SupportCandidate, Variant)
+from executor.perception.tests.fixtures import isolated_perception, load_frame
 from executor.session import MemoryEventSink, RunControl
 from executor.testing import ScriptedPerception, scenario_frames
 
@@ -661,10 +662,11 @@ class RunnerTest(unittest.TestCase):
                             controls=tuple(order_controls))
         animation = Observation(base_page=BasePage.BATTLE,
                                 variants=frozenset({Variant.BATTLE_ANIMATION}))
+        changed = battle.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
             [battle, battle, menu, menu, order, order, order, order, order, order,
-             animation, battle, battle, animation, battle, battle, wrong_cards],
+             animation, changed, changed, animation, changed, changed, wrong_cards],
             [0.0, 0.5, 0.6, 1.1, 1.2, 1.7, 1.8, 2.3, 2.4, 2.9,
              3.0, 3.2, 3.7, 3.8, 4.0, 4.5, 4.6],
         )
@@ -677,6 +679,356 @@ class RunnerTest(unittest.TestCase):
                           '战斗跳过', '从者1技能1', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(2, result.progress.action_index)
+        confirmed = next(event for event in events.events if event.type == 'order_change_confirmed')
+        self.assertEqual((3, 1, 2), confirmed.data['active_slots'])
+        self.assertEqual((0,), confirmed.data['reserve_slots'])
+        self.assertEqual((0, 3), (confirmed.data['out_slot'], confirmed.data['in_slot']))
+
+    def test_order_change_mismatched_frontline_never_updates_mapping(self) -> None:
+        order_change = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
+                                  swap_out_slot=0, swap_in_slot=3)
+        base = single_wave_plan((order_change,))
+        plan = replace(base, formation=(*base.formation, FormationSlotPlan(slot=3, name='候补')))
+        battle = observe(BasePage.BATTLE, button('攻击'), button('御主技能', (1141, 162, 1245, 250))
+                         ).with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (0, 1, 2))})
+        menu = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+            controls=tuple(Control(f'御主技能{index}', ControlKind.BUTTON,
+                                   (850 + index * 90, 275, 920 + index * 90, 352), True)
+                           for index in range(1, 4)),
+        )
+        order = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.ORDER_CHANGE}),
+            controls=(
+                *(Control(f'先发第{index}位', ControlKind.TARGET,
+                          (index * 200, 250, index * 200 + 180, 565), True) for index in range(1, 4)),
+                *(Control(f'候补第{index}位', ControlKind.TARGET,
+                          (600 + index * 200, 250, 780 + index * 200, 565), True) for index in range(1, 4)),
+                Control('进行更替', ControlKind.BUTTON, (478, 591, 803, 661), True),
+            ),
+        )
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, menu, order, order, order, animation, battle, battle],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 30.6],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        self.assertFalse(any(event.type == 'order_change_confirmed' for event in events.events))
+        self.assertEqual(0, result.progress.action_index)
+
+    def test_confirmed_auto_fill_uses_the_departed_frontline_position(self) -> None:
+        retreat = ActionPlan(kind='skill', title='自我退场', detail='', icon='', member_slot=0, skill=0)
+        successor = ActionPlan(kind='skill', title='候补技能', detail='', icon='', member_slot=3, skill=0)
+        base = single_wave_plan((retreat, successor))
+        plan = replace(base, formation=(*base.formation, FormationSlotPlan(slot=3, name='候补', svt_id=4)))
+        battle = observe(
+            BasePage.BATTLE, button('攻击'),
+            Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+        ).with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (0, 1, 2))})
+        filled = battle.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, animation, filled, filled, filled, animation, filled, filled, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['从者1技能1', '战斗跳过', '从者1技能1', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        fills = [event for event in events.events if event.type == 'auto_fill_confirmed']
+        self.assertEqual(1, len(fills))
+        self.assertEqual((0, 3, 1), (fills[0].data['out_slot'], fills[0].data['in_slot'],
+                                    fills[0].data['frontline_position']))
+
+    def test_transient_skill_frame_cannot_confirm_auto_fill(self) -> None:
+        retreat = ActionPlan(kind='skill', title='自我退场', detail='', icon='', member_slot=0, skill=0)
+        following = ActionPlan(kind='skill', title='后续技能', detail='', icon='', member_slot=1, skill=0)
+        base = single_wave_plan((retreat, following))
+        plan = replace(base, formation=(*base.formation, FormationSlotPlan(slot=3, name='候补')))
+        battle = observe(
+            BasePage.BATTLE, button('攻击'),
+            Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+            Control('从者2技能1', ControlKind.SKILL, (365, 548, 426, 610), True),
+        ).with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (0, 1, 2))})
+        transient = battle.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, animation, transient, battle, battle, animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertFalse(any(event.type == 'auto_fill_confirmed' for event in events.events))
+        self.assertIn('从者2技能1', [event.data['control'] for event in events.events
+                                   if event.type == 'action'])
+
+    def test_live_faded_skill_frame_does_not_break_the_next_planned_skill(self) -> None:
+        reader = isolated_perception(self.addCleanup)
+        target = ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2)
+        skill = ActionPlan(kind='skill', title='破灭的难题', detail='', icon='', member_slot=1, skill=2)
+        following = ActionPlan(kind='skill', title='天体轨道调整', detail='', icon='', member_slot=1, skill=0)
+        base = single_wave_plan((target, skill, following))
+        plan = replace(base, formation=(
+            replace(base.formation[0], support=True),
+            *base.formation[1:],
+            *(FormationSlotPlan(slot=slot, name='') for slot in range(3, 6)),
+        ))
+        reader.bind_formation(plan.formation)
+        progress_fields = {
+            'wave': Field(FieldStatus.CONFIRMED, 1),
+            'turn': Field(FieldStatus.CONFIRMED, 1),
+            'turn_boundary': Field(FieldStatus.CONFIRMED, True),
+        }
+        ready = reader.read(load_frame('captures/2026-11-20/key/battle-wave1.png')).with_fields(progress_fields)
+        process = reader.read(
+            load_frame('captures/2026-11-25/key/battle-faded-no-auto-fill.png')).with_fields(progress_fields)
+        self.assertFalse(process.field('battle_servants').usable)
+        device, perception = scripted(
+            [ready, ready, process, ready, ready], [0.0, 0.1, 0.2, 0.3, 0.4])
+        control = RunControl()
+
+        class StopAfterFollowingSkill(MemoryEventSink):
+            def emit(self, event):
+                super().emit(event)
+                if event.type == 'action' and event.data.get('control') == '从者2技能1':
+                    control.stop()
+
+        events = StopAfterFollowingSkill()
+        result = run(plan, device, perception, events, control=control)
+
+        self.assertEqual('manual_stop', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['敌方2', '从者2技能3', '战斗跳过', '从者2技能1'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertFalse(any(event.type == 'auto_fill_confirmed' for event in events.events))
+
+    def test_guts_or_uncertain_departure_keeps_the_original_frontline(self) -> None:
+        for field in (Field(FieldStatus.CONFIRMED, (0, 1, 2)), Field(FieldStatus.UNCERTAIN)):
+            with self.subTest(status=field.status):
+                retreat = ActionPlan(kind='skill', title='可能自我退场', detail='', icon='',
+                                     member_slot=0, skill=0)
+                successor = ActionPlan(kind='skill', title='候补技能', detail='', icon='',
+                                       member_slot=3, skill=0)
+                base = single_wave_plan((retreat, successor))
+                plan = replace(base, formation=(*base.formation, FormationSlotPlan(slot=3, name='候补')))
+                battle = observe(BasePage.BATTLE, button('攻击'),
+                                 Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+                                 ).with_fields({'battle_servants': field})
+                animation = Observation(base_page=BasePage.BATTLE,
+                                        variants=frozenset({Variant.BATTLE_ANIMATION}))
+                device, perception = scripted(
+                    [battle, animation, battle, battle], [0.0, 0.1, 0.2, 0.3])
+                events = MemoryEventSink()
+
+                result = run(plan, device, perception, events)
+
+                self.assertEqual('unsupported_action', result.reason)
+                self.assertFalse(any(event.type == 'auto_fill_confirmed' for event in events.events))
+
+    def test_auto_fill_successor_inherits_strategy_priority(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=AttackPlan(mode='strategy', cards=()))
+        strategy = FallbackStrategy(
+            servant_order=('从者0', '从者1', '从者2', '候补'),
+            servant_order_slots=(0, 1, 2, 3),
+        )
+        plan = replace(
+            base,
+            waves=(replace(base.waves[0], turns=(turn,)),),
+            formation=(*base.formation, FormationSlotPlan(slot=3, name='候补', svt_id=4)),
+            strategy=strategy,
+        )
+        battle = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2)),
+        })
+        card = observe(BasePage.CARD, *(
+            replace(command_card(index, slot), card=replace(command_card(index, slot).card,
+                                                           crit_rate=10, affinity='neutral'))
+            for index, slot in enumerate((3, 1, 2, 3, 2), start=1)
+        ))
+        device, perception = scripted(
+            [battle, battle, card, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 0.2, 0.3, 30.3],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        card_actions = [event.data for event in events.events
+                        if event.type == 'action' and event.data.get('reason') == 'command_card_batch']
+        self.assertEqual([3, 3, 1], [item['servant_slot'] for item in card_actions])
+
+    def test_order_change_uses_current_reserve_order_after_auto_fill(self) -> None:
+        order_change = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
+                                  swap_out_slot=1, swap_in_slot=4)
+        base = single_wave_plan((order_change,))
+        plan = replace(base, formation=(
+            *base.formation,
+            FormationSlotPlan(slot=3, name='候补3', svt_id=4),
+            FormationSlotPlan(slot=4, name='候补4', svt_id=5),
+        ))
+        battle = observe(BasePage.BATTLE, button('攻击'), button('御主技能', (1141, 162, 1245, 250))
+                         ).with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
+        menu = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.MASTER_SKILLS}),
+            controls=tuple(Control(f'御主技能{index}', ControlKind.BUTTON,
+                                   (850 + index * 90, 275, 920 + index * 90, 352), True)
+                           for index in range(1, 4)),
+        )
+        order = Observation(
+            base_page=BasePage.BATTLE,
+            overlays=frozenset({Overlay.ORDER_CHANGE}),
+            controls=(
+                *(Control(f'先发第{index}位', ControlKind.TARGET,
+                          (index * 200, 250, index * 200 + 180, 565), True) for index in range(1, 4)),
+                *(Control(f'候补第{index}位', ControlKind.TARGET,
+                          (600 + index * 200, 250, 780 + index * 200, 565), True) for index in range(1, 4)),
+                Control('进行更替', ControlKind.BUTTON, (478, 591, 803, 661), True),
+            ),
+        )
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        changed = battle.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 4, 2))})
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, menu, order, order, order, animation, changed, changed, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['御主技能', '御主技能3', '先发第2位', '候补第1位', '进行更替',
+                          '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        confirmed = next(event for event in events.events if event.type == 'order_change_confirmed')
+        self.assertEqual(((3, 4, 2), (1,)), (confirmed.data['active_slots'], confirmed.data['reserve_slots']))
+
+    def test_consecutive_auto_fills_consume_each_reserve_once(self) -> None:
+        base = single_wave_plan()
+        plan = replace(base, formation=(
+            *base.formation,
+            FormationSlotPlan(slot=3, name='候补3', svt_id=4),
+            FormationSlotPlan(slot=4, name='候补4', svt_id=5),
+        ))
+        first = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2)),
+        })
+        second = first.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (4, 1, 2))})
+        device, perception = scripted(
+            [first, first, second, second, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 30.4],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        fills = [event.data for event in events.events if event.type == 'auto_fill_confirmed']
+        self.assertEqual([(0, 3), (3, 4)], [(item['out_slot'], item['in_slot']) for item in fills])
+        self.assertEqual((4, 1, 2), fills[-1]['active_slots'])
+        self.assertEqual((), fills[-1]['reserve_slots'])
+
+    def test_empty_slot_auto_fill_is_confirmed_without_joining_specified_order(self) -> None:
+        base = single_wave_plan()
+        plan = replace(base, formation=(
+            FormationSlotPlan(slot=0, name='从者0', svt_id=705000),
+            FormationSlotPlan(slot=1, name='从者1', svt_id=2),
+            FormationSlotPlan(slot=2, name=''),
+            FormationSlotPlan(slot=3, name=''),
+        ))
+        battle = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (-1, 1, -1)),
+        })
+        device, perception = scripted(
+            [battle, battle, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.1, 0.2, 30.2],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason)
+        fill = next(event for event in events.events if event.type == 'auto_fill_confirmed')
+        self.assertEqual((0, 3, 1), (fill.data['out_slot'], fill.data['in_slot'],
+                                    fill.data['frontline_position']))
+        self.assertEqual((3, 1, 2), fill.data['active_slots'])
+
+    def test_wave_strategy_recomputes_from_its_own_order_and_keeps_auto_fill(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=AttackPlan(mode='strategy', cards=()))
+        global_strategy = FallbackStrategy(
+            servant_order=('从者0', '从者1', '从者2', '候补'),
+            servant_order_slots=(0, 1, 2, 3),
+        )
+        wave_strategy = replace(
+            global_strategy,
+            servant_order=('从者1', '从者0', '从者2', '候补'),
+            servant_order_slots=(1, 0, 2, 3),
+        )
+        plan = replace(
+            base,
+            waves=(WavePlan(number=1, target=1, turns=(turn,)),
+                   WavePlan(number=2, target=1, turns=(turn,))),
+            formation=(*base.formation, FormationSlotPlan(slot=3, name='候补', svt_id=4)),
+            strategy=global_strategy,
+            strategy_by_wave={2: wave_strategy},
+        )
+        battle = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2)),
+        })
+        next_wave = battle.with_fields({
+            'wave': Field(FieldStatus.CONFIRMED, 2),
+            'turn': Field(FieldStatus.CONFIRMED, 2),
+        })
+        card = observe(BasePage.CARD, *(
+            replace(command_card(index, slot), card=replace(command_card(index, slot).card,
+                                                           crit_rate=10, affinity='neutral'))
+            for index, slot in enumerate((3, 3, 1, 2, 2), start=1)
+        ))
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        device, perception = scripted(
+            [battle, battle, card, animation, next_wave, next_wave, card,
+             observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.5, 0.6, 0.7, 0.8, 1.0, 1.1, 1.2, 31.2],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        self.assertEqual('unknown_timeout', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        batches = {}
+        for event in events.events:
+            if event.type == 'action' and event.data.get('reason') == 'command_card_batch':
+                batches.setdefault(event.data['batch_id'], []).append(event.data['servant_slot'])
+        self.assertEqual([[3, 3, 1], [1, 3, 3]], list(batches.values()))
+        self.assertEqual(1, len([event for event in events.events if event.type == 'auto_fill_confirmed']))
 
     def test_command_spell_requires_menu_and_confirmation(self) -> None:
         spell = ActionPlan(kind='spell', title='宝具解放', detail='', icon='', skill=0, member_slot=2)
@@ -2090,6 +2442,62 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(2, result.progress.completed_runs)
         self.assertEqual(2, controls.count('开始任务'), controls)
         self.assertEqual(1, controls.count('连续出击'))
+
+    def test_next_battle_restores_initial_frontline_and_strategy_order(self) -> None:
+        base = single_wave_plan()
+        turn = replace(base.waves[0].turns[0], attack=AttackPlan(mode='strategy', cards=()))
+        strategy = FallbackStrategy(
+            servant_order=('从者0', '从者1', '从者2', '候补'),
+            servant_order_slots=(0, 1, 2, 3),
+        )
+        plan = replace(
+            base,
+            waves=(replace(base.waves[0], turns=(turn,)),),
+            formation=(*base.formation, FormationSlotPlan(slot=3, name='候补', svt_id=4)),
+            strategy=strategy,
+        )
+        filled = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2)),
+        })
+        initial = observe(BasePage.BATTLE, button('攻击')).with_fields({
+            'battle_servants': Field(FieldStatus.CONFIRMED, (0, 1, 2)),
+        })
+        team = observe(BasePage.TEAM, button('开始任务', (1086, 635, 1248, 707)))
+
+        def cards(slots) -> Observation:
+            return observe(BasePage.CARD, *(
+                replace(command_card(index, slot), card=replace(command_card(index, slot).card,
+                                                               crit_rate=10, affinity='neutral'))
+                for index, slot in enumerate(slots, start=1)
+            ))
+
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        result_page = observe(BasePage.RESULT, button('结算推进', (0, 0, 1280, 720)))
+        drops = observe(BasePage.DROPS, button('下一步', (948, 606, 1272, 676)))
+        repeat = Observation(base_page=BasePage.DROPS,
+                             overlays=frozenset({Overlay.REPEAT_DIALOG}),
+                             controls=(button('连续出击', (800, 540, 940, 610)),))
+        observations = [
+            filled, filled, cards((3, 3, 1, 2, 2)), animation,
+            result_page, result_page, drops, drops, repeat, repeat, team, team,
+            initial, initial, cards((0, 0, 1, 2, 2)), animation,
+            result_page, result_page, drops, drops, repeat,
+        ]
+        times = [index * 0.5 for index in range(len(observations))]
+        device, perception = scripted(observations, times)
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events, options=RunOptions(run_count=2))
+
+        self.assertEqual(RunStatus.COMPLETED, result.status,
+                         [(event.type, dict(event.data)) for event in events.events])
+        batches = {}
+        for event in events.events:
+            if event.type == 'action' and event.data.get('reason') == 'command_card_batch':
+                batches.setdefault(event.data['batch_id'], []).append(event.data['servant_slot'])
+        self.assertEqual([[3, 3, 1], [0, 0, 1]], list(batches.values()))
+        self.assertEqual(1, len([event for event in events.events if event.type == 'auto_fill_confirmed']))
 
     def test_prefer_mode_uses_strategy_when_cards_do_not_match(self) -> None:
         base = single_wave_plan()

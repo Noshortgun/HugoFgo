@@ -103,6 +103,21 @@ class CompileJobTest(unittest.TestCase):
         self.assertEqual((3, 2), (second.actions[0].from_target, second.actions[0].to_target))
         self.assertEqual('spell', plan.waves[1].turns[0].actions[0].kind)
 
+    def test_second_order_change_in_one_battle_is_diagnosed(self):
+        job = self.valid_job()
+        second = dict(job['waves'][0]['turns'][0]['actions'][0])
+        second['swapOutSlot'] = 1
+        second['swapInSlot'] = 3
+        job['waves'][1]['turns'][0]['actions'].insert(0, second)
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        diagnostic = result.diagnostics[0]
+        self.assertEqual((2, 1), (diagnostic.wave, diagnostic.turn))
+        self.assertEqual('$.waves[1].turns[0].actions[0].kind', diagnostic.path)
+        self.assertIn('每场战斗最多一次', diagnostic.message)
+
     def test_conflicting_np_positions_are_diagnosed(self):
         job = self.valid_job()
         job['waves'][0]['turns'][0]['npPositions'] = {'0': 1, '3': 1}

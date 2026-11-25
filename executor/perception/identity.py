@@ -47,6 +47,7 @@ class IdentityMatcher:
         self._support_tag: np.ndarray | None = None
         self._formation_slots: dict[tuple[int, bool], int] = {}
         self._specified_slots: frozenset[int] | None = None
+        self._has_empty_slots = False
         self._required_face_ids: frozenset[int] | None = None
         self._required_ce_ids: frozenset[int] | None = None
         self._required_command_ids: frozenset[int] | None = None
@@ -66,6 +67,7 @@ class IdentityMatcher:
             slots[key] = member.slot if key not in slots else -1
         self._formation_slots = slots
         self._specified_slots = frozenset(member.slot for member in formation if member.name.strip())
+        self._has_empty_slots = any(not member.name.strip() for member in formation)
         self._required_face_ids = frozenset(member.svt_id for member in formation
                                             if member.svt_id is not None)
         self._required_ce_ids = frozenset(member.ce_id for member in support
@@ -374,6 +376,34 @@ class IdentityMatcher:
         if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < margin:
             return None
         return ranked[0][0]
+
+    def battle(self, image: np.ndarray) -> Field:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        faces = self._load_team('face')
+        if self._support_tag is None:
+            self._support_tag = self._read(cn.TEMPLATE_DIR / 'identities' / 'support-tag.png')
+        support_tag = (None if self._support_tag is None else
+                       cv2.resize(self._support_tag, None, fx=1.25, fy=1.25,
+                                  interpolation=cv2.INTER_CUBIC))
+        slots = []
+        for x in (20, 330, 640):
+            servant_id = self._team_match(gray[350:590, x:x + 280], faces, 'face')
+            if servant_id is None:
+                return Field(FieldStatus.UNCERTAIN)
+            support = False
+            if support_tag is not None:
+                result = cv2.matchTemplate(gray[350:450, x:x + 280], support_tag, cv2.TM_CCOEFF_NORMED)
+                support = float(np.nan_to_num(result.max(), nan=0.0)) >= 0.55
+            slot = self._formation_slots.get((servant_id, support), -1)
+            if slot < 0 and (not self._has_empty_slots
+                             or self._required_face_ids is None
+                             or servant_id in self._required_face_ids):
+                return Field(FieldStatus.UNCERTAIN)
+            slots.append(slot)
+        identified = [slot for slot in slots if slot >= 0]
+        if len(set(identified)) != len(identified):
+            return Field(FieldStatus.UNCERTAIN)
+        return Field(FieldStatus.CONFIRMED, tuple(slots))
 
     def team(self, image: np.ndarray) -> dict[str, Field]:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

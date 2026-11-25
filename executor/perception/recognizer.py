@@ -314,6 +314,8 @@ class Perception:
             fields['support_class'] = _support_class(image)
         if page is BasePage.TEAM:
             fields.update(self._identities.team(image))
+        if page is BasePage.BATTLE and not overlays and Variant.BATTLE_ANIMATION not in variants:
+            fields['battle_servants'] = self._identities.battle(image)
         return Observation(
             base_page=page,
             variants=variants,

@@ -98,6 +98,18 @@ class ExecutorReplayTest(unittest.TestCase):
         self.assertEqual(1, report.result.progress.action_index)
         self.assertEqual('completed', report.result.reason)
 
+    def test_order_change_replays_real_selection_and_result_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_case(get_case('order-change-priority'), Path(directory))
+
+        self.assertEqual('unknown_timeout', report.result.reason)
+        self.assertEqual(['御主技能', '御主技能3', '先发第1位', '候补第1位', '进行更替',
+                          '战斗跳过', '攻击'],
+                         [event.data['control'] for event in report.events.events if event.type == 'action'])
+        confirmed = next(event for event in report.events.events if event.type == 'order_change_confirmed')
+        self.assertEqual((3, 1, 2), confirmed.data['active_slots'])
+        self.assertEqual((0,), confirmed.data['reserve_slots'])
+
     def test_drain_mode_completes_at_real_ap_screen_without_using_items(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('ap-drain-complete'), Path(directory))

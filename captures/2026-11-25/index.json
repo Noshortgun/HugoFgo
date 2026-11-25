@@ -1,0 +1,30 @@
+{
+  "device": {
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-25",
+  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧",
+  "keyFrames": [
+    {
+      "file": "key/battle-faded-no-auto-fill.png",
+      "state": "娄希 3 技能过程帧；前排仍为娄希、娄希、奥伯龙，立绘淡化导致头像身份不可确认",
+      "expectedObservation": {
+        "activeServants": [
+          {"slot": 0, "svtId": 705000, "support": true},
+          {"slot": 1, "svtId": 705000, "support": false},
+          {"slot": 2, "svtId": 2800100, "support": false}
+        ],
+        "battleServantsStatus": "uncertain",
+        "autoFill": false
+      },
+      "observedObservation": {
+        "battleServantsStatus": "uncertain",
+        "autoFill": false
+      },
+      "match": true
+    }
+  ]
+}

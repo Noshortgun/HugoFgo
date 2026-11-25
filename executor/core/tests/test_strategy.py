@@ -35,6 +35,26 @@ class StrategyTest(unittest.TestCase):
             ), 1)
         ))
 
+    def test_current_order_uses_the_swap_successor_position(self) -> None:
+        plan = replace(self.plan, formation=(
+            *self.plan.formation,
+            FormationSlotPlan(slot=3, name='从者3'),
+        ))
+        strategy = replace(
+            self.strategy,
+            servant_order=('从者0', '从者1', '从者2', '从者3'),
+            servant_order_slots=(0, 1, 2, 3),
+        )
+        observation = replace(self.observation, controls=(
+            replace(self.observation.controls[0], card=replace(self.observation.controls[0].card, servant_slot=3)),
+            *self.observation.controls[1:],
+        ))
+
+        selection = select_cards(observation, strategy, plan, 1, current_order=(3, 1, 2))
+
+        self.assertEqual(['卡1', '卡3', '卡4'], [control.name for control in selection.controls])
+        self.assertEqual([3, 1, 1], [control.card.servant_slot for control in selection.controls])
+
     def test_specified_servants_form_a_hard_tier_above_empty_slots(self) -> None:
         plan = replace(self.plan, formation=(
             FormationSlotPlan(slot=0, name='指定0'),
@@ -145,6 +165,32 @@ class StrategyTest(unittest.TestCase):
                 selection = select_cards(observation, replace(strategy, strategy_order=order), self.plan, 1)
                 self.assertEqual(['宝具0', '普通0', '普通1'],
                                  [control.name for control in selection.controls])
+
+    def test_empty_slot_replacement_stays_in_the_lower_tier(self) -> None:
+        plan = replace(self.plan, formation=(
+            FormationSlotPlan(slot=0, name='指定0'),
+            FormationSlotPlan(slot=1, name='指定1'),
+            FormationSlotPlan(slot=2, name=''),
+            FormationSlotPlan(slot=3, name=''),
+        ))
+        observation = Observation(base_page=BasePage.CARD, controls=(
+            Control('空槽优质卡1', ControlKind.CARD, (0, 415, 160, 655), True,
+                    card=CommandCardIdentity(-1, 'buster', crit_rate=100, affinity='advantage')),
+            Control('指定卡1', ControlKind.CARD, (200, 415, 360, 655), True,
+                    card=CommandCardIdentity(0, 'arts', crit_rate=0, affinity='resist')),
+            Control('指定卡2', ControlKind.CARD, (400, 415, 560, 655), True,
+                    card=CommandCardIdentity(1, 'quick', crit_rate=0, affinity='resist')),
+            Control('空槽优质卡2', ControlKind.CARD, (600, 415, 760, 655), True,
+                    card=CommandCardIdentity(-1, 'buster', crit_rate=90, affinity='advantage')),
+            Control('空槽优质卡3', ControlKind.CARD, (800, 415, 960, 655), True,
+                    card=CommandCardIdentity(-1, 'quick', crit_rate=80, affinity='neutral')),
+        ))
+
+        selection = select_cards(observation, self.strategy, plan, 1,
+                                 current_order=(0, 1), active_slots=(0, 1, 3))
+
+        self.assertEqual(['指定卡1', '指定卡2', '空槽优质卡1'],
+                         [control.name for control in selection.controls])
 
     def test_affinity_uses_its_configured_strategy_position(self) -> None:
         affinity_first = replace(self.strategy, strategy_order=('affinity', 'servant', 'cards', 'crit'))

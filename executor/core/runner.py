@@ -8,7 +8,7 @@ from typing import Protocol
 
 from executor.core.ap_policy import CONTROL_NAMES, RecoveryItem, select_recovery
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
-from executor.core.strategy import select_cards
+from executor.core.strategy import select_cards, strategy_servant_ranks
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Observation, Overlay,
@@ -250,6 +250,7 @@ class Runner:
         self.pending_order_action = False
         self.order_stage: str | None = None
         self.pending_swap: tuple[int, int] | None = None
+        self.pending_frontline: tuple[int, ...] | None = None
         self.spell_action: ActionPlan | None = None
         self.pending_spell_action = False
         self.spell_stage: str | None = None
@@ -269,6 +270,11 @@ class Runner:
         self.np_slots_previous: frozenset[str] | None = None
         self.card_confirmation_since: float | None = None
         self.active_slots = [0, 1, 2]
+        self.reserve_slots = [member.slot for member in plan.formation
+                              if member.slot not in self.active_slots]
+        specified = {member.slot for member in plan.formation if member.name.strip()}
+        self.priority_anchors: list[int | None] = [slot if slot in specified else None
+                                                   for slot in self.active_slots]
         self.confirming_job_action = False
         self.run_settled = False
         self.draining = False
@@ -625,10 +631,10 @@ class Runner:
                 self.order_stage = 'swap_in'
                 self.wait_for_overlay(now, Overlay.ORDER_CHANGE)
         elif self.order_stage == 'swap_in':
-            position = action.swap_in_slot - 2
-            if not 1 <= position <= 3:
+            if action.swap_in_slot not in self.reserve_slots:
                 self.emit('failed', now, reason='order_change_invalid')
                 return self.result(RunStatus.STOPPED, 'order_change_invalid')
+            position = self.reserve_slots.index(action.swap_in_slot) + 1
             if self.tap_action(observation, f'候补第{position}位', now):
                 self.order_stage = 'confirm'
                 self.wait_for_overlay(now, Overlay.ORDER_CHANGE)
@@ -670,6 +676,73 @@ class Runner:
             self.spell_stage = None
             self.wait_for_job_action(now)
         return None
+
+    def current_servant_order(self, wave: int) -> tuple[int, ...]:
+        effective = self.plan.strategy_by_wave.get(wave) or self.plan.strategy
+        members = {member.slot: member for member in self.plan.formation}
+        ranks = strategy_servant_ranks(effective, self.plan)
+
+        def rank(item: tuple[int, int, int | None]) -> tuple[int, int]:
+            position, slot, anchor = item
+            return ranks.get(anchor, ranks.get(slot, len(ranks))), position
+
+        positioned = [(position, slot, self.priority_anchors[position])
+                      for position, slot in enumerate(self.active_slots)
+                      if members.get(slot) is not None and members[slot].name.strip()]
+        return tuple(slot for _position, slot, _anchor in sorted(positioned, key=rank))
+
+    def confirm_auto_fill(self, observation: Observation, now: float) -> bool:
+        if self.pending_swap is not None or not self.battle_ready(observation):
+            self.pending_frontline = None
+            return False
+        field = observation.field('battle_servants')
+        if field is None or not field.usable or not isinstance(field.value, tuple) or len(field.value) != 3:
+            self.pending_frontline = None
+            return False
+        observed = field.value
+        if any(not isinstance(slot, int) for slot in observed):
+            self.pending_frontline = None
+            return False
+        members = {member.slot: member for member in self.plan.formation}
+
+        def visible(slot: int) -> int:
+            member = members.get(slot)
+            return slot if member is not None and member.name.strip() else -1
+
+        active = list(self.active_slots)
+        reserves = list(self.reserve_slots)
+        anchors = list(self.priority_anchors)
+        changes: list[tuple[int, int, int]] = []
+        for index, current in enumerate(active):
+            replacement = observed[index]
+            if visible(current) == replacement:
+                continue
+            if not reserves:
+                self.pending_frontline = None
+                return False
+            candidate = reserves.pop(0)
+            if visible(candidate) != replacement:
+                self.pending_frontline = None
+                return False
+            active[index] = candidate
+            anchors[index] = anchors[index] if visible(candidate) == candidate else None
+            changes.append((current, candidate, index + 1))
+        if not changes:
+            self.pending_frontline = None
+            return False
+        if self.pending_frontline != observed:
+            self.pending_frontline = observed
+            self.emit('warning', now, reason='auto_fill_waiting', observed=observed)
+            return True
+        self.pending_frontline = None
+        self.active_slots = active
+        self.reserve_slots = reserves
+        self.priority_anchors = anchors
+        for out_slot, in_slot, position in changes:
+            self.emit('auto_fill_confirmed', now, out_slot=out_slot, in_slot=in_slot,
+                      frontline_position=position, active_slots=tuple(active),
+                      reserve_slots=tuple(reserves))
+        return False
 
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
@@ -881,7 +954,9 @@ class Runner:
                     reserved.append((position, reserved_control))
             self.np_reservation_since = None
             selection = select_cards(observation, self.plan.strategy,
-                                     self.plan, self.progress.wave, tuple(reserved))
+                                     self.plan, self.progress.wave, tuple(reserved),
+                                     current_order=self.current_servant_order(self.progress.wave),
+                                     active_slots=tuple(self.active_slots))
             for warning in selection.warnings:
                 self.emit('warning', now, reason='strategy_servant_slots', message=warning)
             if selection.diagnostic is not None or len(selection.controls) != 3:
@@ -1244,6 +1319,10 @@ class Runner:
                 self.wait_for_pages(now, BasePage.BATTLE, BasePage.RESULT, BasePage.DROPS)
                 self.pending_stage = 'attack_end'
 
+            if page is BasePage.BATTLE and self.confirm_auto_fill(observation, now):
+                time.sleep(self.options.poll_interval)
+                continue
+
             if self.pending_pages is not None:
                 if (self.awaiting_attack_end and page is BasePage.BATTLE
                         and Variant.BATTLE_ANIMATION in observation.variants and not observation.overlays
@@ -1374,6 +1453,13 @@ class Runner:
                                 self.fallback_mode = False
                                 self.emit('wave_started', now, wave=wave, turn=1)
                                 self.emit('turn_started', now, wave=wave, turn=1)
+                if confirmed and self.pending_swap is not None:
+                    swap_out, swap_in = self.pending_swap
+                    expected = list(self.active_slots)
+                    expected[expected.index(swap_out)] = swap_in
+                    frontline = observation.field('battle_servants')
+                    confirmed = (frontline is not None and frontline.usable
+                                 and frontline.value == tuple(expected))
                 if confirmed:
                     self.emit('action_confirmed', now, stage=self.pending_stage,
                               wait_ms=((now - self.pending_since) * 1000
@@ -1402,6 +1488,12 @@ class Runner:
                         self.progress.action_index = 0
                         self.fallback_mode = False
                         self.active_slots = [0, 1, 2]
+                        self.reserve_slots = [member.slot for member in self.plan.formation
+                                              if member.slot not in self.active_slots]
+                        specified = {member.slot for member in self.plan.formation if member.name.strip()}
+                        self.priority_anchors = [slot if slot in specified else None
+                                                 for slot in self.active_slots]
+                        self.pending_frontline = None
                         self.run_settled = False
                         self.starting_next_run = False
                         self.result_seen = False
@@ -1414,8 +1506,14 @@ class Runner:
                         self.optional_target = False
                     if self.pending_swap is not None:
                         swap_out, swap_in = self.pending_swap
-                        self.active_slots[self.active_slots.index(swap_out)] = swap_in
+                        active_position = self.active_slots.index(swap_out)
+                        reserve_position = self.reserve_slots.index(swap_in)
+                        self.active_slots[active_position] = swap_in
+                        self.reserve_slots[reserve_position] = swap_out
                         self.pending_swap = None
+                        self.emit('order_change_confirmed', now, out_slot=swap_out, in_slot=swap_in,
+                                  active_slots=tuple(self.active_slots),
+                                  reserve_slots=tuple(self.reserve_slots))
                     if self.confirming_job_action:
                         self.progress.action_index += 1
                         self.confirming_job_action = False

@@ -492,6 +492,7 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'wave': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'turn': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'np': frozenset({BasePage.BATTLE, BasePage.CARD}),
+    'battle_servants': frozenset({BasePage.BATTLE}),
     'crit': frozenset({BasePage.CARD}),
     'enemies': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'ap': frozenset({BasePage.AP_RECOVERY}),
