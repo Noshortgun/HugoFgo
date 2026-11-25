@@ -429,6 +429,11 @@
       "file": "np_arts.png",
       "source": "captures/2026-11-19-ember/key/11-np-selected.png",
       "threshold": 0.65
+    },
+    "skill_cooldown": {
+      "file": "skill_cooldown.png",
+      "source": "captures/2026-11-23/key/skill-cooldowns.png",
+      "threshold": 0.6
     }
   },
   "digits": {

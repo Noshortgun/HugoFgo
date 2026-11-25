@@ -382,7 +382,7 @@ class RunnerTest(unittest.TestCase):
         self.assertTrue(all(event.data['input_finished_at'] > 0 for event in actions))
         self.assertEqual(1, sum(event.data.get('reason') == 'skill_animation_skip' for event in actions))
 
-    def test_untargeted_skill_does_not_wait_for_cooldown_detection(self) -> None:
+    def test_untargeted_skill_without_cooldown_measurement_keeps_legacy_confirmation(self) -> None:
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
         available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True)
         battle = observe(BasePage.BATTLE, button('攻击'), available)
@@ -402,6 +402,78 @@ class RunnerTest(unittest.TestCase):
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertFalse(any(event.type == 'warning' and event.data.get('reason') == 'action_recovery'
                              for event in events.events))
+
+    def test_cooling_skill_is_not_tapped_and_fails_after_timeout(self) -> None:
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        cooling = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), False,
+                          'skill_cooldown', on_cooldown=True)
+        battle = observe(BasePage.BATTLE, button('攻击'), cooling)
+        device, perception = scripted([battle, battle], [0.0, 31.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('skill_unavailable', result.reason)
+        self.assertEqual([], [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertTrue(any(event.type == 'warning' and event.data.get('reason') == 'skill_cooldown'
+                            for event in events.events))
+
+    def test_skill_still_available_after_tap_is_retried_once_then_fails(self) -> None:
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                            'slot_visible:1', on_cooldown=False)
+        battle = observe(BasePage.BATTLE, button('攻击'), available)
+        device, perception = scripted([battle, battle, battle, battle], [0.0, 0.1, 2.2, 33.0])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('action_confirmation_timeout', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['从者1技能1', '战斗跳过', '从者1技能1'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_cooling_icon_confirms_the_skill(self) -> None:
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                            'slot_visible:1', on_cooldown=False)
+        cooling = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), False,
+                          'skill_cooldown', on_cooldown=True)
+        battle = observe(BasePage.BATTLE, button('攻击'), available)
+        used = observe(BasePage.BATTLE, button('攻击'), cooling)
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([battle, animation, used, used, wrong_cards],
+                                      [0.0, 0.1, 0.2, 0.3, 0.4])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['从者1技能1', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_departed_servant_does_not_require_cooldown(self) -> None:
+        skill = ActionPlan(kind='skill', title='自我退场', detail='', icon='', member_slot=0, skill=0)
+        available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                            'slot_visible:1', on_cooldown=False)
+        battle = observe(BasePage.BATTLE, button('攻击'), available)
+        used = battle.with_fields({'battle_servants': Field(FieldStatus.CONFIRMED, (3, 1, 2))})
+        animation = Observation(base_page=BasePage.BATTLE,
+                                variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted([battle, animation, used, used, wrong_cards],
+                                      [0.0, 0.1, 0.2, 0.3, 0.4])
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason,
+                         [(event.type, dict(event.data)) for event in events.events])
+        self.assertEqual(['从者1技能1', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_consecutive_skills_regress_the_live_361ms_early_input(self) -> None:
         first = ActionPlan(kind='skill', title='二技能', detail='', icon='', member_slot=0, skill=1)
@@ -588,8 +660,12 @@ class RunnerTest(unittest.TestCase):
     def test_targeted_skill_recovers_once_from_missing_state_change(self) -> None:
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                            member_slot=0, skill=0, player_target_slot=1)
-        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
-                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                            'slot_visible:1', on_cooldown=False)
+        battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'), available)
+        used = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
+                       Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), False,
+                               'skill_cooldown', on_cooldown=True))
         target = Observation(
             base_page=BasePage.BATTLE,
             variants=frozenset({Variant.SKILL_TARGET}),
@@ -599,7 +675,7 @@ class RunnerTest(unittest.TestCase):
         )
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, battle, battle, target, battle, battle, battle, wrong_cards],
+            [battle, battle, battle, target, used, used, used, wrong_cards],
             [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6],
         )
         events = MemoryEventSink()
@@ -618,7 +694,8 @@ class RunnerTest(unittest.TestCase):
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                            member_slot=0, skill=0, player_target_slot=1)
         battle = observe(BasePage.BATTLE, button('攻击'), button('战斗菜单'),
-                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                                 'slot_visible:1', on_cooldown=False))
         device, perception = scripted(
             [battle, battle, battle, battle, battle],
             [0.0, 0.1, 2.1, 2.2, 32.2],
@@ -802,8 +879,11 @@ class RunnerTest(unittest.TestCase):
         process = reader.read(
             load_frame('captures/2026-11-25/key/battle-faded-no-auto-fill.png')).with_fields(progress_fields)
         self.assertFalse(process.field('battle_servants').usable)
+        used = replace(ready, controls=tuple(
+            replace(control, actionable=False, reason='skill_cooldown', on_cooldown=True)
+            if control.name == '从者2技能3' else control for control in ready.controls))
         device, perception = scripted(
-            [ready, ready, process, ready, ready], [0.0, 0.1, 0.2, 0.3, 0.4])
+            [ready, ready, process, used, used], [0.0, 0.1, 0.2, 0.3, 0.4])
         control = RunControl()
 
         class StopAfterFollowingSkill(MemoryEventSink):

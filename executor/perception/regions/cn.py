@@ -436,6 +436,11 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
 # 从者技能槽内的三个技能图标（相对 1280×720 基准的绝对坐标）。
 SKILL_ICON_OFFSETS: tuple[int, ...] = (0, 87, 174)
 SKILL_ICON_BOX = (0, 548, 61, 610)
+# 技能冷却：灰化图标下方带「剩余 N」白字。按图标左缘向两侧扩一点搜索，只匹配「剩余」二字。
+# 实测：冷却中 0.72–1.00，可用图标 0.24–0.43。
+SKILL_COOLDOWN_THRESHOLD = 0.6
+SKILL_COOLDOWN_SEARCH_Y = (594, 626)
+SKILL_COOLDOWN_SEARCH_X_PAD = (10, 24)
 
 # 助战卡片行的动态检测参数：用水平边缘找卡片上下边界（行内深色文字不会干扰）。
 SUPPORT_ROW_REGION: Box = (40, 150, 1216, 720)

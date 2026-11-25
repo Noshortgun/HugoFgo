@@ -303,6 +303,36 @@ class Runner:
         self.support_previous_rows: tuple | None = None
         self.fallback_signature: tuple | None = None
         self.fallback_since: float | None = None
+        self.skill_confirmation: tuple[str, int, int] | None = None
+        self.skill_cooldown_since: float | None = None
+
+    def skill_retry_allowed(self, observation: Observation) -> bool:
+        """只有实测图标仍然可用（没放出去）才允许重点，避免把已生效的技能再点一次。"""
+        if self.skill_confirmation is None:
+            return True
+        control = observation.control(self.skill_confirmation[0])
+        return control is not None and control.on_cooldown is False
+
+    def skill_effect_confirmed(self, observation: Observation) -> bool:
+        """技能生效证据：被点的图标进入冷却；位置已换成别的从者时不再要求。
+
+        没有冷却测量（control 缺失或 on_cooldown 为 None）时保持原确认规则。
+        """
+        if self.skill_confirmation is None:
+            return True
+        name, member_slot, position = self.skill_confirmation
+        control = observation.control(name)
+        if control is None or control.on_cooldown is None:
+            return True
+        if control.on_cooldown:
+            return True
+        frontline = observation.field('battle_servants')
+        if frontline is not None and frontline.usable and isinstance(frontline.value, tuple) \
+                and len(frontline.value) == 3:
+            observed = frontline.value[position - 1]
+            if isinstance(observed, int) and observed >= 0 and observed != member_slot:
+                return True
+        return False
 
     def check_stop(self) -> None:
         if self.control is not None and self.control.stop_requested:
@@ -791,6 +821,18 @@ class Runner:
                 return self.result(RunStatus.STOPPED, 'unsupported_action')
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
+            control = observation.control(name)
+            if control is not None and control.on_cooldown is True:
+                if self.skill_cooldown_since is None:
+                    self.skill_cooldown_since = now
+                    self.emit('warning', now, reason='skill_cooldown', control=name,
+                              wave=self.progress.wave, turn=self.progress.turn,
+                              action_index=self.progress.action_index)
+                elif now - self.skill_cooldown_since >= self.options.action_timeout:
+                    self.emit('failed', now, reason='skill_unavailable', control=name)
+                    return self.result(RunStatus.STOPPED, 'skill_unavailable')
+                return None
+            self.skill_cooldown_since = None
             if self.tap_action(observation, name, now):
                 self.skill_animation_skipped = False
                 if action.player_target_slot is not None:
@@ -802,7 +844,7 @@ class Runner:
                     self.pending_since = now
                     self.pending_variant = None if self.optional_target else Variant.SKILL_TARGET
                     self.pending_overlay = None
-                    self.pending_recovery_control = None if self.optional_target else name
+                    self.pending_recovery_control = name
                     self.pending_recovery_used = False
                     if not self.optional_target:
                         self.pending_stage = 'skill_target'
@@ -812,6 +854,8 @@ class Runner:
                         self.pending_skill_recovery = True
                 else:
                     self.wait_for_job_action(now, skill=True)
+                    self.pending_recovery_control = name
+                self.skill_confirmation = (name, action.member_slot, position)
             return None
         if self.tap_action(observation, '攻击', now):
             self.attack_submitted_at = self.last_input_finished_at
@@ -1363,7 +1407,8 @@ class Runner:
                         and (self.pending_variant is None or self.pending_variant not in observation.variants)
                         and self.pending_since is not None
                         and now - self.pending_since >= ACTION_RECOVERY_SECONDS
-                        and observation.frame_hash != self.pending_frame_hash):
+                        and observation.frame_hash != self.pending_frame_hash
+                        and self.skill_retry_allowed(observation)):
                     control = self.pending_recovery_control
                     if self.tap_action(observation, control, now):
                         self.pending_recovery_used = True
@@ -1414,7 +1459,8 @@ class Runner:
                              and (not self.pending_skill_recovery or not self.pending_skill_skip
                                   or (self.optional_target and Variant.SKILL_TARGET in observation.variants))
                              and not (page is BasePage.BATTLE
-                                      and Variant.BATTLE_ANIMATION in observation.variants))
+                                      and Variant.BATTLE_ANIMATION in observation.variants)
+                             and self.skill_effect_confirmed(observation))
                 if confirmed and self.awaiting_attack_end and page is BasePage.BATTLE:
                     wave_field = observation.field('wave')
                     turn_field = observation.field('turn')
@@ -1481,6 +1527,8 @@ class Runner:
                     self.last_attack_skip_at = None
                     self.card_recovery_used = False
                     self.card_recovery_reading = False
+                    self.skill_confirmation = None
+                    self.skill_cooldown_since = None
                     if self.starting_next_run:
                         self.progress.wave = 1
                         self.progress.turn = 1

@@ -66,5 +66,25 @@ class EmblemTest(unittest.TestCase):
         self.assertFalse(blobs['C'])
 
 
+class SkillCooldownTest(unittest.TestCase):
+    def test_only_cooling_icons_have_the_remaining_label(self) -> None:
+        from executor.perception.regions import cn
+        from executor.perception.tests.fixtures import load_frame
+
+        emblem = evidence.load_emblems()['skill_cooldown']
+        cases = {
+            'captures/2026-11-23/key/skill-cooldowns.png': {'1:3', '2:3', '3:2', '3:3'},
+            'captures/2026-11-23/key/skill1-cooldown.png': {'1:3', '2:1', '2:3', '3:2', '3:3'},
+            'captures/2026-11-20/key/battle-wave1.png': set(),
+        }
+        for file, expected in cases.items():
+            with self.subTest(file=file):
+                gray = cv2.cvtColor(evidence.decode_frame(load_frame(file)), cv2.COLOR_BGR2GRAY)
+                scores = evidence.measure_skill_cooldowns(gray, emblem)
+                cooling = {name for name, score in scores.items()
+                           if score >= cn.SKILL_COOLDOWN_THRESHOLD}
+                self.assertEqual(expected, cooling)
+
+
 if __name__ == '__main__':
     unittest.main()

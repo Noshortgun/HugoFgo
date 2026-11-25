@@ -486,8 +486,10 @@
       "actionable": true,
       "basis": "annotated",
       "actionableControls": [
-        "从者1技能1",
         "敌方1"
+      ],
+      "absentControls": [
+        "从者1技能1"
       ]
     },
     {
@@ -498,8 +500,10 @@
       "actionable": true,
       "basis": "annotated",
       "actionableControls": [
-        "从者1技能1",
         "敌方1"
+      ],
+      "absentControls": [
+        "从者1技能1"
       ]
     },
     {
@@ -1194,7 +1198,12 @@
       "actionable": true,
       "actionableControls": [
         "从者2技能1",
-        "从者2技能2",
+        "从者2技能2"
+      ],
+      "absentControls": [
+        "从者1技能3",
+        "从者2技能3",
+        "从者3技能2",
         "从者3技能3"
       ],
       "basis": "annotated"
