@@ -1063,6 +1063,9 @@ def check_order_change_auto_fill():
                 'turn_boundary': Field(FieldStatus.CONFIRMED, True)}
     ready = ready.with_fields(progress)
     process = process.with_fields(progress)
+    used = replace(ready, controls=tuple(
+        replace(control, actionable=False, reason='skill_cooldown', on_cooldown=True)
+        if control.name == '从者2技能3' else control for control in ready.controls))
     actions = (
         ActionPlan(kind='target', title='切换目标', detail='', icon='', to_target=2),
         ActionPlan(kind='skill', title='破灭的难题', detail='', icon='', member_slot=1, skill=2),
@@ -1075,7 +1078,7 @@ def check_order_change_auto_fill():
         Control(f'卡{index}', ControlKind.CARD, (index * 200, 415, index * 200 + 160, 655), True,
                 card=CommandCardIdentity(9, 'arts')) for index in range(1, 6)))
     result, _device, events = run_core_scenario(
-        [ready, ready, process, ready, ready, wrong], [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], plan)
+        [ready, ready, process, used, used, wrong], [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     fills = [event for event in events.events if event.type == 'auto_fill_confirmed']
     expected = ['敌方2', '从者2技能3', '战斗跳过', '攻击']
@@ -1211,7 +1214,13 @@ def check_executor_self_target():
     targeted_battle = replace(battle, controls=(
         battle.controls[0],
         Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
-        Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
+        Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True, 'slot_visible:1',
+                on_cooldown=False),
+    ))
+    targeted_used = replace(targeted_battle, controls=(
+        targeted_battle.controls[0], targeted_battle.controls[1],
+        Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), False, 'skill_cooldown',
+                on_cooldown=True),
     ))
     servant_target = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.SKILL_TARGET}),
                                  controls=tuple(Control(
@@ -1221,7 +1230,7 @@ def check_executor_self_target():
     targeted_turn = replace(turn, actions=(targeted,))
     targeted_plan = replace(plan, waves=(replace(plan.waves[0], turns=(targeted_turn,)),))
     result, _, events = run_core_scenario(
-        [targeted_battle, servant_target, targeted_battle, targeted_battle, targeted_battle, wrong],
+        [targeted_battle, servant_target, targeted_used, targeted_used, targeted_used, wrong],
         [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '目标从者2', '战斗跳过', '攻击']
@@ -1231,7 +1240,7 @@ def check_executor_self_target():
 
     result, _, events = run_core_scenario(
         [targeted_battle, targeted_battle, targeted_battle, servant_target,
-         targeted_battle, targeted_battle, targeted_battle, wrong],
+         targeted_used, targeted_used, targeted_used, wrong],
         [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击']

@@ -176,8 +176,10 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
                     left = x1 + offset
                     box = (left, cn.SKILL_ICON_BOX[1], left + cn.SKILL_ICON_BOX[2] - cn.SKILL_ICON_BOX[0],
                            cn.SKILL_ICON_BOX[3])
-                    controls.append(Control(f'从者{slot}技能{skill}', ControlKind.SKILL, box, True,
-                                            f'slot_visible:{slot}'))
+                    cooling = evidence.skill_cooling(slot, skill)
+                    controls.append(Control(f'从者{slot}技能{skill}', ControlKind.SKILL, box, not cooling,
+                                            'skill_cooldown' if cooling else f'slot_visible:{slot}',
+                                            on_cooldown=cooling))
             for index, (x, y, w, h) in enumerate(find_enemy_bars(image), start=1):
                 # 面板相对血条的实测几何：左 80、上 37、右 32、下 57，贴近标注区域。
                 box = (max(0, x - 80), max(0, y - 37), min(1280, x + w + 32), min(720, y + h + 57))
@@ -309,6 +311,9 @@ class Perception:
             frame_evidence = Evidence(scores=scores, templates=self._templates, means=means,
                                       edges=edges, slots=slots, np_slots=np_slots, np_blobs=np_blobs,
                                       np_faces=np_faces, locations=locations)
+        if page is BasePage.BATTLE and Variant.BATTLE_ANIMATION not in variants:
+            cooldowns = evidence.measure_skill_cooldowns(gray, self._emblems.get('skill_cooldown'))
+            frame_evidence = replace(frame_evidence, skill_cooldowns=cooldowns)
         fields = _fields(page)
         if page is BasePage.SUPPORT:
             fields['support_class'] = _support_class(image)

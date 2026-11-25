@@ -94,7 +94,7 @@ class ExecutorReplayTest(unittest.TestCase):
             report = run_case(get_case('skill-action-loop'), Path(directory))
 
         controls = [event.data['control'] for event in report.events.events if event.type == 'action']
-        self.assertLess(controls.index('从者1技能1'), controls.index('攻击'))
+        self.assertLess(controls.index('从者1技能3'), controls.index('攻击'))
         self.assertEqual(1, report.result.progress.action_index)
         self.assertEqual('completed', report.result.reason)
 

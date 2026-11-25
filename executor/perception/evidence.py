@@ -42,7 +42,11 @@ class Evidence:
     np_slots: Mapping[str, float] = field(default_factory=dict)
     np_blobs: Mapping[str, bool] = field(default_factory=dict)
     np_faces: Mapping[str, float] = field(default_factory=dict)
+    skill_cooldowns: Mapping[str, float] = field(default_factory=dict)
     locations: Mapping[str, tuple[int, int]] = field(default_factory=dict)
+
+    def skill_cooling(self, slot: int, skill: int) -> bool:
+        return self.skill_cooldowns.get(f'{slot}:{skill}', 0.0) >= cn.SKILL_COOLDOWN_THRESHOLD
 
     def np_hit(self, slot: str) -> bool:
         return (bool(self.np_blobs.get(slot))
@@ -236,6 +240,8 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
         roi = gray[y1:y2, x1:x2]
         best = 0.0
         for emblem in emblems.values():
+            if not emblem.name.startswith('np_'):
+                continue
             if roi.shape[0] < emblem.patch.shape[0] or roi.shape[1] < emblem.patch.shape[1]:
                 continue
             result = cv2.matchTemplate(roi, emblem.patch, cv2.TM_CCOEFF_NORMED)
@@ -246,6 +252,26 @@ def measure_np_slots(image: np.ndarray, gray: np.ndarray,
         face = full_hsv[fy1:fy2, fx1:fx2]
         faces[slot] = float(((face[..., 2] > 165) & (face[..., 1] < 110)).mean())
     return scores, blobs, faces
+
+
+def measure_skill_cooldowns(gray: np.ndarray, emblem: Emblem | None) -> dict[str, float]:
+    """逐技能图标找「剩余 N」标签：只有冷却中的灰化图标才有，可用图标不出现。"""
+    scores: dict[str, float] = {}
+    if emblem is None:
+        return scores
+    top, bottom = cn.SKILL_COOLDOWN_SEARCH_Y
+    left_pad, right_pad = cn.SKILL_COOLDOWN_SEARCH_X_PAD
+    for slot in (1, 2, 3):
+        base_x = cn.SLOT_PROBES[f'servant_slot_{slot}'].box[0]
+        for skill, offset in enumerate(cn.SKILL_ICON_OFFSETS, start=1):
+            x1 = base_x + offset
+            roi = gray[top:bottom, max(0, x1 - left_pad):x1 + cn.SKILL_ICON_BOX[2] + right_pad]
+            if roi.shape[0] < emblem.patch.shape[0] or roi.shape[1] < emblem.patch.shape[1]:
+                scores[f'{slot}:{skill}'] = 0.0
+                continue
+            result = cv2.matchTemplate(roi, emblem.patch, cv2.TM_CCOEFF_NORMED)
+            scores[f'{slot}:{skill}'] = float(np.nan_to_num(result.max(), nan=0.0))
+    return scores
 
 
 def match_templates(gray: np.ndarray,

@@ -133,6 +133,8 @@ def read_image(path: Path) -> np.ndarray:
 EMBLEMS = (
     # (name, source, box, threshold)
     ('np_arts', 'captures/2026-11-19-ember/key/11-np-selected.png', (330, 250, 430, 350), 0.65),
+    # 冷却中图标的「剩余」二字，数字逐技能不同，不参与匹配。
+    ('skill_cooldown', 'captures/2026-11-23/key/skill-cooldowns.png', (213, 601, 246, 616), 0.6),
 )
 
 

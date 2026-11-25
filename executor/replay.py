@@ -147,7 +147,7 @@ def replay_plan() -> ExecutionPlan:
 
 def skill_plan() -> ExecutionPlan:
     plan = replay_plan()
-    skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+    skill = ActionPlan(kind='skill', title='三技能', detail='', icon='', member_slot=0, skill=2)
     turn = replace(plan.waves[0].turns[0], actions=(skill,))
     return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),))
 
@@ -331,7 +331,7 @@ CASES = (
             FULL_LOOP + '12-battle-start.png',
             FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
             'captures/2026-11-19-ember/key/05-skill.png',
-            FULL_LOOP + 'battle-after-cards.png', FULL_LOOP + 'battle-after-cards.png',
+            'captures/2026-11-23/key/skill1-cooldown.png', 'captures/2026-11-23/key/skill1-cooldown.png',
             FULL_LOOP + 'card-select.png',
             'captures/2026-11-19-ember/36-attack-animation.png',
             FULL_LOOP + 'result.png', FULL_LOOP + 'result.png',
@@ -339,11 +339,33 @@ CASES = (
             FULL_LOOP + 'drops.png', FULL_LOOP + 'drops.png',
             FULL_LOOP + 'repeat-dialog.png',
         ),
-        actions=('助战卡片第2行', '开始任务', '从者1技能1', '战斗跳过', '攻击', '卡1', '卡2', '卡4',
+        actions=('助战卡片第2行', '开始任务', '从者1技能3', '战斗跳过', '攻击', '卡1', '卡2', '卡4',
                  '战斗跳过', '结算推进', '结算推进', '下一步'),
         states=('support', 'team', 'loading', 'battle', 'card', 'result', 'drops', 'battle'),
         event_types=('action', 'action', 'action', 'action', 'finished'),
         plan_factory=skill_plan,
+    ),
+    ReplayCase(
+        name='skill-cooldown-unconfirmed',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            FULL_LOOP + '12-battle-start.png',
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            'captures/2026-11-19-ember/key/05-skill.png',
+            'captures/2026-11-19-ember/key/07-battle-wave2.png',
+            'captures/2026-11-19-ember/key/08-battle-wave3.png',
+            'captures/2026-11-19-ember/key/07-battle-wave2.png',
+            'captures/2026-11-19-ember/key/08-battle-wave3.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 35.0, 36.0, 66.0),
+        actions=('助战卡片第2行', '开始任务', '从者1技能3', '战斗跳过', '从者1技能3'),
+        status=RunStatus.STOPPED,
+        reason='action_confirmation_timeout',
+        states=('support', 'team', 'loading', 'battle'),
+        event_types=('action', 'warning', 'failed'),
+        plan_factory=skill_plan,
+        completed_runs=0,
     ),
     ReplayCase(
         name='order-change-priority',
