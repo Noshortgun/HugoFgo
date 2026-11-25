@@ -18,6 +18,7 @@ from executor.session.evidence import RunEvidence
 
 
 SUPPORT_REFRESH_COOLDOWN_SECONDS = 5.0
+SUPPORT_ROW_HASH_MAX_DISTANCE = 8
 NP_CARD_CENTERS = (420, 635, 855)
 NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
@@ -48,6 +49,21 @@ FLOW_OVERLAYS = frozenset({
     Overlay.COMMAND_SPELL_TARGET,
     Overlay.COMMAND_SPELL_CONFIRM,
 })
+
+
+def support_rows_same(left: tuple, right: tuple) -> bool:
+    if len(left) != len(right):
+        return False
+    for previous, current in zip(left, right):
+        if previous[:2] != current[:2]:
+            return False
+        previous_hash, current_hash = previous[4], current[4]
+        if previous_hash == current_hash:
+            continue
+        if (not previous_hash or not current_hash or len(previous_hash) != len(current_hash)
+                or sum(a != b for a, b in zip(previous_hash, current_hash)) > SUPPORT_ROW_HASH_MAX_DISTANCE):
+            return False
+    return True
 
 
 class FramePerception(Protocol):
@@ -304,6 +320,7 @@ class Runner:
         self.support_confirm_since: float | None = None
         self.support_refresh_cooldown_until: float | None = None
         self.support_search_signature: tuple | None = None
+        self.support_search_rows: tuple | None = None
         self.support_search_since: float | None = None
         self.support_previous_rows: tuple | None = None
         self.fallback_signature: tuple | None = None
@@ -485,12 +502,15 @@ class Runner:
 
     def reset_support_search(self) -> None:
         self.support_search_signature = None
+        self.support_search_rows = None
         self.support_search_since = None
 
     def support_search_stable(self, observation: Observation, rows: tuple, now: float) -> bool:
-        signature = (observation.base_page, observation.variants, observation.overlays, rows)
-        if signature != self.support_search_signature:
+        signature = (observation.base_page, observation.variants, observation.overlays)
+        if (signature != self.support_search_signature or self.support_search_rows is None
+                or not support_rows_same(self.support_search_rows, rows)):
             self.support_search_signature = signature
+            self.support_search_rows = rows
             self.support_search_since = now
             return False
         return (self.support_search_since is not None
@@ -600,11 +620,16 @@ class Runner:
                     self.emit('failed', now, reason='support_candidates_unavailable')
                     return self.result(RunStatus.STOPPED, 'support_candidates_unavailable')
                 return None
-            if rows == self.support_previous_rows:
-                if self.tap_stable(observation, '列表更新', now):
-                    self.support_stage = 'refresh_confirm'
-                    self.reset_support_search()
-                    self.wait_for_overlay(now, Overlay.SUPPORT_CONFIRM, BasePage.SUPPORT)
+            if self.support_previous_rows is not None and support_rows_same(rows, self.support_previous_rows):
+                at_bottom = observation.field('support_at_bottom')
+                if at_bottom is not None and at_bottom.usable and at_bottom.value is True:
+                    if self.tap_stable(observation, '列表更新', now):
+                        self.support_stage = 'refresh_confirm'
+                        self.reset_support_search()
+                        self.wait_for_overlay(now, Overlay.SUPPORT_CONFIRM, BasePage.SUPPORT)
+                elif self.support_search_stable(observation, rows, now):
+                    self.support_scrolls += 1
+                    self.support_swipe(observation, now, down=True)
             elif self.support_search_stable(observation, rows, now):
                 self.support_previous_rows = rows
                 self.support_scrolls += 1

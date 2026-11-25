@@ -62,6 +62,10 @@ def observe(page: BasePage, *controls: Control) -> Observation:
     return Observation(base_page=page, controls=tuple(controls), fields=fields, frame_hash=page.value)
 
 
+def support_bottom(observation: Observation) -> Observation:
+    return observation.with_fields({'support_at_bottom': Field(FieldStatus.CONFIRMED, True)})
+
+
 def scripted(observations: list[Observation], times: list[float], *,
              preserve_hashes: bool = False, config: DeviceConfig | None = None) -> tuple[FakeDevice, object]:
     frames = scenario_frames(times, len(observations))
@@ -160,10 +164,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         confirm = Observation(base_page=BasePage.SUPPORT,
                               overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
                               controls=(button('是', (708, 534, 969, 592)),))
@@ -194,10 +198,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         confirm = Observation(base_page=BasePage.SUPPORT,
                               overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
                               controls=(button('是', (708, 534, 969, 592)),))
@@ -244,16 +248,47 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn('列表更新', actions)
         self.assertIn('助战列表向下', actions)
 
-    def test_same_support_rows_at_bottom_do_refresh(self) -> None:
+    def test_support_scroll_stability_tolerates_visual_noise_and_identity_rechecks(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他人', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
+                                support=wrong_candidate, visual_hash='0' * 256),
+                        button('列表更新', (888, 98, 972, 162))).with_fields({
+                            'support_at_bottom': Field(FieldStatus.CONFIRMED, False),
+                        })
+        noisy = []
+        for index in range(1, 4):
+            candidate = replace(wrong_candidate, svt_id=index)
+            visual_hash = ('1' * index) + ('0' * (256 - index))
+            noisy.append(replace(wrong, controls=(replace(
+                wrong.controls[0], support=candidate, visual_hash=visual_hash), *wrong.controls[1:])))
+        device, perception = scripted(
+            [wrong, wrong, wrong, *noisy, observe(BasePage.UNKNOWN), observe(BasePage.UNKNOWN)],
+            [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 32.5, 62.5],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        actions = [event.data['control'] for event in events.events if event.type == 'action']
+        self.assertEqual('unknown_timeout', result.reason)
+        self.assertEqual(2, actions.count('助战列表向下'), actions)
+        self.assertNotIn('列表更新', actions)
+
+    def test_same_support_rows_at_bottom_do_refresh(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他人', svt_id=1, role='Saber')
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 650), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         device, perception = scripted([wrong, wrong, wrong, wrong, wrong], [0.0, 0.5, 1.0, 1.5, 2.0])
         events = MemoryEventSink()
 
@@ -267,10 +302,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker', ce_id=9403520)
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         confirm = Observation(base_page=BasePage.SUPPORT,
                               overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
                               controls=(button('是', (708, 534, 969, 592)),))
@@ -301,10 +336,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         cooldown = Observation(base_page=BasePage.SUPPORT,
                                overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
                                controls=(button('关闭', (508, 531, 772, 599)),))
@@ -336,10 +371,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         confirm = Observation(base_page=BasePage.SUPPORT,
                               overlays=frozenset({Overlay.SUPPORT_CONFIRM}),
                               controls=(button('是', (708, 534, 969, 592)),))
@@ -368,10 +403,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         observations = [wrong] * 8
         times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5]
         device, perception = scripted(observations, times)
@@ -3276,10 +3311,10 @@ class RunnerTest(unittest.TestCase):
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
-        unknown_rows = observe(BasePage.SUPPORT,
+        unknown_rows = support_bottom(observe(BasePage.SUPPORT,
                                Control('助战卡片第1行', ControlKind.ROW, (40, 150, 1216, 350), True),
                                Control('助战卡片第2行', ControlKind.ROW, (40, 350, 1216, 720), True),
-                               button('列表更新', (888, 98, 972, 162)))
+                               button('列表更新', (888, 98, 972, 162))))
         observations = [unknown_rows] * 6 + [observe(BasePage.UNKNOWN)] * 2
         times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.0]
         device, perception = scripted(observations, times)
@@ -3296,10 +3331,10 @@ class RunnerTest(unittest.TestCase):
                                svt_id=705000, role='Berserker')
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
-        wrong = observe(BasePage.SUPPORT,
+        wrong = support_bottom(observe(BasePage.SUPPORT,
                         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
-                        button('列表更新', (888, 98, 972, 162)))
+                        button('列表更新', (888, 98, 972, 162))))
         empty = observe(BasePage.SUPPORT, button('列表更新', (888, 98, 972, 162)))
         observations = [wrong] * 4 + [empty] * 4 + [observe(BasePage.UNKNOWN)] * 2
         times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0]

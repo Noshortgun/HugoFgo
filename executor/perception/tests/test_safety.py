@@ -205,6 +205,20 @@ class SafetyTest(unittest.TestCase):
         self.assertEqual(_row_visual_hash(first, box), _row_visual_hash(first, box))
         self.assertNotEqual(_row_visual_hash(first, box), _row_visual_hash(second, box))
 
+    def test_support_scrollbar_distinguishes_bottom_from_ignored_swipe(self) -> None:
+        cases = {
+            'captures/2026-11-25/key/support-last-page.png': True,
+            'captures/2026-11-25/key/support-partial-row.png': False,
+            'captures/2026-11-23/key/support-unknown-candidates.png': False,
+            'captures/2026-11-20/key/support-select-wrong-ce.png': False,
+            'captures/2026-11-26/key/support-ignored-swipe-mid-list.png': False,
+        }
+        for relative, expected in cases.items():
+            with self.subTest(relative=relative):
+                field = self.read(relative).field('support_at_bottom')
+                self.assertTrue(field.usable)
+                self.assertIs(expected, field.value)
+
     def test_selected_arts_and_buster_pair_is_detected(self) -> None:
         for relative in ('captures/2026-11-21/key/card-np-selected-arts-buster.png',
                          'captures/2026-11-21/key/card-np-selected-chain.png'):

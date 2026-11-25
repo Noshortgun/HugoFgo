@@ -145,6 +145,13 @@ def replay_plan() -> ExecutionPlan:
                          waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
 
 
+def support_scroll_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    support = replace(plan.formation[0], name='光之高扬斯卡娅', svt_id=604200, role='Assassin',
+                      ce='黄金苹果', ce_id=9300340)
+    return replace(plan, formation=(support, *plan.formation[1:]))
+
+
 def skill_plan() -> ExecutionPlan:
     plan = replay_plan()
     skill = ActionPlan(kind='skill', title='三技能', detail='', icon='', member_slot=0, skill=2)
@@ -405,17 +412,46 @@ CASES = (
     ReplayCase(
         name='support-search-refresh',
         frames=(
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png',
+            *(('captures/2026-11-25/key/support-last-page.png',) * 7),
             FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
             FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
             'captures/2026-11-21/key/repeat-over-support.png',
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 40.0),
-        actions=('助战列表向下', '列表更新', '是', '助战卡片第2行'),
+        actions=('职阶筛选:berserker', '助战列表向下', '列表更新', '是', '助战卡片第2行'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='support-ignored-swipe-is-not-bottom',
+        frames=(
+            *(('captures/2026-11-26/key/support-ignored-swipe-mid-list.png',) * 6),
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.0),
+        actions=('助战列表向下', '助战列表向下', '助战列表向下'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'action', 'action', 'warning', 'failed'),
+        plan_factory=support_scroll_plan,
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='support-unknown-rows-bottom',
+        frames=(
+            *(('captures/2026-11-25/key/support-last-page.png',) * 6),
+            FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
+        actions=('职阶筛选:berserker', '助战列表向下', '列表更新', '是'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
@@ -423,28 +459,9 @@ CASES = (
         completed_runs=0,
     ),
     ReplayCase(
-        name='support-unknown-rows-bottom',
-        frames=(
-            *(('captures/2026-11-23/key/support-unknown-candidates.png',) * 6),
-            FULL_LOOP + 'support-list-update-confirm.png', FULL_LOOP + 'support-list-update-confirm.png',
-            'captures/2026-11-21/key/repeat-over-support.png',
-            'captures/2026-11-21/key/repeat-over-support.png',
-        ),
-        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
-        actions=('助战列表向下', '列表更新', '是'),
-        status=RunStatus.STOPPED,
-        reason='unknown_timeout',
-        states=('support', 'unknown'),
-        event_types=('action', 'action', 'action', 'warning', 'failed'),
-        completed_runs=0,
-    ),
-    ReplayCase(
         name='support-refresh-cooldown',
         frames=(
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png', FULL_LOOP + 'support-select-wrong-ce.png',
-            FULL_LOOP + 'support-select-wrong-ce.png',
+            *(('captures/2026-11-25/key/support-last-page.png',) * 7),
             'captures/2026-11-22/key/support-refresh-cooldown.png',
             'captures/2026-11-22/key/support-refresh-cooldown.png',
             FULL_LOOP + 'support-select-wrong-ce.png',
@@ -453,11 +470,11 @@ CASES = (
             'captures/2026-11-21/key/repeat-over-support.png',
         ),
         times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 9.0, 9.5, 10.0, 40.0),
-        actions=('助战列表向下', '列表更新', '关闭', '助战卡片第2行'),
+        actions=('职阶筛选:berserker', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'),
         status=RunStatus.STOPPED,
         reason='unknown_timeout',
         states=('support', 'unknown'),
-        event_types=('action', 'action', 'action', 'action', 'warning', 'failed'),
+        event_types=('action', 'action', 'action', 'action', 'action', 'warning', 'failed'),
         completed_runs=0,
     ),
     ReplayCase(

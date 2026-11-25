@@ -43,10 +43,10 @@ class ExecutorReplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = run_case(get_case('support-search-refresh'), Path(directory))
 
-        self.assertEqual(['助战列表向下', '列表更新', '是', '助战卡片第2行'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新', '是', '助战卡片第2行'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
-        self.assertEqual(['swipe', 'tap', 'tap', 'tap'],
+        self.assertEqual(['tap', 'swipe', 'tap', 'tap', 'tap'],
                          [action['action'] for action in report.device.actions])
 
     def test_support_refresh_cooldown_closes_then_resumes_search(self) -> None:
@@ -54,10 +54,10 @@ class ExecutorReplayTest(unittest.TestCase):
             report = run_case(get_case('support-refresh-cooldown'), Path(directory))
 
         self.assertEqual('unknown_timeout', report.result.reason)
-        self.assertEqual(['助战列表向下', '列表更新', '关闭', '助战卡片第2行'],
+        self.assertEqual(['职阶筛选:berserker', '助战列表向下', '列表更新', '关闭', '助战卡片第2行'],
                          [event.data['control'] for event in report.events.events
                           if event.type == 'action'])
-        self.assertEqual((640, 565), (report.device.actions[2]['x'], report.device.actions[2]['y']))
+        self.assertEqual((640, 565), (report.device.actions[3]['x'], report.device.actions[3]['y']))
 
     def test_battle_status_detail_closes_then_target_action_finishes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

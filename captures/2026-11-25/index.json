@@ -92,30 +92,36 @@
     },
     {
       "file": "key/support-last-page.png",
-      "state": "实机助战列表最后一页；最后一行下缘为 675，底部阈值 650 可刷新，720 会误判",
+      "state": "实机助战列表最后一页；右侧滑块下缘为 706，确认到底后相同行图像可触发刷新",
       "expectedObservation": {
         "basePage": "support",
-        "lastRowBottom": 675,
+        "scrollHandleBottom": 706,
+        "supportAtBottom": true,
         "canRefresh": true
       },
       "observedObservation": {
         "basePage": "support",
-        "lastRowBottom": 675,
+        "scrollHandleBottom": 706,
+        "supportAtBottom": true,
         "canRefresh": true
       },
       "match": true
     },
     {
       "file": "key/support-partial-row.png",
-      "state": "实机助战列表非末页；第三行只有 146 像素高，是截断卡片，不能刷新",
+      "state": "实机助战列表非末页；第三行只有 146 像素高，右侧滑块下缘为 241，不能刷新",
       "expectedObservation": {
         "basePage": "support",
         "lastRowHeight": 146,
+        "scrollHandleBottom": 241,
+        "supportAtBottom": false,
         "canRefresh": false
       },
       "observedObservation": {
         "basePage": "support",
         "lastRowHeight": 146,
+        "scrollHandleBottom": 241,
+        "supportAtBottom": false,
         "canRefresh": false
       },
       "match": true

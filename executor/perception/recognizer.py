@@ -110,6 +110,17 @@ def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
     return boxes
 
 
+def _support_at_bottom(image: np.ndarray) -> Field:
+    x1, y1, x2, y2 = cn.SUPPORT_SCROLL_REGION
+    hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    handle = (hsv[..., 1] < 80) & (hsv[..., 2] > 170)
+    rows = np.flatnonzero((handle.sum(axis=1) >= cn.SUPPORT_SCROLL_HANDLE_MIN_WIDTH))
+    if not len(rows):
+        return Field(FieldStatus.UNCERTAIN)
+    handle_bottom = int(rows[-1]) + y1
+    return Field(FieldStatus.CONFIRMED, handle_bottom >= cn.SUPPORT_SCROLL_BOTTOM_Y)
+
+
 def _support_class(image: np.ndarray) -> Field:
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     scores = []
@@ -325,6 +336,7 @@ class Perception:
         fields = _fields(page)
         if page is BasePage.SUPPORT:
             fields['support_class'] = _support_class(image)
+            fields['support_at_bottom'] = _support_at_bottom(image)
         if page is BasePage.TEAM:
             fields.update(self._identities.team(image))
         if page is BasePage.BATTLE and not overlays and Variant.BATTLE_ANIMATION not in variants:

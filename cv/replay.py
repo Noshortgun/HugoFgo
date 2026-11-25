@@ -1839,7 +1839,7 @@ def check_executor_safety():
     wrong_support = Observation(base_page=BasePage.SUPPORT, controls=(
         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
-    ))
+    ), fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, True)})
     cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
                            controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
     result, device, events = run_core_scenario(
@@ -2414,7 +2414,8 @@ def check_transient_second_np_rejected():
 def check_support_refresh_confirmation_timeout():
     from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
-    from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate
+    from executor.perception import (BasePage, Control, ControlKind, Field, FieldStatus,
+                                     Observation, Overlay, SupportCandidate)
     cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
     turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
     formation = (
@@ -2428,7 +2429,7 @@ def check_support_refresh_confirmation_timeout():
     wrong = Observation(base_page=BasePage.SUPPORT, controls=(
         Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
-    ))
+    ), fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, True)})
     result, device, events = run_core_scenario(
         [wrong] * 8, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
