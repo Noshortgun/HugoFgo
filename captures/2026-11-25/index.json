@@ -57,6 +57,23 @@
         "cardTypes": ["quick", "buster", "buster", "arts", "arts"]
       },
       "match": true
+    },
+    {
+      "file": "key/card-ciel-right-edge.png",
+      "state": "run-1795621804173-23360 提交帧；右侧红卡 SIFT 内点不足，需 ORB 独立兜底",
+      "expectedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["arts", "arts", "buster", "quick", "buster"]
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["arts", "arts", "buster", "quick", "buster"]
+      },
+      "match": true
     }
   ]
 }

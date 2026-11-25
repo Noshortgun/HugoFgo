@@ -35,6 +35,7 @@ def default_identity_root() -> Path:
 class IdentityMatcher:
     _catalog_cache: dict[tuple[str, str, frozenset[int] | None], list[IdentityTemplate]] = {}
     _command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
+    _orb_command_cache: dict[tuple[str, frozenset[int] | None], list[CommandTemplate]] = {}
     _team_cache: dict[tuple[str, str, frozenset[int] | None], list[CommandTemplate]] = {}
 
     def __init__(self, root: Path | None = None) -> None:
@@ -44,6 +45,7 @@ class IdentityMatcher:
         self._face_templates: list[IdentityTemplate] | None = None
         self._ce_templates: list[IdentityTemplate] | None = None
         self._command_templates: list[CommandTemplate] | None = None
+        self._orb_command_templates: list[CommandTemplate] | None = None
         self._support_tag: np.ndarray | None = None
         self._formation_slots: dict[tuple[int, bool], int] = {}
         self._specified_slots: frozenset[int] | None = None
@@ -53,6 +55,8 @@ class IdentityMatcher:
         self._required_command_ids: frozenset[int] | None = None
         self._required_mystic_id: str | None = None
         self._sift = cv2.SIFT_create(nfeatures=cn.COMMAND_SIFT_FEATURES)
+        self._orb = cv2.ORB_create(nfeatures=1600)
+        self._orb_feature_matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
         self._team_sift = cv2.SIFT_create(nfeatures=1000)
         self._mystic_sift = cv2.SIFT_create(nfeatures=1000, contrastThreshold=0.01)
         self._feature_matcher = cv2.BFMatcher()
@@ -77,6 +81,7 @@ class IdentityMatcher:
         self._face_templates = None
         self._ce_templates = None
         self._command_templates = None
+        self._orb_command_templates = None
 
     def bind_mystic(self, mystic_id: str) -> None:
         self._required_mystic_id = mystic_id
@@ -213,6 +218,66 @@ class IdentityMatcher:
         self._command_cache[cache_key] = templates
         return templates
 
+    def _load_orb_commands(self) -> list[CommandTemplate]:
+        cache_key = (str(self._root), self._required_command_ids)
+        if cache_key in self._orb_command_cache:
+            return self._orb_command_cache[cache_key]
+        directory = self._root / 'assets/atlas/commands'
+        builtin = cn.TEMPLATE_DIR / 'identities' / 'commands'
+        paths: dict[str, tuple[int, Path]] = {}
+        for source in (builtin, directory):
+            if not source.exists():
+                continue
+            for path in source.glob('*/*.png'):
+                try:
+                    entity_id = int(path.parent.name)
+                except ValueError:
+                    continue
+                if ((self._required_command_ids is None and source == builtin)
+                        or (self._required_command_ids is not None
+                            and entity_id in self._required_command_ids)):
+                    paths[str(path.relative_to(source))] = (entity_id, path)
+        templates = []
+        for entity_id, path in paths.values():
+            data = np.fromfile(str(path), dtype=np.uint8)
+            asset = cv2.imdecode(data, cv2.IMREAD_UNCHANGED) if data.size else None
+            if asset is None or asset.ndim != 3 or asset.shape[2] != 4:
+                continue
+            gray = cv2.cvtColor(asset[..., :3], cv2.COLOR_BGR2GRAY)
+            keypoints, descriptors = self._orb.detectAndCompute(gray, asset[..., 3])
+            if descriptors is not None:
+                templates.append(CommandTemplate(entity_id, tuple(keypoints), descriptors))
+        self._orb_command_cache[cache_key] = templates
+        return templates
+
+    def _command_servant_orb(self, query: np.ndarray) -> int | None:
+        if self._orb_command_templates is None:
+            self._orb_command_templates = self._load_orb_commands()
+        query_keypoints, query_descriptors = self._orb.detectAndCompute(query, None)
+        if query_descriptors is None or len(query_descriptors) < 2:
+            return None
+        best: dict[int, int] = {}
+        for template in self._orb_command_templates:
+            matches = self._orb_feature_matcher.knnMatch(template.descriptors, query_descriptors, k=2)
+            good = [pair[0] for pair in matches if len(pair) == 2
+                    and pair[0].distance < cn.COMMAND_SIFT_RATIO * pair[1].distance]
+            if len(good) < 4:
+                continue
+            source = np.float32([template.keypoints[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
+            target = np.float32([query_keypoints[match.trainIdx].pt for match in good]).reshape(-1, 1, 2)
+            _homography, mask = cv2.findHomography(source, target, cv2.RANSAC,
+                                                   cn.COMMAND_SIFT_RANSAC_THRESHOLD)
+            if mask is None:
+                continue
+            inliers = int(mask.sum())
+            best[template.entity_id] = max(inliers, best.get(template.entity_id, 0))
+        ranked = sorted(best.items(), key=lambda item: item[1], reverse=True)
+        if not ranked or ranked[0][1] < cn.COMMAND_SIFT_MIN_INLIERS:
+            return None
+        if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < cn.COMMAND_SIFT_MIN_MARGIN:
+            return None
+        return ranked[0][0]
+
     def _command_servant(self, query: np.ndarray) -> int | None:
         query_keypoints, query_descriptors = self._sift.detectAndCompute(query, None)
         if query_descriptors is None or len(query_descriptors) < 2:
@@ -277,6 +342,8 @@ class IdentityMatcher:
             top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
             query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
             servant_id = self._command_servant(query)
+        if servant_id is None:
+            servant_id = self._command_servant_orb(query)
         fallback_slot = None
         if support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
             support_slots = [(entity_id, slot) for (entity_id, is_support), slot

@@ -188,6 +188,16 @@ def check_perception_identities():
         add_report('perception:identity:ciel-type-text', ciel_path, expected, actual, 'observe',
                    '上方头像区优先，卡色特效文字不得阻断从者识别', actual == expected)
 
+        right_path = ROOT / 'captures/2026-11-25/key/card-ciel-right-edge.png'
+        right = perception.read(Frame(image=right_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = [(right.control(f'卡{index}').card.svt_id,
+                   right.control(f'卡{index}').card.servant_slot,
+                   right.control(f'卡{index}').card.card_type) for index in range(1, 6)]
+        expected = [(2300900, 0, 'arts'), (2300900, 0, 'arts'), (2300900, 0, 'buster'),
+                    (2300900, 0, 'quick'), (2300900, 0, 'buster')]
+        add_report('perception:identity:ciel-right-edge-orb', right_path, expected, actual, 'observe',
+                   'SIFT 不足时 ORB 兜底，不降低匹配阈值', actual == expected)
+
         affinity = [old.control(f'卡{index}').card.affinity for index in range(1, 6)]
         resisted_path = ROOT / 'captures/2026-11-19-ember/key/10-np-card-select.png'
         resisted = perception.read(Frame(image=resisted_path.read_bytes(), width=1280,
