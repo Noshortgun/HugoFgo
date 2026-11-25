@@ -22,7 +22,8 @@ NP_CARD_CENTERS = (420, 635, 855)
 NP_CARD_CENTER_TOLERANCE = 100
 BATTLE_SKIP_POINT = (1240, 420)
 ACTION_RECOVERY_SECONDS = 2.0
-COMMAND_CARD_INTERVAL_SECONDS = 0.2
+JOB_ACTION_INTERVAL_SECONDS = 1.0
+COMMAND_CARD_INTERVAL_SECONDS = 0.35
 SUPPORT_CLASS_TAB_POINTS = {
     'saber': (161, 128), 'archer': (227, 128), 'lancer': (295, 128),
     'rider': (362, 128), 'caster': (430, 128), 'assassin': (497, 128), 'berserker': (565, 128),
@@ -266,9 +267,12 @@ class Runner:
         self.card_recovery_reading = False
         self.attack_submitted_at: float | None = None
         self.last_input_finished_at: float | None = None
+        self.last_job_action_finished_at: float | None = None
         self.np_reservation_since: float | None = None
         self.np_slots_previous: frozenset[str] | None = None
         self.card_confirmation_since: float | None = None
+        self.card_selection_since: float | None = None
+        self.card_readings: list[tuple[tuple[str, int, str], ...]] = []
         self.active_slots = [0, 1, 2]
         self.reserve_slots = [member.slot for member in plan.formation
                               if member.slot not in self.active_slots]
@@ -307,17 +311,12 @@ class Runner:
         self.skill_cooldown_since: float | None = None
 
     def skill_retry_allowed(self, observation: Observation) -> bool:
-        """只有实测图标仍然可用（没放出去）才允许重点，避免把已生效的技能再点一次。"""
         if self.skill_confirmation is None:
             return True
         control = observation.control(self.skill_confirmation[0])
         return control is not None and control.on_cooldown is False
 
     def skill_effect_confirmed(self, observation: Observation) -> bool:
-        """技能生效证据：被点的图标进入冷却；位置已换成别的从者时不再要求。
-
-        没有冷却测量（control 缺失或 on_cooldown 为 None）时保持原确认规则。
-        """
         if self.skill_confirmation is None:
             return True
         name, member_slot, position = self.skill_confirmation
@@ -394,7 +393,12 @@ class Runner:
         if control is None or not control.actionable:
             return False
         x, y = control.center
-        self.tap_point(observation, now, name, x, y, 'battle_action')
+        if self.last_job_action_finished_at is not None:
+            remaining = JOB_ACTION_INTERVAL_SECONDS - (time.time() - self.last_job_action_finished_at)
+            if remaining > 0:
+                time.sleep(remaining)
+        self.last_job_action_finished_at = self.tap_point(
+            observation, now, name, x, y, 'battle_action')
         self.reset_stability()
         return True
 
@@ -895,9 +899,15 @@ class Runner:
         self.emit('card_batch_submitted', submitted_at, batch_id=batch_id, batch_attempt=attempt,
                   controls=[control.name for control in controls],
                   configured_interval_ms=COMMAND_CARD_INTERVAL_SECONDS * 1000,
+                  hand=[{'control': control.name, 'servant_slot': control.card.servant_slot,
+                         'card_type': control.card.card_type}
+                        for control in observation.controls
+                        if control.card is not None and not control.card.noble_phantasm],
                   wave=self.progress.wave, turn=self.progress.turn,
                   action_index=self.progress.action_index)
         self.card_confirmation_since = None
+        self.card_selection_since = None
+        self.card_readings = []
         self.np_reservation_since = None
         self.card_recovery_used = recovery
         self.card_recovery_reading = False
@@ -944,13 +954,66 @@ class Runner:
             if not control.reason.startswith('np_slot:')
             or control.reason.split(':', 1)[-1] in stable))
 
+    def voted_normal_hand(self, observation: Observation) -> Observation | None:
+        unknown_in_history = any(slot == -1 for reading in self.card_readings
+                                 for _name, slot, _card_type in reading)
+        minimum_readings = 3 if unknown_in_history else 2
+        if len(self.card_readings) < minimum_readings:
+            return None
+        normals = sorted((control for control in observation.controls
+                          if control.card is not None and not control.card.noble_phantasm),
+                         key=lambda control: control.name)
+        voted = []
+        for index, control in enumerate(normals):
+            values = [reading[index] for reading in self.card_readings]
+
+            def majority(items, allowed=None):
+                counts = {}
+                for item in items:
+                    if allowed is None or item in allowed:
+                        counts[item] = counts.get(item, 0) + 1
+                ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+                if not ranked or ranked[0][1] < 2 or len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+                    return None
+                return ranked[0][0]
+
+            slot = majority([item[1] for item in values])
+            card_type = majority([item[2] for item in values], {'buster', 'arts', 'quick'})
+            if slot is None or card_type is None:
+                return None
+            voted.append(replace(control, card=replace(control.card, servant_slot=slot, card_type=card_type)))
+        replacements = {control.name: control for control in voted}
+        return replace(observation, controls=tuple(replacements.get(control.name, control)
+                                                    for control in observation.controls))
+
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
         observation = self.stable_np_cards(observation)
         observation, np_mapping_diagnostic = positioned_np_cards(
             observation, self.active_slots, self.plan.formation)
         turn = (None if self.fallback_mode else
                 self.plan.waves[self.progress.wave - 1].turns[self.progress.turn - 1])
+        normals = sorted((control for control in observation.controls
+                          if control.card is not None and not control.card.noble_phantasm),
+                         key=lambda control: control.name)
+        if len(normals) == 5:
+            self.card_readings.append(tuple((control.name, control.card.servant_slot, control.card.card_type)
+                                            for control in normals))
+            self.card_readings = self.card_readings[-4:]
+            if len(self.card_readings) > 1 or any(control.card.servant_slot == -1 for control in normals):
+                voted = self.voted_normal_hand(observation)
+                if voted is None:
+                    if self.card_selection_since is None:
+                        self.card_selection_since = now
+                        self.emit('warning', now, reason='card_batch_waiting',
+                                  message='指令卡身份与颜色等待多帧确认')
+                    if now - self.card_selection_since < self.options.action_timeout:
+                        return None
+                    self.emit('failed', now, reason='fallback_cards_unavailable',
+                              message='指令卡身份与颜色持续不稳定')
+                    return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
+                observation = voted
         if not complete_normal_hand(observation):
+            self.card_selection_since = None
             if self.card_recovery_used:
                 remaining = self.remaining_card_controls(observation)
                 if remaining is not None:
@@ -1004,9 +1067,14 @@ class Runner:
             for warning in selection.warnings:
                 self.emit('warning', now, reason='strategy_servant_slots', message=warning)
             if selection.diagnostic is not None or len(selection.controls) != 3:
+                message = selection.diagnostic or '补刀策略未选出三张卡'
+                if self.card_selection_since is None:
+                    self.card_selection_since = now
+                    self.emit('warning', now, reason='card_batch_waiting', message=message)
+                if now - self.card_selection_since < self.options.action_timeout:
+                    return None
                 self.emit('failed', now, reason='fallback_cards_unavailable',
-                          message=selection.diagnostic or '补刀策略未选出三张卡',
-                          strategy_source=selection.source)
+                          message=message, strategy_source=selection.source)
                 return self.result(RunStatus.STOPPED, 'fallback_cards_unavailable')
             controls = selection.controls
         else:

@@ -6,7 +6,7 @@
     "density": 240
   },
   "capturedAt": "2026-11-25",
-  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧",
+  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧；logs/farm/run-1795595300009-23360/failure.bgr24；指令卡飞入过程帧",
   "keyFrames": [
     {
       "file": "key/battle-faded-no-auto-fill.png",
@@ -23,6 +23,21 @@
       "observedObservation": {
         "battleServantsStatus": "uncertain",
         "autoFill": false
+      },
+      "match": true
+    },
+    {
+      "file": "key/card-flying-servants-unidentified.png",
+      "state": "第 1 面指令卡飞入过程帧；五张普通卡可见但仍在移动，从者身份尚未稳定",
+      "expectedObservation": {
+        "basePage": "card",
+        "normalCardServantSlots": [-1, -1, -1, -1, -1],
+        "cardSelection": "wait"
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "normalCardServantSlots": [-1, -1, -1, -1, -1],
+        "cardSelection": "wait"
       },
       "match": true
     }
