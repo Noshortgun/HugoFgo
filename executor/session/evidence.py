@@ -34,6 +34,7 @@ def observation_data(observation: Observation) -> dict:
                 'reason': control.reason,
                 'card': asdict(control.card) if control.card is not None else None,
                 'support': asdict(control.support) if control.support is not None else None,
+                'visual_hash': control.visual_hash,
             }
             for control in observation.controls
         ],
@@ -58,6 +59,7 @@ class RunEvidence:
         self.jsonl = JsonlEventSink(self.directory / 'events.jsonl')
         self.latest: tuple[Frame, Observation] | None = None
         self.recent_events: list[dict] = []
+        self.support_evidence_sequences: dict[str, int] = {}
         self.started_at = time.time()
         self.closed = False
 
@@ -67,6 +69,22 @@ class RunEvidence:
                              {**event.data, 'evidence_dir': str(self.directory)})
         self.downstream.emit(event)
         self.jsonl.emit(event)
+        if event.type == 'action' and self.latest is not None \
+                and (event.data.get('reason') == 'support_search' or event.data.get('control') == '列表更新'):
+            frame, observation = self.latest
+            kind = 'swipe' if event.data.get('reason') == 'support_search' else 'refresh'
+            sequence = self.support_evidence_sequences.get(kind, 0) + 1
+            self.support_evidence_sequences[kind] = sequence
+            stem = f'support-{kind}-{sequence:03d}'
+            suffix = 'png' if frame.format is FrameFormat.PNG else 'bgr24'
+            (self.directory / f'{stem}.{suffix}').write_bytes(frame.image)
+            write_json(self.directory / f'{stem}.json', observation_data(observation))
+        if event.type == 'card_batch_submitted' and self.latest is not None:
+            frame, observation = self.latest
+            suffix = 'png' if frame.format is FrameFormat.PNG else 'bgr24'
+            stem = f'card-batch-{event.data["batch_id"]}-attempt-{event.data["batch_attempt"]}'
+            (self.directory / f'{stem}.{suffix}').write_bytes(frame.image)
+            write_json(self.directory / f'{stem}.json', observation_data(observation))
         self.recent_events.append({'type': event.type, 'timestamp': event.timestamp, 'data': dict(event.data)})
         self.recent_events = self.recent_events[-20:]
 

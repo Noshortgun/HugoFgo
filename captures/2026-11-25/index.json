@@ -6,7 +6,7 @@
     "density": 240
   },
   "capturedAt": "2026-11-25",
-  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧",
+  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧；logs/farm/run-1795595300009-23360/failure.bgr24；指令卡飞入过程帧；2026-11-25 实机卡色特效文字截图",
   "keyFrames": [
     {
       "file": "key/battle-faded-no-auto-fill.png",
@@ -23,6 +23,106 @@
       "observedObservation": {
         "battleServantsStatus": "uncertain",
         "autoFill": false
+      },
+      "match": true
+    },
+    {
+      "file": "key/card-flying-servants-unidentified.png",
+      "state": "第 1 面指令卡飞入过程帧；五张普通卡可见但仍在移动，从者身份尚未稳定",
+      "expectedObservation": {
+        "basePage": "card",
+        "normalCardServantSlots": [-1, -1, -1, -1, -1],
+        "cardSelection": "wait"
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "normalCardServantSlots": [-1, -1, -1, -1, -1],
+        "cardSelection": "wait"
+      },
+      "match": true
+    },
+    {
+      "file": "key/card-ciel-type-text.png",
+      "state": "希耶尔锁卡与卡色特效文字覆盖；五张普通卡均为希耶尔",
+      "expectedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["quick", "buster", "buster", "arts", "arts"]
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["quick", "buster", "buster", "arts", "arts"]
+      },
+      "match": true
+    },
+    {
+      "file": "key/card-ciel-right-edge.png",
+      "state": "run-1795621804173-23360 提交帧；右侧红卡 SIFT 内点不足，需 ORB 独立兜底",
+      "expectedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["arts", "arts", "buster", "quick", "buster"]
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["arts", "arts", "buster", "quick", "buster"]
+      },
+      "match": true
+    },
+    {
+      "file": "key/team-ce-limit-break.png",
+      "state": "队伍确认页；礼装右下角有满破标识，供后续满破状态识别与作业要求使用",
+      "expectedObservation": {
+        "basePage": "team",
+        "teamServants": [2300900, 500800, 604200],
+        "limitBreakMarker": "present"
+      },
+      "observedObservation": {
+        "basePage": "team",
+        "teamServants": [2300900, 500800, 604200],
+        "limitBreakMarker": "present"
+      },
+      "match": true
+    },
+    {
+      "file": "key/support-last-page.png",
+      "state": "实机助战列表最后一页；右侧滑块下缘为 706，确认到底后相同行图像可触发刷新",
+      "expectedObservation": {
+        "basePage": "support",
+        "scrollHandleBottom": 706,
+        "supportAtBottom": true,
+        "canRefresh": true
+      },
+      "observedObservation": {
+        "basePage": "support",
+        "scrollHandleBottom": 706,
+        "supportAtBottom": true,
+        "canRefresh": true
+      },
+      "match": true
+    },
+    {
+      "file": "key/support-partial-row.png",
+      "state": "实机助战列表非末页；第三行只有 146 像素高，右侧滑块下缘为 241，不能刷新",
+      "expectedObservation": {
+        "basePage": "support",
+        "lastRowHeight": 146,
+        "scrollHandleBottom": 241,
+        "supportAtBottom": false,
+        "canRefresh": false
+      },
+      "observedObservation": {
+        "basePage": "support",
+        "lastRowHeight": 146,
+        "scrollHandleBottom": 241,
+        "supportAtBottom": false,
+        "canRefresh": false
       },
       "match": true
     }

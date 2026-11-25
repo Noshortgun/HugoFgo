@@ -1,0 +1,225 @@
+{
+  "enemyCount": 3,
+  "formation": [
+    {
+      "limitCount": 4,
+      "name": "谜之代行者C.I.E.L",
+      "npId": 2300901,
+      "role": "Moon Cancer",
+      "slot": 0,
+      "svtId": 2300900
+    },
+    {
+      "limitCount": 4,
+      "name": "梅林",
+      "npId": 500801,
+      "role": "Caster",
+      "slot": 1,
+      "svtId": 500800
+    },
+    {
+      "limitCount": 4,
+      "name": "光之高扬斯卡娅",
+      "npId": 604201,
+      "role": "Assassin",
+      "slot": 2,
+      "support": true,
+      "supportRequired": true,
+      "svtId": 604200
+    },
+    {
+      "name": "",
+      "role": "",
+      "slot": 3
+    },
+    {
+      "name": "",
+      "role": "",
+      "slot": 4
+    },
+    {
+      "name": "",
+      "role": "",
+      "slot": 5
+    }
+  ],
+  "mysticId": "atlas-40",
+  "name": "谜之代行者C.I.E.L、梅林、光之高扬斯卡娅",
+  "strategy": {
+    "allowNp": false,
+    "cards": "buster",
+    "colorPriority": [
+      "buster",
+      "arts",
+      "quick"
+    ],
+    "servantOrder": [
+      "谜之代行者C.I.E.L",
+      "梅林",
+      "光之高扬斯卡娅"
+    ],
+    "servantOrderSlots": [
+      0,
+      1,
+      2
+    ],
+    "strategyOrder": [
+      "servant",
+      "cards",
+      "affinity",
+      "crit"
+    ]
+  },
+  "version": 1,
+  "waves": [
+    {
+      "target": 3,
+      "turnCount": 1,
+      "turns": [
+        {
+          "actions": [
+            {
+              "detail": "目标：自身",
+              "icon": "skill_00400",
+              "kind": "skill",
+              "memberSlot": 0,
+              "playerTargetSlot": 0,
+              "skill": 0,
+              "title": "谜之代行者C.I.E.L · 人类魔力工厂 A"
+            },
+            {
+              "detail": "目标：自身",
+              "icon": "skill_00403",
+              "kind": "skill",
+              "memberSlot": 0,
+              "playerTargetSlot": 0,
+              "skill": 1,
+              "title": "谜之代行者C.I.E.L · 相位滑剑 B+"
+            },
+            {
+              "detail": "己方全体",
+              "icon": "skill_00700",
+              "kind": "skill",
+              "memberSlot": 0,
+              "skill": 2,
+              "title": "谜之代行者C.I.E.L · 原理血戒 B"
+            },
+            {
+              "detail": "己方全体",
+              "icon": "skill_00400",
+              "kind": "skill",
+              "memberSlot": 1,
+              "skill": 0,
+              "title": "梅林 · 梦幻魅力 A"
+            },
+            {
+              "detail": "己方全体",
+              "icon": "skill_00403",
+              "kind": "skill",
+              "memberSlot": 1,
+              "skill": 1,
+              "title": "梅林 · 幻术 A+"
+            },
+            {
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00400",
+              "kind": "skill",
+              "memberSlot": 2,
+              "playerTargetSlot": 0,
+              "skill": 0,
+              "title": "光之高扬斯卡娅 · 兔子革新者 A"
+            },
+            {
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00403",
+              "kind": "skill",
+              "memberSlot": 2,
+              "playerTargetSlot": 0,
+              "skill": 1,
+              "title": "光之高扬斯卡娅 · 杀戮技巧（人） A"
+            },
+            {
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00700",
+              "kind": "skill",
+              "memberSlot": 2,
+              "playerTargetSlot": 0,
+              "skill": 2,
+              "title": "光之高扬斯卡娅 · NFF特别服务 A"
+            },
+            {
+              "detail": "宝具释放卡序：2",
+              "icon": "skill_00400",
+              "kind": "attack",
+              "memberSlot": 0,
+              "title": "谜之代行者C.I.E.L · 第七圣典·断罪死"
+            }
+          ],
+          "npPositions": {
+            "0": 2
+          }
+        }
+      ]
+    },
+    {
+      "target": 3,
+      "turnCount": 1,
+      "turns": [
+        {
+          "actions": [
+            {
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00400",
+              "kind": "master",
+              "playerTargetSlot": 0,
+              "skill": 2,
+              "title": "魔术礼装·阿特拉斯院制服 · 3 技能"
+            },
+            {
+              "detail": "目标：自身",
+              "icon": "skill_00403",
+              "kind": "skill",
+              "memberSlot": 0,
+              "playerTargetSlot": 0,
+              "skill": 1,
+              "title": "谜之代行者C.I.E.L · 相位滑剑 B+"
+            },
+            {
+              "detail": "己方全体",
+              "icon": "skill_00700",
+              "kind": "skill",
+              "memberSlot": 0,
+              "skill": 2,
+              "title": "谜之代行者C.I.E.L · 原理血戒 B"
+            },
+            {
+              "detail": "目标：谜之代行者C.I.E.L",
+              "icon": "skill_00700",
+              "kind": "skill",
+              "memberSlot": 1,
+              "playerTargetSlot": 0,
+              "skill": 2,
+              "title": "梅林 · 英雄塑造 EX"
+            },
+            {
+              "detail": "宝具释放卡序：自动",
+              "icon": "skill_00400",
+              "kind": "attack",
+              "memberSlot": 0,
+              "title": "谜之代行者C.I.E.L · 第七圣典·断罪死"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": 3,
+      "turnCount": 1,
+      "turns": [
+        {
+          "actions": []
+        }
+      ]
+    }
+  ]
+}

@@ -70,6 +70,13 @@ def _classify(evidence: Evidence):
     return page, frozenset(variants), overlays, confidence
 
 
+def _row_visual_hash(gray: np.ndarray, box: tuple[int, int, int, int]) -> str:
+    x1, y1, x2, y2 = box
+    crop = gray[y1:y2, x1:x2]
+    small = cv2.resize(crop, (16, 16), interpolation=cv2.INTER_AREA)
+    return ''.join('1' if value else '0' for value in (small > small.mean()).flatten())
+
+
 def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
     """助战列表可滚动：用 Sobel 水平边缘找每张卡片的上下边界，再切成行。"""
     x1, y1, x2, y2 = cn.SUPPORT_ROW_REGION
@@ -101,6 +108,17 @@ def _support_rows(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
     if y2 - start >= cn.SUPPORT_ROW_MIN_HEIGHT:
         boxes.append((x1, start, x2, y2))
     return boxes
+
+
+def _support_at_bottom(image: np.ndarray) -> Field:
+    x1, y1, x2, y2 = cn.SUPPORT_SCROLL_REGION
+    hsv = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    handle = (hsv[..., 1] < 80) & (hsv[..., 2] > 170)
+    rows = np.flatnonzero((handle.sum(axis=1) >= cn.SUPPORT_SCROLL_HANDLE_MIN_WIDTH))
+    if not len(rows):
+        return Field(FieldStatus.UNCERTAIN)
+    handle_bottom = int(rows[-1]) + y1
+    return Field(FieldStatus.CONFIRMED, handle_bottom >= cn.SUPPORT_SCROLL_BOTTOM_Y)
 
 
 def _support_class(image: np.ndarray) -> Field:
@@ -165,7 +183,8 @@ def _controls(page: BasePage, variants: frozenset[Variant], overlays: frozenset[
         if page is BasePage.SUPPORT:
             for index, box in enumerate(_support_rows(gray), start=1):
                 controls.append(Control(f'助战卡片第{index}行', ControlKind.ROW, box, True, 'row_detected',
-                                        support=identities.support(image, box)))
+                                        support=identities.support(image, box),
+                                        visual_hash=_row_visual_hash(gray, box)))
 
         if page is BasePage.BATTLE:
             for slot in (1, 2, 3):
@@ -317,6 +336,7 @@ class Perception:
         fields = _fields(page)
         if page is BasePage.SUPPORT:
             fields['support_class'] = _support_class(image)
+            fields['support_at_bottom'] = _support_at_bottom(image)
         if page is BasePage.TEAM:
             fields.update(self._identities.team(image))
         if page is BasePage.BATTLE and not overlays and Variant.BATTLE_ANIMATION not in variants:

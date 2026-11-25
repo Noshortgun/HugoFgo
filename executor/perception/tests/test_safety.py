@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import unittest
 
+import numpy as np
+
 from executor.perception.tests.fixtures import isolated_perception, load_frame
 
 
@@ -192,6 +194,30 @@ class SafetyTest(unittest.TestCase):
                     self.assertGreaterEqual(row.box[3] - row.box[1], 60)
                 for first, second in zip(rows, rows[1:]):
                     self.assertEqual(first.box[3], second.box[1])
+
+    def test_support_row_visual_hash_changes_with_card_content(self) -> None:
+        from executor.perception.recognizer import _row_visual_hash
+
+        first = np.zeros((720, 1280, 3), dtype=np.uint8)
+        second = first.copy()
+        second[150:720, 40:1216:2] = 255
+        box = (40, 150, 1216, 720)
+        self.assertEqual(_row_visual_hash(first, box), _row_visual_hash(first, box))
+        self.assertNotEqual(_row_visual_hash(first, box), _row_visual_hash(second, box))
+
+    def test_support_scrollbar_distinguishes_bottom_from_ignored_swipe(self) -> None:
+        cases = {
+            'captures/2026-11-25/key/support-last-page.png': True,
+            'captures/2026-11-25/key/support-partial-row.png': False,
+            'captures/2026-11-23/key/support-unknown-candidates.png': False,
+            'captures/2026-11-20/key/support-select-wrong-ce.png': False,
+            'captures/2026-11-26/key/support-ignored-swipe-mid-list.png': False,
+        }
+        for relative, expected in cases.items():
+            with self.subTest(relative=relative):
+                field = self.read(relative).field('support_at_bottom')
+                self.assertTrue(field.usable)
+                self.assertIs(expected, field.value)
 
     def test_selected_arts_and_buster_pair_is_detected(self) -> None:
         for relative in ('captures/2026-11-21/key/card-np-selected-arts-buster.png',

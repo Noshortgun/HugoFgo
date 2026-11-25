@@ -173,6 +173,37 @@ def check_perception_identities():
         add_report('perception:identity:cross-session', old_path, expected, actual, 'observe',
                    'Atlas 指令卡原图覆盖梅林等从者', actual == expected)
 
+        ciel_path = ROOT / 'captures/2026-11-25/key/card-ciel-type-text.png'
+        perception.bind_formation((
+            FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900),
+            FormationSlotPlan(slot=1, name='梅林', svt_id=500800),
+            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True, ce_id=9403520),
+        ))
+        ciel = perception.read(Frame(image=ciel_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = [(ciel.control(f'卡{index}').card.svt_id,
+                   ciel.control(f'卡{index}').card.servant_slot,
+                   ciel.control(f'卡{index}').card.card_type) for index in range(1, 6)]
+        expected = [(2300900, 0, 'quick'), (2300900, 0, 'buster'), (2300900, 0, 'buster'),
+                    (2300900, 0, 'arts'), (2300900, 0, 'arts')]
+        add_report('perception:identity:ciel-type-text', ciel_path, expected, actual, 'observe',
+                   '上方头像区优先，卡色特效文字不得阻断从者识别', actual == expected)
+
+        right_path = ROOT / 'captures/2026-11-25/key/card-ciel-right-edge.png'
+        right = perception.read(Frame(image=right_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = [(right.control(f'卡{index}').card.svt_id,
+                   right.control(f'卡{index}').card.servant_slot,
+                   right.control(f'卡{index}').card.card_type) for index in range(1, 6)]
+        expected = [(2300900, 0, 'arts'), (2300900, 0, 'arts'), (2300900, 0, 'buster'),
+                    (2300900, 0, 'quick'), (2300900, 0, 'buster')]
+        add_report('perception:identity:ciel-right-edge-orb', right_path, expected, actual, 'observe',
+                   'SIFT 不足时 ORB 兜底，不降低匹配阈值', actual == expected)
+
+        team_path = ROOT / 'captures/2026-11-25/key/team-ce-limit-break.png'
+        team = perception.read(Frame(image=team_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = team.field('team_support_ce').value
+        add_report('perception:identity:team-support-ce-slot', team_path, 9403520, actual, 'observe',
+                   '按实际助战槽位读取礼装，不固定读取第一列', actual == 9403520)
+
         affinity = [old.control(f'卡{index}').card.affinity for index in range(1, 6)]
         resisted_path = ROOT / 'captures/2026-11-19-ember/key/10-np-card-select.png'
         resisted = perception.read(Frame(image=resisted_path.read_bytes(), width=1280,
@@ -270,6 +301,17 @@ def check_executor_core():
                'stop', '实机故障回归：攻击和菜单已恢复时不得再点跳过区，避免误开御主技能',
                ok, simulated_ocr=True)
 
+    next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
+    result, _device, events = run_core_scenario(
+        [battle, card, card, animation, animation, animation, next_battle, unknown, unknown],
+        [0.0, 0.1, 0.2, 35.0, 35.1, 91.0, 91.5, 122.0, 122.1], plan)
+    ok = (result.reason != 'action_confirmation_timeout'
+          and any(event.type == 'turn_started' and event.data.get('turn') == 2
+                  for event in events.events))
+    add_report('executor:attack-animation-long-confirmation', LOADING_IMAGE,
+               '35 秒动画不停止，后续推进回合', result.reason, 'stop',
+               'run-1795620454593-23360：战斗动画等待与选卡恢复超时分离', ok, simulated_ocr=True)
+
     result, device, events = run_core_scenario(
         [battle, card, card, card, card, card, card, card, card, card],
         [0.0, 0.1, 0.6, 0.7, 1.2, 1.3, 1.8, 1.9, 2.9, 31.9], plan)
@@ -296,7 +338,7 @@ def check_executor_core():
 
 def check_command_card_batch():
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
-                                 TurnPlan, WavePlan)
+                                 TurnPlan, WavePlan, compile_job)
     from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Field,
                                      FieldStatus, Observation, Variant)
 
@@ -336,7 +378,7 @@ def check_command_card_batch():
           and all(item['batch_attempt'] == 0 for item in cards)
           and cards[0].get('attack_to_first_card_ms', -1) >= 0
           and all(item.get('interval_ms', -1) >= 0 for item in cards[1:])
-          and len(submitted) == 1 and submitted[0]['configured_interval_ms'] == 200.0)
+          and len(submitted) == 1 and submitted[0]['configured_interval_ms'] == 350.0)
     add_report('executor:card-batch-one-read-and-timing', LOADING_IMAGE, expected,
                [item['control'] for item in actions], 'tap',
                f'batch={submitted}; cards={cards}', ok, simulated_ocr=True)
@@ -360,9 +402,84 @@ def check_command_card_batch():
                [item['control'] for item in actions], 'tap',
                f'waiting={len(waiting)}; reason={result.reason}', ok, simulated_ocr=True)
 
+    flying_path = ROOT / 'captures/2026-11-25/key/card-flying-servants-unidentified.png'
+    temporary = TemporaryDirectory()
+    perception = Perception(identity_root=Path(temporary.name))
+    try:
+        perception.bind_formation(np_plan.formation)
+        flying = perception.read(Frame(image=flying_path.read_bytes(), width=1280, height=720,
+                                       captured_at=0.1))
+    finally:
+        perception.close()
+        temporary.cleanup()
+    flying_turn = replace(np_turn, attack=AttackPlan(mode='strategy', cards=()))
+    flying_plan = replace(plan, waves=(replace(plan.waves[0], turns=(flying_turn,)),))
+    result, device, events = run_core_scenario(
+        [battle, flying, with_np, with_np, animation, unknown, unknown],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 30.5], flying_plan)
+    actions = [event.data for event in events.events if event.type == 'action']
+    waiting = [event for event in events.events
+               if event.type == 'warning' and event.data.get('reason') == 'card_batch_waiting']
+    unidentified = [control.card.servant_slot for control in flying.controls
+                    if control.card is not None and not control.card.noble_phantasm]
+    expected = ['攻击', '卡1', '宝具卡A', '卡4', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and [item['control'] for item in actions] == expected
+          and unidentified == [-1] * 5 and len(waiting) == 1)
+    add_report('executor:card-flying-identities-wait', flying_path, expected,
+               [item['control'] for item in actions], 'tap',
+               f'unidentified={unidentified}; waiting={len(waiting)}; reason={result.reason}', ok)
+
+    live_job = ROOT / 'jobs/谜之代行者C.I.E.L、梅林、光之高扬斯卡娅.json'
+    live_plan = compile_job(live_job.read_text(encoding='utf-8')).plan
+    live_turn = TurnPlan(actions=(ActionPlan(kind='attack', title='宝具', detail='', icon='', member_slot=0),),
+                         np_positions={0: 2}, attack=AttackPlan(mode='strategy', cards=()))
+    live_plan = replace(live_plan, waves=(replace(live_plan.waves[0], turns=(live_turn,)),))
+    live_np = Control('宝具卡1', ControlKind.CARD, (330, 100, 510, 330), True, 'np_slot:A')
+
+    def live_hand(types):
+        return Observation(base_page=BasePage.CARD, controls=(
+            *(replace(initial.controls[index], card=CommandCardIdentity(0, card_type))
+              for index, card_type in enumerate(types)), live_np))
+
+    live_flying = Observation(base_page=BasePage.CARD, controls=(
+        *(replace(initial.controls[index], card=CommandCardIdentity(-1, 'unknown'))
+          for index in range(5)), live_np))
+    live_wrong = live_hand(('buster', 'arts', 'arts', 'arts', 'quick'))
+    live_settled = live_hand(('buster', 'buster', 'arts', 'arts', 'quick'))
+    result, _, events = run_core_scenario(
+        [battle, battle, live_flying, live_wrong, live_settled, live_settled, animation, unknown, unknown],
+        [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 30.6], live_plan)
+    selected = [event.data['control'] for event in events.events if event.type == 'action']
+    submitted = next((event.data for event in events.events if event.type == 'card_batch_submitted'), {})
+    hand_types = [card['card_type'] for card in submitted.get('hand', [])]
+    expected = ['攻击', '卡1', '宝具卡1', '卡2', '战斗跳过']
+    ok = (result.reason == 'unknown_timeout' and selected == expected
+          and hand_types == ['buster', 'buster', 'arts', 'arts', 'quick'])
+    add_report('strategy:live-job-two-buster-around-np', live_job, expected, selected, 'tap',
+               f'run-1795596280454-23360：五张同为希耶尔，等待两张红卡颜色稳定；hand={hand_types}', ok)
+
+    empty_turn = TurnPlan(attack=AttackPlan(mode='strategy', cards=()))
+    empty_plan = replace(plan, formation=(*plan.formation[:2], FormationSlotPlan(slot=2, name='')),
+                         waves=(replace(plan.waves[0], turns=(empty_turn,)),))
+    uncertain = Observation(base_page=BasePage.CARD, controls=tuple(
+        replace(initial.controls[index], card=CommandCardIdentity(-1 if index == 1 else index % 2, 'buster'))
+        for index in range(5)))
+    identified = Observation(base_page=BasePage.CARD, controls=tuple(
+        replace(initial.controls[index], card=CommandCardIdentity(index % 2, 'buster'))
+        for index in range(5)))
+    result, _, events = run_core_scenario(
+        [battle, battle, uncertain, identified, identified, animation, unknown, unknown],
+        [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 30.5], empty_plan)
+    submitted_event = next(event for event in events.events if event.type == 'card_batch_submitted')
+    empty_hand = submitted_event.data.get('hand', [])
+    ok = submitted_event.timestamp == 1.0 and all(card['servant_slot'] != -1 for card in empty_hand)
+    add_report('strategy:empty-slot-single-unknown-never-submits', LOADING_IMAGE,
+               '单帧未知不提交；后续指定从者多数确认', empty_hand, 'tap',
+               f'timestamp={submitted_event.timestamp}; hand={empty_hand}', ok, simulated_ocr=True)
+
     result, device, events = run_core_scenario(
         [battle, initial, initial, changed, animation, unknown, unknown],
-        [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0], plan)
+        [0.0, 0.1, 1.0, 2.9, 3.0, 3.1, 33.2], plan)
     actions = [event.data for event in events.events if event.type == 'action']
     recovered = [item for item in actions if item.get('batch_attempt') == 1]
     recoveries = [event for event in events.events
@@ -378,7 +495,7 @@ def check_command_card_batch():
     remaining = replace(initial, controls=initial.controls[1:])
     result, device, events = run_core_scenario(
         [battle, initial, initial, remaining, animation, unknown, unknown],
-        [0.0, 0.1, 1.0, 2.6, 2.7, 2.8, 33.0], plan)
+        [0.0, 0.1, 1.0, 2.9, 3.0, 3.1, 33.2], plan)
     actions = [event.data for event in events.events if event.type == 'action']
     recovered = [item for item in actions if item.get('batch_attempt') == 1]
     expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3', '战斗跳过']
@@ -391,7 +508,7 @@ def check_command_card_batch():
 
     result, device, events = run_core_scenario(
         [battle, initial, initial, remaining, remaining, remaining],
-        [0.0, 0.1, 2.2, 2.6, 3.0, 5.1], plan)
+        [0.0, 0.1, 2.2, 2.9, 3.3, 5.7], plan)
     actions = [event.data for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3', '卡2', '卡3']
     ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
@@ -403,7 +520,7 @@ def check_command_card_batch():
                f'taps={device.actions}', ok, simulated_ocr=True)
 
     result, device, events = run_core_scenario(
-        [battle, initial, initial, initial, initial], [0.0, 0.1, 2.2, 2.6, 5.1], plan)
+        [battle, initial, initial, initial, initial], [0.0, 0.1, 2.2, 2.9, 5.7], plan)
     actions = [event.data for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3', '卡1', '卡2', '卡3']
     ok = (result.status.value == 'stopped' and result.reason == 'action_confirmation_timeout'
@@ -417,7 +534,8 @@ def check_command_card_batch():
     next_battle = battle.with_fields({'turn': Field(FieldStatus.CONFIRMED, 2)})
     wrong = hand((4, 4, 4, 4, 4))
     result, device, events = run_core_scenario(
-        [battle, initial, obscured, next_battle, wrong], [0.0, 0.1, 2.6, 2.7, 2.8], plan)
+        [battle, initial, obscured, next_battle, wrong, wrong, wrong],
+        [0.0, 0.1, 2.6, 2.7, 2.8, 32.8, 62.8], plan)
     actions = [event.data for event in events.events if event.type == 'action']
     expected = ['攻击', '卡1', '卡2', '卡3', '攻击']
     confirmed_index = next((index for index, event in enumerate(events.events)
@@ -1239,21 +1357,20 @@ def check_executor_self_target():
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
     result, _, events = run_core_scenario(
-        [targeted_battle, targeted_battle, targeted_battle, servant_target,
-         targeted_used, targeted_used, targeted_used, wrong],
-        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6], targeted_plan)
+        [targeted_battle, targeted_battle, targeted_battle, targeted_battle,
+         targeted_battle, targeted_battle, servant_target, targeted_used, targeted_used, targeted_used, wrong],
+        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 2.8, 2.9, 3.0], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击']
+    expected = ['从者1技能1', '目标从者2', '战斗跳过', '攻击']
     recoveries = [event for event in events.events
                   if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
-    ok = (result.reason == 'card_mismatch' and controls == expected and len(recoveries) == 1
-          and recoveries[0].data.get('attempt') == 1)
+    ok = result.reason == 'card_mismatch' and controls == expected and len(recoveries) == 0
     add_report('executor:targeted-skill-one-new-frame-recovery', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; recoveries={len(recoveries)}', ok, simulated_ocr=True)
 
     result, device, events = run_core_scenario(
-        [targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle],
-        [0.0, 0.1, 2.1, 2.2, 32.2], targeted_plan)
+        [targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle],
+        [0.0, 0.1, 2.1, 2.2, 2.6, 32.2], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '从者1技能1']
     recoveries = [event for event in events.events
@@ -1322,7 +1439,7 @@ def check_executor_repeat_support():
                          controls=(Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True),))
     candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker', ce_id=9403520)
     support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=candidate),))
     team = Observation(base_page=BasePage.TEAM, fields={
         'team_servants': Field(FieldStatus.CONFIRMED, (705000, 2, 3)),
         'team_support_ce': Field(FieldStatus.CONFIRMED, 9403520),
@@ -1594,8 +1711,8 @@ def check_executor_safety():
         Control('从者1技能2', ControlKind.SKILL, (130, 548, 190, 610), True),
         Control('从者1技能3', ControlKind.SKILL, (217, 548, 278, 610), True),
     ))
-    input_times = [1795498380.6858945, 1795498380.7996883, 1795498381.2,
-                   1795498381.3, 1795498381.5]
+    input_times = [1795498380.6858945, 1795498380.7996883, 1795498380.9,
+                   1795498381.6858945, 1795498381.8, 1795498381.9, 1795498382.6858945]
     with mock.patch('executor.core.runner.time.time', side_effect=input_times):
         result, _, events = run_core_scenario(
             [consecutive, animation, consecutive, consecutive, animation,
@@ -1614,6 +1731,48 @@ def check_executor_safety():
                'run-1795498348917-18264 输入完成时间回归；不推断技能生效', ok,
                simulated_ocr=True)
 
+    merlin = ActionPlan(kind='skill', title='梅林一技能', detail='', icon='', member_slot=1, skill=0)
+    cross_servant = replace(consecutive, controls=(
+        *consecutive.controls,
+        Control('从者2技能1', ControlKind.SKILL, (365, 548, 426, 610), True),
+    ))
+    input_times = [1795592987.2630138, 1795592987.395141, 1795592987.5122046,
+                   1795592988.2630138, 1795592988.3, 1795592988.4, 1795592989.2630138]
+    with mock.patch('executor.core.runner.time.time', side_effect=input_times):
+        result, _, events = run_core_scenario(
+            [cross_servant, animation, cross_servant, cross_servant, cross_servant,
+             animation, cross_servant, cross_servant, wrong],
+            [0.0, 0.1, 0.2, 0.3, 1.0, 1.1, 1.2, 1.3, 1.4], make_plan((second, merlin)))
+    actions = [event for event in events.events if event.type == 'action']
+    controls = [event.data['control'] for event in actions]
+    expected = ['从者1技能3', '战斗跳过', '从者2技能1', '战斗跳过', '攻击']
+    interval = (actions[2].data['input_finished_at'] - actions[0].data['input_finished_at']
+                if len(actions) == 5 else -1)
+    ok = result.reason == 'card_mismatch' and controls == expected and interval >= 1.0
+    add_report('executor:skill-live-368ms-early-input-regression', LOADING_IMAGE,
+               '梅林一技能不早于前一技能 1 秒', f'{controls}; input_interval={interval:.6f}', 'stop',
+               'run-1795592952313-23360 的 0.368 秒输入间隔回归；不推断技能生效', ok,
+               simulated_ocr=True)
+
+    merlin_second = ActionPlan(kind='skill', title='梅林二技能', detail='', icon='', member_slot=1, skill=1)
+    merlin_battle = replace(ready, controls=(
+        *ready.controls,
+        Control('从者2技能1', ControlKind.SKILL, (365, 548, 426, 610), True,
+                'slot_visible:2', on_cooldown=False),
+        Control('从者2技能2', ControlKind.SKILL, (452, 548, 513, 610), True,
+                'slot_visible:2', on_cooldown=False),
+    ))
+    result, _, events = run_core_scenario(
+        [merlin_battle, merlin_battle, merlin_battle, merlin_battle, merlin_battle],
+        [0.0, 0.1, 2.2, 63.0, 93.0], make_plan((merlin, merlin_second)))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者2技能1', '战斗跳过', '从者2技能1']
+    ok = result.reason == 'action_confirmation_timeout' and controls == expected
+    add_report('executor:merlin-second-requires-first-cooldown',
+               ROOT / 'captures/2026-11-23/key/skill-cooldowns.png', expected, controls, 'stop',
+               'run-1795596280454-23360：一技能未进冷却时重试并停止，不得使用二技能', ok,
+               simulated_ocr=True)
+
     repeat = battle(overlays=(Overlay.REPEAT_DIALOG,))
     repeat = replace(repeat, controls=(*repeat.controls,
                                       Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True)))
@@ -1630,7 +1789,7 @@ def check_executor_safety():
 
     candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
     support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=candidate),))
     result_page = Observation(base_page=BasePage.RESULT, controls=(
         Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
     drops = Observation(base_page=BasePage.DROPS, controls=(
@@ -1678,9 +1837,9 @@ def check_executor_safety():
 
     wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
     wrong_support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
-    ))
+    ), fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, True)})
     cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
                            controls=(Control('关闭', ControlKind.BUTTON, (508, 531, 772, 599), True),))
     result, device, events = run_core_scenario(
@@ -2255,7 +2414,8 @@ def check_transient_second_np_rejected():
 def check_support_refresh_confirmation_timeout():
     from executor.domain import (AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
-    from executor.perception import BasePage, Control, ControlKind, Observation, Overlay, SupportCandidate
+    from executor.perception import (BasePage, Control, ControlKind, Field, FieldStatus,
+                                     Observation, Overlay, SupportCandidate)
     cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
     turn = TurnPlan(attack=AttackPlan(mode='verify', cards=cards))
     formation = (
@@ -2267,9 +2427,9 @@ def check_support_refresh_confirmation_timeout():
                          waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
     wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
     wrong = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
-    ))
+    ), fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, True)})
     result, device, events = run_core_scenario(
         [wrong] * 8, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.5], plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
@@ -2308,6 +2468,24 @@ def check_support_refresh_confirmation_timeout():
     add_report('executor:support-empty-scroll-is-not-bottom', SUPPORT_IMAGE,
                'empty scrolled list waits; no refresh', f'{result.reason}; {controls}',
                'wait', f'actions={device.actions}', ok, simulated_ocr=True)
+
+    noisy_support = replace(wrong, fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, False)})
+    noisy = []
+    for index in range(1, 4):
+        candidate = replace(wrong_candidate, svt_id=index)
+        row = replace(noisy_support.controls[0], support=candidate,
+                      visual_hash=('1' * index) + ('0' * (256 - index)))
+        noisy.append(replace(noisy_support, controls=(row, *noisy_support.controls[1:])))
+    result, device, events = run_core_scenario(
+        [noisy_support] * 3 + noisy + [unknown] * 2,
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 32.5, 62.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.reason == 'unknown_timeout' and controls.count('助战列表向下') == 2
+          and '列表更新' not in controls)
+    add_report('executor:support-scroll-visual-noise', SUPPORT_IMAGE,
+               'two swipes in two seconds; no refresh', f'{result.reason}; {controls}',
+               'swipe', '8/256 hash noise and identity rechecks do not reset stability', ok,
+               simulated_ocr=True)
 
 
 def check_manual_key_frames():

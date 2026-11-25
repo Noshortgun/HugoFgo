@@ -444,6 +444,9 @@ SKILL_COOLDOWN_SEARCH_X_PAD = (10, 24)
 
 # 助战卡片行的动态检测参数：用水平边缘找卡片上下边界（行内深色文字不会干扰）。
 SUPPORT_ROW_REGION: Box = (40, 150, 1216, 720)
+SUPPORT_SCROLL_REGION: Box = (1240, 150, 1265, 720)
+SUPPORT_SCROLL_HANDLE_MIN_WIDTH = 8
+SUPPORT_SCROLL_BOTTOM_Y = 700
 SUPPORT_ROW_EDGE_PERCENTILE = 97
 SUPPORT_ROW_EDGE_GROUP = 6
 SUPPORT_ROW_MIN_GAP = 80
@@ -474,6 +477,7 @@ COMMAND_SIFT_RANSAC_THRESHOLD = 5.0
 COMMAND_SIFT_MIN_INLIERS = 30
 COMMAND_SIFT_MIN_MARGIN = 20
 COMMAND_SIFT_QUERY_OFFSETS = (-65, -20, 145, 200)
+COMMAND_PORTRAIT_QUERY_HEIGHT = 120
 COMMAND_TYPE_Y_OFFSETS = (85, 235)
 COMMAND_TYPE_MIN_PIXELS = 500
 COMMAND_TYPE_MIN_SATURATION = 120
@@ -502,6 +506,7 @@ FIELD_PAGES: dict[str, frozenset[BasePage]] = {
     'enemies': frozenset({BasePage.BATTLE, BasePage.CARD}),
     'ap': frozenset({BasePage.AP_RECOVERY}),
     'support_class': frozenset({BasePage.SUPPORT}),
+    'support_at_bottom': frozenset({BasePage.SUPPORT}),
     'team_servants': frozenset({BasePage.TEAM}),
     'team_backline_servants': frozenset({BasePage.TEAM}),
     'team_support_ce': frozenset({BasePage.TEAM}),

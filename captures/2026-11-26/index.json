@@ -1,0 +1,27 @@
+{
+  "device": {
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-26",
+  "source": "scrcpy 实机故障回归 .scratch/pr-66-card-reading/logs/farm/20261126-015619-296493/support-refresh-001.bgr24",
+  "keyFrames": [
+    {
+      "file": "key/support-ignored-swipe-mid-list.png",
+      "state": "助战列表滑动未生效；前后行图像相同，但右侧滑块下缘为 338，列表仍在中间",
+      "expectedObservation": {
+        "basePage": "support",
+        "supportAtBottom": false,
+        "expectedAction": "retry_scroll_without_refresh"
+      },
+      "observedObservation": {
+        "basePage": "support",
+        "supportAtBottom": false,
+        "expectedAction": "retry_scroll_without_refresh"
+      },
+      "match": true
+    }
+  ]
+}
