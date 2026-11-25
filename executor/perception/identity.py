@@ -271,9 +271,12 @@ class IdentityMatcher:
             support_score = float(np.nan_to_num(result.max(), nan=0.0))
         support = support_score >= cn.COMMAND_SUPPORT_THRESHOLD
 
-        top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
-        query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
+        query = gray[y1:y1 + cn.COMMAND_PORTRAIT_QUERY_HEIGHT, x1:x2]
         servant_id = self._command_servant(query)
+        if servant_id is None:
+            top, left, bottom, right = cn.COMMAND_SIFT_QUERY_OFFSETS
+            query = gray[y1 + top:y1 + bottom, x1 + left:x1 + right]
+            servant_id = self._command_servant(query)
         fallback_slot = None
         if support_score >= cn.COMMAND_SUPPORT_FALLBACK_THRESHOLD:
             support_slots = [(entity_id, slot) for (entity_id, is_support), slot

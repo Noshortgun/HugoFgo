@@ -6,7 +6,7 @@
     "density": 240
   },
   "capturedAt": "2026-11-25",
-  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧；logs/farm/run-1795595300009-23360/failure.bgr24；指令卡飞入过程帧",
+  "source": "scrcpy 实机故障回归 logs/farm/run-1795540884604-48136/failure.bgr24；娄希 3 技能淡化过程帧；logs/farm/run-1795595300009-23360/failure.bgr24；指令卡飞入过程帧；2026-11-25 实机卡色特效文字截图",
   "keyFrames": [
     {
       "file": "key/battle-faded-no-auto-fill.png",
@@ -38,6 +38,23 @@
         "basePage": "card",
         "normalCardServantSlots": [-1, -1, -1, -1, -1],
         "cardSelection": "wait"
+      },
+      "match": true
+    },
+    {
+      "file": "key/card-ciel-type-text.png",
+      "state": "希耶尔锁卡与卡色特效文字覆盖；五张普通卡均为希耶尔",
+      "expectedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["quick", "buster", "buster", "arts", "arts"]
+      },
+      "observedObservation": {
+        "basePage": "card",
+        "svtIds": [2300900, 2300900, 2300900, 2300900, 2300900],
+        "normalCardServantSlots": [0, 0, 0, 0, 0],
+        "cardTypes": ["quick", "buster", "buster", "arts", "arts"]
       },
       "match": true
     }

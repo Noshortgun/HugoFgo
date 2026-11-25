@@ -173,6 +173,21 @@ def check_perception_identities():
         add_report('perception:identity:cross-session', old_path, expected, actual, 'observe',
                    'Atlas 指令卡原图覆盖梅林等从者', actual == expected)
 
+        ciel_path = ROOT / 'captures/2026-11-25/key/card-ciel-type-text.png'
+        perception.bind_formation((
+            FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900),
+            FormationSlotPlan(slot=1, name='梅林', svt_id=500800),
+            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True),
+        ))
+        ciel = perception.read(Frame(image=ciel_path.read_bytes(), width=1280, height=720, captured_at=0.0))
+        actual = [(ciel.control(f'卡{index}').card.svt_id,
+                   ciel.control(f'卡{index}').card.servant_slot,
+                   ciel.control(f'卡{index}').card.card_type) for index in range(1, 6)]
+        expected = [(2300900, 0, 'quick'), (2300900, 0, 'buster'), (2300900, 0, 'buster'),
+                    (2300900, 0, 'arts'), (2300900, 0, 'arts')]
+        add_report('perception:identity:ciel-type-text', ciel_path, expected, actual, 'observe',
+                   '上方头像区优先，卡色特效文字不得阻断从者识别', actual == expected)
+
         affinity = [old.control(f'卡{index}').card.affinity for index in range(1, 6)]
         resisted_path = ROOT / 'captures/2026-11-19-ember/key/10-np-card-select.png'
         resisted = perception.read(Frame(image=resisted_path.read_bytes(), width=1280,

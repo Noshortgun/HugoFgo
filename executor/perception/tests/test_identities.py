@@ -148,6 +148,55 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual([2, 0, 0, 1, 1], [card.servant_slot for card in cards])
         self.assertNotIn('command_card_identity', readiness_gaps(observation))
 
+    def test_command_prefers_the_portrait_region_before_the_full_query(self) -> None:
+        from executor.perception.identity import IdentityMatcher
+
+        matcher = IdentityMatcher()
+        matcher._command_templates = []
+        matcher._support_tag = None
+        matcher._formation_slots = {(2300900, False): 0}
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        image[500:655, 46:211] = (0, 0, 255)
+
+        with mock.patch.object(matcher, '_command_servant', return_value=2300900) as identify:
+            card = matcher.command(image, (46, 415, 211, 655))
+
+        self.assertEqual((120, 165), identify.call_args.args[0].shape)
+        self.assertEqual((0, 2300900, 'buster'),
+                         (card.servant_slot, card.svt_id, card.card_type))
+
+    def test_command_falls_back_to_the_full_query_when_the_portrait_fails(self) -> None:
+        from executor.perception.identity import IdentityMatcher
+
+        matcher = IdentityMatcher()
+        matcher._command_templates = []
+        matcher._support_tag = None
+        matcher._formation_slots = {(2300900, False): 0}
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        image[500:655, 46:211] = (0, 0, 255)
+
+        with mock.patch.object(matcher, '_command_servant', side_effect=[None, 2300900]) as identify:
+            card = matcher.command(image, (46, 415, 211, 655))
+
+        self.assertEqual(2, identify.call_count)
+        self.assertEqual((210, 220), identify.call_args.args[0].shape)
+        self.assertEqual(2300900, card.svt_id)
+
+    def test_ciel_type_text_uses_the_portrait_region(self) -> None:
+        self.perception.bind_formation((
+            FormationSlotPlan(slot=0, name='谜之代行者C.I.E.L', svt_id=2300900),
+            FormationSlotPlan(slot=1, name='梅林', svt_id=500800),
+            FormationSlotPlan(slot=2, name='光之高扬斯卡娅', svt_id=604200, support=True),
+        ))
+
+        observation = self.perception.read(load_frame('captures/2026-11-25/key/card-ciel-type-text.png'))
+
+        cards = [observation.control(f'卡{index}').card for index in range(1, 6)]
+        self.assertEqual([2300900] * 5, [card.svt_id for card in cards])
+        self.assertEqual([0] * 5, [card.servant_slot for card in cards])
+        self.assertEqual(['quick', 'buster', 'buster', 'arts', 'arts'],
+                         [card.card_type for card in cards])
+
     def test_battle_frontline_maps_faces_to_original_formation_slots(self) -> None:
         perception = self.perception
         perception.bind_formation((
