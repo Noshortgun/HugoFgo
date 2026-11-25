@@ -89,6 +89,21 @@
         "limitBreakMarker": "present"
       },
       "match": true
+    },
+    {
+      "file": "key/support-last-page.png",
+      "state": "实机助战列表最后一页；最后一行下缘为 675，底部阈值 650 可刷新，720 会误判",
+      "expectedObservation": {
+        "basePage": "support",
+        "lastRowBottom": 675,
+        "canRefresh": true
+      },
+      "observedObservation": {
+        "basePage": "support",
+        "lastRowBottom": 675,
+        "canRefresh": true
+      },
+      "match": true
     }
   ]
 }

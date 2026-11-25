@@ -210,6 +210,23 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn('列表更新', actions)
         self.assertIn('助战列表向下', actions)
 
+    def test_same_support_rows_at_bottom_do_refresh(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他人', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 650), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        device, perception = scripted([wrong, wrong, wrong, wrong, wrong], [0.0, 0.5, 1.0, 1.5, 2.0])
+        events = MemoryEventSink()
+
+        run(plan, device, perception, events)
+
+        self.assertIn('列表更新', [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_second_support_refresh_waits_for_candidates_before_not_found(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
