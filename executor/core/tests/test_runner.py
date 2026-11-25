@@ -96,7 +96,7 @@ class RunnerTest(unittest.TestCase):
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker',
                                      ce='午茶', ce_id=9403520)
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         team = observe(BasePage.TEAM, button('开始任务', (1086, 635, 1248, 707)))
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -143,7 +143,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         candidate = SupportCandidate(name='奥伯龙', svt_id=2800100, role='Pretender')
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted([support, support, wrong_cards], [0.0, 0.5, 31.0])
@@ -161,7 +161,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         confirm = Observation(base_page=BasePage.SUPPORT,
@@ -169,7 +169,7 @@ class RunnerTest(unittest.TestCase):
                               controls=(button('是', (708, 534, 969, 592)),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         match = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=candidate))
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -188,6 +188,28 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['swipe'], [action['action'] for action in device.actions
                                     if action['action'] == 'swipe'])
 
+    def test_same_support_rows_above_bottom_do_not_refresh(self) -> None:
+        plan = single_wave_plan()
+        support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
+                               svt_id=705000, role='Berserker')
+        plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
+        wrong_candidate = SupportCandidate(name='其他人', svt_id=1, role='Saber')
+        wrong = observe(BasePage.SUPPORT,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                                support=wrong_candidate),
+                        button('列表更新', (888, 98, 972, 162)))
+        device, perception = scripted(
+            [wrong, wrong, wrong, wrong, wrong, wrong],
+            [0.0, 0.5, 1.0, 1.5, 2.0, 31.0],
+        )
+        events = MemoryEventSink()
+
+        result = run(plan, device, perception, events)
+
+        actions = [event.data['control'] for event in events.events if event.type == 'action']
+        self.assertNotIn('列表更新', actions)
+        self.assertIn('助战列表向下', actions)
+
     def test_second_support_refresh_waits_for_candidates_before_not_found(self) -> None:
         plan = single_wave_plan()
         support_slot = replace(plan.formation[0], name='娄希', support=True, support_required=True,
@@ -195,7 +217,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         confirm = Observation(base_page=BasePage.SUPPORT,
@@ -229,7 +251,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         cooldown = Observation(base_page=BasePage.SUPPORT,
@@ -237,7 +259,7 @@ class RunnerTest(unittest.TestCase):
                                controls=(button('关闭', (508, 531, 772, 599)),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         match = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=candidate))
         unknown = observe(BasePage.UNKNOWN)
         observations = [wrong] * 7 + [cooldown, cooldown, wrong, match, match, unknown, unknown]
@@ -264,7 +286,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         confirm = Observation(base_page=BasePage.SUPPORT,
@@ -272,7 +294,7 @@ class RunnerTest(unittest.TestCase):
                               controls=(button('是', (708, 534, 969, 592)),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         match = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=candidate))
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -296,7 +318,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         observations = [wrong] * 8
@@ -322,7 +344,7 @@ class RunnerTest(unittest.TestCase):
                              controls=(button('结束', (167, 582, 493, 649)),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -2395,7 +2417,7 @@ class RunnerTest(unittest.TestCase):
                              controls=(button('连续出击'),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         team = observe(BasePage.TEAM, button('开始任务'))
         battle = observe(BasePage.BATTLE, button('攻击'))
@@ -2422,7 +2444,7 @@ class RunnerTest(unittest.TestCase):
                              controls=(button('连续出击'),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         battle = observe(BasePage.BATTLE, button('攻击'))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
@@ -2666,7 +2688,7 @@ class RunnerTest(unittest.TestCase):
                              controls=(button('连续出击'),))
         candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
         support = observe(BasePage.SUPPORT,
-                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                          Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                   support=candidate))
         device, perception = scripted([drops, repeat, repeat, repeat, support, support],
                                       [0.0, 0.1, 0.6, 1.1, 1.2, 1.7])
@@ -3205,7 +3227,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         unknown_rows = observe(BasePage.SUPPORT,
                                Control('助战卡片第1行', ControlKind.ROW, (40, 150, 1216, 350), True),
-                               Control('助战卡片第2行', ControlKind.ROW, (40, 350, 1216, 550), True),
+                               Control('助战卡片第2行', ControlKind.ROW, (40, 350, 1216, 720), True),
                                button('列表更新', (888, 98, 972, 162)))
         observations = [unknown_rows] * 6 + [observe(BasePage.UNKNOWN)] * 2
         times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 33.0]
@@ -3224,7 +3246,7 @@ class RunnerTest(unittest.TestCase):
         plan = replace(plan, formation=(support_slot, *plan.formation[1:]))
         wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
         wrong = observe(BasePage.SUPPORT,
-                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True,
+                        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True,
                                 support=wrong_candidate),
                         button('列表更新', (888, 98, 972, 162)))
         empty = observe(BasePage.SUPPORT, button('列表更新', (888, 98, 972, 162)))

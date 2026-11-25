@@ -74,6 +74,21 @@
         "cardTypes": ["arts", "arts", "buster", "quick", "buster"]
       },
       "match": true
+    },
+    {
+      "file": "key/team-ce-limit-break.png",
+      "state": "队伍确认页；礼装右下角有满破标识，供后续满破状态识别与作业要求使用",
+      "expectedObservation": {
+        "basePage": "team",
+        "teamServants": [2300900, 500800, 604200],
+        "limitBreakMarker": "present"
+      },
+      "observedObservation": {
+        "basePage": "team",
+        "teamServants": [2300900, 500800, 604200],
+        "limitBreakMarker": "present"
+      },
+      "match": true
     }
   ]
 }

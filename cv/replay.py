@@ -1433,7 +1433,7 @@ def check_executor_repeat_support():
                          controls=(Control('连续出击', ControlKind.BUTTON, (709, 554, 970, 612), True),))
     candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker', ce_id=9403520)
     support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=candidate),))
     team = Observation(base_page=BasePage.TEAM, fields={
         'team_servants': Field(FieldStatus.CONFIRMED, (705000, 2, 3)),
         'team_support_ce': Field(FieldStatus.CONFIRMED, 9403520),
@@ -1783,7 +1783,7 @@ def check_executor_safety():
 
     candidate = SupportCandidate(name='娄希', svt_id=705000, role='Berserker')
     support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=candidate),))
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=candidate),))
     result_page = Observation(base_page=BasePage.RESULT, controls=(
         Control('结算推进', ControlKind.BUTTON, (0, 0, 1280, 720), True),))
     drops = Observation(base_page=BasePage.DROPS, controls=(
@@ -1831,7 +1831,7 @@ def check_executor_safety():
 
     wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
     wrong_support = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
     ))
     cooldown = Observation(base_page=BasePage.SUPPORT, overlays=frozenset({Overlay.SUPPORT_REFRESH_COOLDOWN}),
@@ -2420,7 +2420,7 @@ def check_support_refresh_confirmation_timeout():
                          waves=(WavePlan(number=1, target=1, turns=(turn,)),), formation=formation)
     wrong_candidate = SupportCandidate(name='其他', svt_id=1, role='Saber')
     wrong = Observation(base_page=BasePage.SUPPORT, controls=(
-        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 400), True, support=wrong_candidate),
+        Control('助战卡片第1行', ControlKind.ROW, (40, 200, 1000, 720), True, support=wrong_candidate),
         Control('列表更新', ControlKind.BUTTON, (888, 98, 972, 162), True),
     ))
     result, device, events = run_core_scenario(
