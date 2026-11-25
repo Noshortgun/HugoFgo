@@ -2469,6 +2469,24 @@ def check_support_refresh_confirmation_timeout():
                'empty scrolled list waits; no refresh', f'{result.reason}; {controls}',
                'wait', f'actions={device.actions}', ok, simulated_ocr=True)
 
+    noisy_support = replace(wrong, fields={'support_at_bottom': Field(FieldStatus.CONFIRMED, False)})
+    noisy = []
+    for index in range(1, 4):
+        candidate = replace(wrong_candidate, svt_id=index)
+        row = replace(noisy_support.controls[0], support=candidate,
+                      visual_hash=('1' * index) + ('0' * (256 - index)))
+        noisy.append(replace(noisy_support, controls=(row, *noisy_support.controls[1:])))
+    result, device, events = run_core_scenario(
+        [noisy_support] * 3 + noisy + [unknown] * 2,
+        [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 32.5, 62.5], plan)
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    ok = (result.reason == 'unknown_timeout' and controls.count('助战列表向下') == 2
+          and '列表更新' not in controls)
+    add_report('executor:support-scroll-visual-noise', SUPPORT_IMAGE,
+               'two swipes in two seconds; no refresh', f'{result.reason}; {controls}',
+               'swipe', '8/256 hash noise and identity rechecks do not reset stability', ok,
+               simulated_ocr=True)
+
 
 def check_manual_key_frames():
     from executor.device import Frame
