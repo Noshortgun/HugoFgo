@@ -1351,21 +1351,20 @@ def check_executor_self_target():
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
     result, _, events = run_core_scenario(
-        [targeted_battle, targeted_battle, targeted_battle, servant_target,
-         targeted_used, targeted_used, targeted_used, wrong],
-        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6], targeted_plan)
+        [targeted_battle, targeted_battle, targeted_battle, targeted_battle,
+         targeted_battle, targeted_battle, servant_target, targeted_used, targeted_used, targeted_used, wrong],
+        [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 2.8, 2.9, 3.0], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
-    expected = ['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击']
+    expected = ['从者1技能1', '目标从者2', '战斗跳过', '攻击']
     recoveries = [event for event in events.events
                   if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
-    ok = (result.reason == 'card_mismatch' and controls == expected and len(recoveries) == 1
-          and recoveries[0].data.get('attempt') == 1)
+    ok = result.reason == 'card_mismatch' and controls == expected and len(recoveries) == 0
     add_report('executor:targeted-skill-one-new-frame-recovery', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}; recoveries={len(recoveries)}', ok, simulated_ocr=True)
 
     result, device, events = run_core_scenario(
-        [targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle],
-        [0.0, 0.1, 2.1, 2.2, 32.2], targeted_plan)
+        [targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle, targeted_battle],
+        [0.0, 0.1, 2.1, 2.2, 2.6, 32.2], targeted_plan)
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '从者1技能1']
     recoveries = [event for event in events.events
@@ -1758,8 +1757,8 @@ def check_executor_safety():
                 'slot_visible:2', on_cooldown=False),
     ))
     result, _, events = run_core_scenario(
-        [merlin_battle, merlin_battle, merlin_battle, merlin_battle],
-        [0.0, 0.1, 2.2, 33.0], make_plan((merlin, merlin_second)))
+        [merlin_battle, merlin_battle, merlin_battle, merlin_battle, merlin_battle],
+        [0.0, 0.1, 2.2, 63.0, 93.0], make_plan((merlin, merlin_second)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者2技能1', '战斗跳过', '从者2技能1']
     ok = result.reason == 'action_confirmation_timeout' and controls == expected

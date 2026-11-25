@@ -447,7 +447,7 @@ class RunnerTest(unittest.TestCase):
                                  'slot_visible:2', on_cooldown=False),
                          Control('从者2技能2', ControlKind.SKILL, (452, 548, 513, 610), True,
                                  'slot_visible:2', on_cooldown=False))
-        device, perception = scripted([battle, battle, battle, battle], [0.0, 0.1, 2.2, 33.0])
+        device, perception = scripted([battle, battle, battle, battle, battle], [0.0, 0.1, 2.2, 63.0, 93.0])
         events = MemoryEventSink()
 
         result = run(single_wave_plan((first, second)), device, perception, events)
@@ -455,6 +455,25 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual('action_confirmation_timeout', result.reason)
         self.assertEqual(['从者2技能1', '战斗跳过', '从者2技能1'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_skill_retry_requires_stable_available_evidence(self) -> None:
+        skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
+        available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
+                            'slot_visible:1', on_cooldown=False)
+        battle = observe(BasePage.BATTLE, button('攻击'), available)
+        device, perception = scripted(
+            [battle, battle, battle, battle, battle, battle],
+            [0.0, 0.1, 2.2, 2.4, 2.8, 33.0],
+        )
+        events = MemoryEventSink()
+
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('action_confirmation_timeout', result.reason)
+        actions = [event for event in events.events if event.type == 'action']
+        self.assertEqual(['从者1技能1', '战斗跳过', '从者1技能1'],
+                         [event.data['control'] for event in actions])
+        self.assertEqual(2.8, actions[-1].timestamp)
 
     def test_servant_skill_is_confirmed_before_attack(self) -> None:
         skill = ActionPlan(kind='skill', title='一技能', detail='', icon='', member_slot=0, skill=0)
@@ -604,7 +623,7 @@ class RunnerTest(unittest.TestCase):
                          [event.timestamp for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
 
-    def test_targeted_skill_recovers_once_from_missing_state_change(self) -> None:
+    def test_targeted_skill_does_not_retry_after_target_panel_appears(self) -> None:
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                            member_slot=0, skill=0, player_target_slot=1)
         available = Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
@@ -622,20 +641,19 @@ class RunnerTest(unittest.TestCase):
         )
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, battle, battle, target, used, used, used, wrong_cards],
-            [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6],
+            [battle, battle, battle, battle, battle, battle, target, used, used, used, wrong_cards],
+            [0.0, 0.1, 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 2.8, 2.9, 3.0],
         )
         events = MemoryEventSink()
 
         result = run(single_wave_plan((skill,)), device, perception, events)
 
         self.assertEqual('card_mismatch', result.reason)
-        self.assertEqual(['从者1技能1', '从者1技能1', '目标从者2', '战斗跳过', '攻击'],
+        self.assertEqual(['从者1技能1', '目标从者2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         recoveries = [event for event in events.events
                       if event.type == 'warning' and event.data.get('reason') == 'action_recovery']
-        self.assertEqual(1, len(recoveries))
-        self.assertEqual(1, recoveries[0].data['attempt'])
+        self.assertEqual(0, len(recoveries))
 
     def test_targeted_skill_stops_after_one_failed_recovery(self) -> None:
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
@@ -644,8 +662,8 @@ class RunnerTest(unittest.TestCase):
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True,
                                  'slot_visible:1', on_cooldown=False))
         device, perception = scripted(
-            [battle, battle, battle, battle, battle],
-            [0.0, 0.1, 2.1, 2.2, 32.2],
+            [battle, battle, battle, battle, battle, battle],
+            [0.0, 0.1, 2.1, 2.2, 2.6, 32.2],
         )
         events = MemoryEventSink()
 

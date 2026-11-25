@@ -310,12 +310,19 @@ class Runner:
         self.fallback_since: float | None = None
         self.skill_confirmation: tuple[str, int, int] | None = None
         self.skill_cooldown_since: float | None = None
+        self.skill_available_since: float | None = None
 
-    def skill_retry_allowed(self, observation: Observation) -> bool:
+    def skill_retry_allowed(self, observation: Observation, now: float) -> bool:
         if self.skill_confirmation is None:
             return True
         control = observation.control(self.skill_confirmation[0])
-        return control is not None and control.on_cooldown is False
+        if control is None or control.on_cooldown is not False:
+            self.skill_available_since = None
+            return False
+        if self.skill_available_since is None:
+            self.skill_available_since = now
+            return False
+        return now - self.skill_available_since >= 0.5
 
     def skill_effect_confirmed(self, observation: Observation) -> bool:
         if self.skill_confirmation is None:
@@ -1477,7 +1484,7 @@ class Runner:
                         and self.pending_since is not None
                         and now - self.pending_since >= ACTION_RECOVERY_SECONDS
                         and observation.frame_hash != self.pending_frame_hash
-                        and self.skill_retry_allowed(observation)):
+                        and self.skill_retry_allowed(observation, now)):
                     control = self.pending_recovery_control
                     if self.tap_action(observation, control, now):
                         self.pending_recovery_used = True
@@ -1598,6 +1605,7 @@ class Runner:
                     self.card_recovery_reading = False
                     self.skill_confirmation = None
                     self.skill_cooldown_since = None
+                    self.skill_available_since = None
                     if self.starting_next_run:
                         self.progress.wave = 1
                         self.progress.turn = 1
