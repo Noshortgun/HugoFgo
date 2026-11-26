@@ -47,6 +47,7 @@ class Overlay(str, Enum):
     SUPPORT_PARTY_CONFIRM = 'support_party_confirm'
     REPEAT_DIALOG = 'repeat_dialog'
     AP_RECOVERY_CONFIRM = 'ap_recovery_confirm'
+    STORM_POD_INSUFFICIENT = 'storm_pod_insufficient'
     ORDER_CHANGE = 'order_change'
     COMMAND_SPELL_MENU = 'command_spell_menu'
     COMMAND_SPELL_TARGET = 'command_spell_target'

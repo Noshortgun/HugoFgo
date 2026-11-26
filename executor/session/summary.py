@@ -29,6 +29,7 @@ REASON_NAMES = {
     'card_mismatch': '指令卡与作业不一致',
     'ap_recovery': 'AP 恢复停止',
     'ap_drained': 'AP 已清空',
+    'storm_pod_insufficient': '风暴罐不足，已关闭弹窗并停止',
 }
 
 

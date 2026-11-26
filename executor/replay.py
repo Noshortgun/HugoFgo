@@ -51,6 +51,8 @@ class ReplayCase:
     suppress_controls: tuple[str, ...] = ()
     fresh_hashes: bool = True
     ignored_action_reasons: tuple[str, ...] = ()
+    terminal_action_reasons: tuple[str, ...] = ()
+    summary_contains: tuple[str, ...] = ()
 
 
 @dataclass
@@ -235,6 +237,8 @@ def check_report(report: ReplayReport) -> None:
                     or following['data'].get('card_position') != data['card_position'] + 1):
                 raise ReplayFailure(f'{case.name}: 连击内部出现取帧或动作中断：{action}')
             continue
+        if data.get('reason') in case.terminal_action_reasons:
+            continue
         if not any(item['kind'] == 'observation' for item in report.trace[position + 1:]):
             raise ReplayFailure(f'{case.name}: 动作后没有重新识别：{action}')
 
@@ -245,6 +249,11 @@ def check_report(report: ReplayReport) -> None:
         for name in ('result.json', 'observation.json', 'events.jsonl', 'failure.png'):
             if not (root / name).is_file():
                 raise ReplayFailure(f'{case.name}: 缺少证据文件 {name}')
+        if case.summary_contains:
+            summary = (root / 'summary.md').read_text(encoding='utf-8')
+            for expected in case.summary_contains:
+                if expected not in summary:
+                    raise ReplayFailure(f'{case.name}: 中文摘要缺少 {expected!r}')
 
 
 def run_case(case: ReplayCase, output: str | Path) -> ReplayReport:
@@ -329,6 +338,23 @@ CASES = (
         event_types=('action', 'warning', 'failed'),
         completed_runs=0,
         fresh_hashes=False,
+    ),
+    ReplayCase(
+        name='storm-pod-insufficient',
+        frames=(
+            'captures/2026-11-26/key/storm-pod-insufficient.png',
+            'captures/2026-11-26/key/storm-pod-insufficient.png',
+        ),
+        times=(0.0, 0.5),
+        actions=('关闭',),
+        status=RunStatus.STOPPED,
+        reason='storm_pod_insufficient',
+        states=('battle',),
+        event_types=('action', 'stopped'),
+        completed_runs=0,
+        evidence=True,
+        terminal_action_reasons=('stable_actionable',),
+        summary_contains=('风暴罐不足，已关闭弹窗并停止',),
     ),
     ReplayCase(
         name='skill-action-loop',

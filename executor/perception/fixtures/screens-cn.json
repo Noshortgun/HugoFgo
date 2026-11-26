@@ -402,6 +402,23 @@
         "从者卡第1位",
         "开始任务"
       ]
+    },
+    {
+      "file": "captures/2026-11-26/key/storm-pod-insufficient.png",
+      "base": "battle",
+      "variants": [],
+      "overlays": [
+        "storm_pod_insufficient"
+      ],
+      "actionable": true,
+      "basis": "annotated",
+      "actionableControls": [
+        "关闭"
+      ],
+      "absentControls": [
+        "攻击",
+        "战斗跳过"
+      ]
     }
   ],
   "crossSession": [

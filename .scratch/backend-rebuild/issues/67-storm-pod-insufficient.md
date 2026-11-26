@@ -2,7 +2,7 @@
 
 ## Context
 
-实机截图 `captures/2026-11-26/key/storm-pod-insufficient.png`（emulator-5554，1280×720）：白纸化地球关卡战斗 2/2、敌方还剩 0 名后，画面中央弹出蓝色对话框：
+实机截图 `captures/2026-11-26/key/storm-pod-insufficient.png`（emulator-5554，1280×720）：白纸化地球关卡结算后，画面中央弹出蓝色对话框：
 
 > 挑战该任务所需风暴罐不足
 > 返回关卡选择界面。
@@ -18,8 +18,8 @@
 ## Constraints
 
 - 只点「关闭」，不在弹窗或后续页面上做任何其他点击。
-- 弹窗可能在战斗结束、结算或连续出击流程中出现，识别不得依赖单一前置页面。
-- 停止理由稳定可机读（如 `storm_pod_insufficient`），摘要用中文说明「风暴罐不足，已返回关卡选择并停止」。
+- 弹窗只会在结算后出现；连续出击前出现也属于这一场景。识别采用独立 overlay，不依赖当前页面等待逻辑。
+- 停止理由固定为 `storm_pod_insufficient`，摘要用中文说明「风暴罐不足，已关闭弹窗并停止」。
 - 本票据只实装国服文案；日服台服在 13。
 - 按工作约定补离线回放用例，新旧回放全绿。
 
@@ -27,7 +27,7 @@
 
 - 感知侧新增 overlay（如 `Overlay.STORM_POD_INSUFFICIENT`），用弹窗标题/文案区域模板匹配，参考现有 `REPEAT_DIALOG`、`AP_RECOVERY_CONFIRM` 的识别方式。
 - `executor/core/runner.py`：该 overlay 优先级高于当前页面等待逻辑，出现时点击「关闭」并发出 action 事件，随后 `RunStatus.STOPPED`、reason `storm_pod_insufficient`。
-- 若点击关闭后落到关卡选择页，直接停止即可，不再尝试出击。
+- 点击关闭后立即停止，不读取或确认关闭后的页面，不再尝试出击；摘要不得声称已经返回关卡选择页。
 - 回放用例引用已入库截图 `captures/2026-11-26/key/storm-pod-insufficient.png`：期望识别出 overlay、动作序列仅「关闭」、最终停止理由正确。
 
 ## Steps
@@ -49,7 +49,7 @@ npm run replay
 - [ ] 入库截图被识别为风暴罐不足弹窗，不误判其他页面。
 - [ ] 动作序列只有「关闭」一次点击，无其他盲点。
 - [ ] 运行以 `storm_pod_insufficient` 停止，事件与中文摘要可见。
-- [ ] 战斗结束、结算、连续出击三种时机出现弹窗均能处理。
+- [ ] 结算后出现弹窗能处理；连续出击前出现归为同一场景，不虚构其他实机时机。
 - [ ] 新旧回放全绿。
 
 ## References
