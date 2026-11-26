@@ -94,6 +94,8 @@ SOURCES: tuple[AnchorSource, ...] = (
                  (500, 48, 780, 84), 30, 0.6),
     AnchorSource('ap_recovery_confirm_bronze', 'captures/2026-11-22/key/ap-recovery-confirm-bronze.png',
                  (450, 116, 600, 154), 25, 0.6),
+    AnchorSource('storm_pod_insufficient', 'captures/2026-11-26/key/storm-pod-insufficient.png',
+                 (505, 232, 775, 313), 30, 0.6),
     AnchorSource('loading', 'captures/2026-11-20/key/12-battle-start.png', (927, 676, 1012, 706), 25, 0.6),
     AnchorSource('repeat_dialog', 'captures/2026-11-20/key/repeat-dialog.png', (477, 98, 793, 127), 30, 0.6),
     AnchorSource('order_change', 'captures/2026-11-20/key/61-order-change-select.png', (585, 606, 697, 644), 25, 0.6),

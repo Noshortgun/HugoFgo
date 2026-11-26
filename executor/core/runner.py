@@ -1310,6 +1310,13 @@ class Runner:
                 return self.result(RunStatus.FAILED, 'device_error')
             now = frame.captured_at
             page = observation.base_page
+            if Overlay.STORM_POD_INSUFFICIENT in observation.overlays:
+                if self.tap_stable(observation, '关闭', now):
+                    message = '风暴罐不足，已关闭弹窗并停止'
+                    self.emit('stopped', now, reason='storm_pod_insufficient', message=message)
+                    return self.result(RunStatus.STOPPED, 'storm_pod_insufficient')
+                time.sleep(self.options.poll_interval)
+                continue
             if page is BasePage.CARD and any(control.card is not None and not control.card.noble_phantasm
                                               and control.card.crit_rate is None
                                               for control in observation.controls):

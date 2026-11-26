@@ -1,4 +1,4 @@
-"""28 屏回归集与跨会话截图的逐屏断言。"""
+"""29 屏回归集与跨会话截图的逐屏断言。"""
 from __future__ import annotations
 
 import json
@@ -33,9 +33,9 @@ class ScreenRegressionTest(unittest.TestCase):
             self.assertIsNotNone(control, f"{case['file']} 缺少控件：{name}")
             self.assertTrue(control.actionable, f"{case['file']} 应可点：{name}")
 
-    def test_regression_set_28_screens(self) -> None:
+    def test_regression_set_29_screens(self) -> None:
         cases = FIXTURES['regression']
-        self.assertEqual(28, len(cases))
+        self.assertEqual(29, len(cases))
         for case in cases:
             with self.subTest(file=case['file']):
                 self.check(case)

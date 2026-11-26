@@ -170,6 +170,17 @@
       ],
       "threshold": 0.6
     },
+    "storm_pod_insufficient": {
+      "file": "storm_pod_insufficient.png",
+      "source": "captures/2026-11-26/key/storm-pod-insufficient.png",
+      "roi": [
+        475,
+        202,
+        805,
+        343
+      ],
+      "threshold": 0.6
+    },
     "loading": {
       "file": "loading.png",
       "source": "captures/2026-11-20/key/12-battle-start.png",

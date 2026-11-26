@@ -75,7 +75,7 @@ def check_classifications():
 
 
 def check_perception():
-    """双速感知的逐屏回放：28 屏开发/回归集 + 跨会话关键帧，覆盖覆盖层与第三张卡之后的动作安全。"""
+    """双速感知的逐屏回放：29 屏开发/回归集 + 跨会话关键帧，覆盖覆盖层与第三张卡之后的动作安全。"""
     temporary = TemporaryDirectory()
     perception = Perception(identity_root=Path(temporary.name))
     try:
@@ -2623,6 +2623,24 @@ def check_manual_key_frames():
         perception.close()
 
 
+def check_storm_pod_insufficient():
+    from executor.replay import ReplayFailure, get_case, run_case
+
+    path = ROOT / 'captures/2026-11-26/key/storm-pod-insufficient.png'
+    expected = '关闭一次；storm_pod_insufficient；风暴罐不足，已关闭弹窗并停止'
+    try:
+        with TemporaryDirectory() as directory:
+            report = run_case(get_case('storm-pod-insufficient'), Path(directory))
+            controls = [event.data['control'] for event in report.events.events if event.type == 'action']
+            actual = f'{controls}；{report.result.reason}；中文摘要已确认'
+            ok = controls == ['关闭'] and report.result.reason == 'storm_pod_insufficient'
+    except ReplayFailure as error:
+        actual = str(error)
+        ok = False
+    add_report('executor:storm-pod-insufficient', path, expected, actual, 'stop',
+               '结算后弹窗只关闭一次并立即安全停止，不读取关闭后的页面', ok)
+
+
 def run(output: Path, name_filter: str | None = None):
     REPORTS.clear()
     check_classifications()
@@ -2650,6 +2668,7 @@ def run(output: Path, name_filter: str | None = None):
     check_executor_recovery()
     check_executor_process()
     check_executor_safety()
+    check_storm_pod_insufficient()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))
     check_result_action("action:repeat-only-after-dialog", [("连续进行同一关卡", 640, 300)], "repeat", (870, 577))
     check_result_action("action:unknown-waits", [("加载中", 640, 360)], "wait")

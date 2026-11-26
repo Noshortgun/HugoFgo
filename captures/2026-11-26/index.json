@@ -6,7 +6,7 @@
     "density": 240
   },
   "capturedAt": "2026-11-26",
-  "source": "scrcpy 实机故障回归 .scratch/pr-66-card-reading/logs/farm/20261126-015619-296493/support-refresh-001.bgr24",
+  "source": "scrcpy 实机故障回归 .scratch/pr-66-card-reading/logs/farm/20261126-015619-296493/support-refresh-001.bgr24；adb exec-out screencap 白纸化地球结算后风暴罐不足提示",
   "keyFrames": [
     {
       "file": "key/support-ignored-swipe-mid-list.png",
@@ -22,6 +22,14 @@
         "expectedAction": "retry_scroll_without_refresh"
       },
       "match": true
+    },
+    {
+      "file": "key/storm-pod-insufficient.png",
+      "state": "结算后弹出对话框：挑战该任务所需风暴罐不足，返回关卡选择界面。仅有关闭按钮",
+      "expectedObservation": {
+        "overlay": "storm_pod_insufficient",
+        "closeButton": {"x": 640, "y": 562}
+      }
     }
   ]
 }

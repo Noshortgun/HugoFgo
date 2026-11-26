@@ -106,6 +106,7 @@ OVERLAY_RULES: tuple[OverlayRule, ...] = (
     OverlayRule(Overlay.RETREAT_CONFIRM, ('retreat_confirm',)),
     OverlayRule(Overlay.REPEAT_DIALOG, ('repeat_dialog',)),
     OverlayRule(Overlay.AP_RECOVERY_CONFIRM, ('ap_recovery_confirm',)),
+    OverlayRule(Overlay.STORM_POD_INSUFFICIENT, ('storm_pod_insufficient',)),
     OverlayRule(Overlay.COMMAND_SPELL_CONFIRM, ('command_spell_confirm',)),
     OverlayRule(Overlay.COMMAND_SPELL_TARGET, ('command_spell_target', 'command_spell_use')),
     OverlayRule(Overlay.COMMAND_SPELL_MENU, ('command_spell_repair',)),
@@ -127,6 +128,7 @@ OVERLAY_BASE_FALLBACK: dict[Overlay, BasePage] = {
 
 # 模态覆盖层按优先级从高到低：只输出最高优先级那一层的控件。
 MODAL_OVERLAYS: tuple[Overlay, ...] = (
+    Overlay.STORM_POD_INSUFFICIENT,
     Overlay.AP_RECOVERY_CONFIRM,
     Overlay.REPEAT_DIALOG,
     Overlay.SUPPORT_CONFIRM,
@@ -378,6 +380,9 @@ OVERLAY_CONTROLS: dict[Overlay, tuple[ControlSpec, ...]] = {
         ControlSpec('开关牵绊2倍', ControlKind.BUTTON, (686, 427, 845, 518),
                     anchor='repeat_bond_boost', hide_when_missing=True, always_disabled=True,
                     follow_anchor=True),
+    ),
+    Overlay.STORM_POD_INSUFFICIENT: (
+        ControlSpec('关闭', ControlKind.BUTTON, (508, 531, 772, 593)),
     ),
     Overlay.AP_RECOVERY_CONFIRM: (
         ControlSpec('决定', ControlKind.BUTTON, (708, 550, 972, 614)),
