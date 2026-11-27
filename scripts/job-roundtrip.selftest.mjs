@@ -7,7 +7,7 @@ import jobSchema from '../schemas/job-v1.schema.json' with { type: 'json' };
 const root = fileURLToPath(new URL('../', import.meta.url));
 const bundle = await build({
   stdin: {
-    contents: "export * from './src/job.ts'; export { emptyServant, team, mysticCodes } from './src/data.ts'; export { dedupeJobDiagnostics, inspectUnsupportedJob } from './src/jobValidation.ts'; export { frontlineEntries, normalizeServantOrder } from './src/servantOrder.ts';",
+    contents: "export * from './src/job.ts'; export { emptyServant, team, mysticCodes } from './src/data.ts'; export { dedupeJobDiagnostics, inspectUnsupportedJob } from './src/jobValidation.ts'; export { frontlineEntries, normalizeServantOrder } from './src/servantOrder.ts'; export { convertChaldeaTeam } from './src/chaldea.ts';",
     resolveDir: root,
     sourcefile: 'job-roundtrip.ts',
     loader: 'ts',
@@ -33,6 +33,23 @@ const applied = jobModule.applyFormation(
   () => `test-member-${nextId++}`,
 );
 const { snapshot } = jobModule.jobToSnapshot(job, applied.members, jobModule.mysticCodes[0]);
+const secondaryKey = Object.keys(snapshot.actionsBySlot)[0];
+snapshot.actionsBySlot[secondaryKey] = [{
+  id: 999,
+  kind: 'skill',
+  title: '追加选择保存测试',
+  detail: '',
+  icon: 'skill_00400',
+  memberInstanceId: applied.members[0].memberInstanceId,
+  skill: 0,
+  secondarySelection: {
+    type: 'selectAddInfo', index: 1, value: 1, label: '消耗10个',
+    options: [
+      { value: 0, label: '不消耗', conditions: [{ cond: 'NONE' }] },
+      { value: 1, label: '消耗10个', conditions: [{ cond: 'STAR_HIGHER', value: 10 }] },
+    ],
+  },
+}];
 const saved = jobModule.buildJobFile({
   members: applied.members,
   mystic: jobModule.mysticCodes[0],
@@ -51,6 +68,8 @@ assert.deepEqual(
 assert.deepEqual(saved.extraField, { preserved: true }, '再次保存必须保留原作业的额外字段');
 assert.deepEqual(saved.strategy.strategyOrder, ['servant', 'cards', 'crit'], '旧作业往返保存不得新增显式克制判据');
 assert.equal(saved.strategyByWave, undefined, '清空每面策略后不得从原作业复活旧值');
+const savedSecondary = saved.waves.flatMap((wave) => wave.turns).flatMap((turn) => turn.actions).find((action) => action.secondarySelection)?.secondarySelection;
+assert.deepEqual(savedSecondary.options, [{ value: 0, label: '不消耗' }, { value: 1, label: '消耗10个' }], '内部按钮条件不得泄漏进 Job Schema');
 
 const longJob = structuredClone(job);
 longJob.strategyByWave = undefined;
@@ -235,5 +254,41 @@ assert.deepEqual(clearedSaved.waves[0].turns[0].actions, [sparseAction, sparseSw
   '清空从者后，旧动作必须改挂到新的空槽运行态而不是丢失槽位');
 assert.equal(clearedSaved.formation[4].support, undefined, '即使运行态残留，导出空槽也必须清除助战字段');
 assert.equal(clearedSaved.formation[4].ceId, undefined, '即使运行态残留，导出空槽也必须清除礼装字段');
+
+const importTdSelection = (svtId, selected, options) => {
+  const converted = jobModule.convertChaldeaTeam({
+    id: 1,
+    data: {
+      team: { onFieldSvts: [{ svtId }], backupSvts: [] },
+      actions: [{ type: 'skill', svt: 0, skill: 2 }],
+      delegate: { tdTypeChanges: [selected] },
+    },
+  }, { [svtId]: { id: svtId, name: String(svtId), classLabel: '' } }, undefined, {
+    [svtId]: { id: svtId, skills: [{ num: 3, secondarySelection: { type: 'noblePhantasmCardType', label: '宝具变体', options } }] },
+  });
+  return converted.waves[0].turns[0].actions[0].secondarySelection;
+};
+assert.deepEqual(importTdSelection(200100, 2, [{ value: 1, label: '蓝卡宝具' }, { value: 2, label: '红卡宝具' }]), {
+  type: 'noblePhantasmCardType', index: 1, value: 2, label: '红卡宝具',
+  options: [{ value: 1, label: '蓝卡宝具' }, { value: 2, label: '红卡宝具' }],
+}, 'Chaldea 导入卫宫必须保留两项与真实画面顺序');
+assert.deepEqual(importTdSelection(1100900, 1, [{ value: 3, label: '绿卡宝具' }, { value: 1, label: '蓝卡宝具' }, { value: 2, label: '红卡宝具' }]), {
+  type: 'noblePhantasmCardType', index: 1, value: 1, label: '蓝卡宝具',
+  options: [{ value: 3, label: '绿卡宝具' }, { value: 1, label: '蓝卡宝具' }, { value: 2, label: '红卡宝具' }],
+}, 'Chaldea 导入太空伊什塔尔必须按 Q/A/B 画面顺序保存');
+assert.deepEqual(importTdSelection(2300600, 2, [{ value: 1, label: '攻击类型' }, { value: 2, label: '防御类型' }]), {
+  type: 'noblePhantasmCardType', index: 1, value: 2, label: '防御类型',
+  options: [{ value: 1, label: '攻击类型' }, { value: 2, label: '防御类型' }],
+}, 'Chaldea 导入 BB 迪拜必须保存攻击/防御语义');
+assert.throws(() => jobModule.convertChaldeaTeam({
+  id: 1,
+  data: {
+    team: { onFieldSvts: [{ svtId: 2501100 }], backupSvts: [] },
+    actions: [{ type: 'skill', svt: 0, skill: 0 }],
+    delegate: { skillActSelectSelections: [null] },
+  },
+}, { 2501100: { id: 2501100, name: '库库尔坎', classLabel: '' } }, undefined, {
+  2501100: { id: 2501100, skills: [{ num: 1, secondarySelection: { type: 'selectAddInfo', label: '耗星', options: [{ value: 0, label: '不消耗' }, { value: 1, label: '消耗10个' }] } }] },
+}), /缺少有效的技能追加选择/, 'Chaldea 空选择不得静默改成第 0 项');
 
 console.log('作业加载与保存往返自检通过（含空槽归一、非法引用保留、六槽导出与既有格式回归）');

@@ -213,6 +213,48 @@ class CompileJobTest(unittest.TestCase):
         self.assertIn('secondarySelection.type', result.diagnostics[0].path)
         self.assertIn('不支持的二次选择类型', result.diagnostics[0].message)
 
+    def test_secondary_selection_requires_matching_option_index_and_value(self) -> None:
+        job = self.valid_job()
+        selection = job['waves'][0]['turns'][0]['actions'][1]['secondarySelection']
+        selection['index'] = 2
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(1, len(result.diagnostics))
+        self.assertIn('secondarySelection.index', result.diagnostics[0].path)
+        self.assertIn('没有对应候选', result.diagnostics[0].message)
+
+        selection['index'] = 0
+        selection['value'] = 2
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+        self.assertEqual(1, len(result.diagnostics))
+        self.assertIn('secondarySelection.value', result.diagnostics[0].path)
+
+    def test_secondary_selection_requires_candidate_options(self) -> None:
+        job = self.valid_job()
+        selection = job['waves'][0]['turns'][0]['actions'][1]['secondarySelection']
+        selection.pop('options')
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(1, len(result.diagnostics))
+        self.assertIn('secondarySelection.options', result.diagnostics[0].path)
+        self.assertIn('缺少候选选项', result.diagnostics[0].message)
+
+    def test_legacy_string_card_selection_is_rejected(self) -> None:
+        job = self.valid_job()
+        selection = job['waves'][0]['turns'][0]['actions'][1]['secondarySelection']
+        selection['value'] = 'arts'
+        selection['options'] = [{'value': 'arts', 'label': '蓝卡宝具'}]
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(1, len(result.diagnostics))
+        self.assertIn('旧字符串卡色值', result.diagnostics[0].message)
+
     def test_turn_count_mismatch_is_diagnosed(self):
         job = self.valid_job()
         job['waves'][0]['turnCount'] = 3

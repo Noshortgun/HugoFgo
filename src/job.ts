@@ -110,7 +110,23 @@ function toJobAction(members: Servant[], action: PlanAction): JobAction {
   };
   if (action.skill !== undefined) jobAction.skill = action.skill;
   if (action.enemyTarget !== undefined) jobAction.enemyTarget = action.enemyTarget;
-  if (action.secondarySelection) jobAction.secondarySelection = action.secondarySelection;
+  if (action.secondarySelection) {
+    const selection = action.secondarySelection;
+    jobAction.secondarySelection = {
+      type: selection.type,
+      index: selection.index,
+      value: selection.value,
+      label: selection.label,
+      ...(selection.imageUrl ? { imageUrl: selection.imageUrl } : {}),
+      ...(selection.options ? {
+        options: selection.options.map((option) => ({
+          value: option.value,
+          label: option.label,
+          ...(option.imageUrl ? { imageUrl: option.imageUrl } : {}),
+        })),
+      } : {}),
+    };
+  }
   if (action.fromTarget !== undefined) jobAction.fromTarget = action.fromTarget;
   if (action.toTarget !== undefined) jobAction.toTarget = action.toTarget;
   const memberSlot = memberSlotOf(members, action.memberInstanceId);
@@ -438,10 +454,10 @@ export function applyFormation(
   job.waves.forEach((wave) => wave.turns.forEach((turn) => turn.actions.forEach((action) => {
     if (!action.secondarySelection || action.memberSlot === undefined || action.skill === undefined) return;
     const definition = members[action.memberSlot]?.skills[action.skill];
-    if (!definition) return;
+    if (!definition || definition.secondarySelection) return;
     definition.secondarySelection = {
       type: action.secondarySelection.type,
-      label: action.secondarySelection.type === 'noblePhantasmCardType' ? '选择宝具卡色' : '技能追加选择',
+      label: action.secondarySelection.type === 'noblePhantasmCardType' ? '选择宝具变体' : '技能追加选择',
       options: action.secondarySelection.options ?? [],
     };
   })));

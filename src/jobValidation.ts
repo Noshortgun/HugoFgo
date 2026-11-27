@@ -86,13 +86,27 @@ export function inspectUnsupportedJob(job: HugoFgoJob): JobDiagnostic[] {
   job.waves.forEach((wave, waveIndex) => {
     wave.turns.forEach((turn, turnIndex) => {
       turn.actions.forEach((action, actionIndex) => {
-        if (action.secondarySelection) {
-          diagnostics.push({
-            path: `$.waves[${waveIndex}].turns[${turnIndex}].actions[${actionIndex}].secondarySelection`,
-            message: '此技能使用后还需要额外选择，当前无法自动执行；请移除该动作后再运行',
-            wave: waveIndex + 1,
-            turn: turnIndex + 1,
-          });
+        const selection = action.secondarySelection;
+        if (!selection) return;
+        const base = `$.waves[${waveIndex}].turns[${turnIndex}].actions[${actionIndex}].secondarySelection`;
+        const add = (path: string, message: string) => diagnostics.push({
+          path, message, wave: waveIndex + 1, turn: turnIndex + 1,
+        });
+        if (action.kind !== 'skill') add(base, '技能追加选择只能挂在从者技能上');
+        if (selection.type === 'criticalStarConsumption') add(`${base}.type`, '没有对应真实技能的追加选择类型');
+        const options = selection.options ?? [];
+        if (!options.length) {
+          add(`${base}.options`, '技能追加选择缺少候选选项，请重新导入或编辑该技能');
+          return;
+        }
+        if (selection.index < 0 || selection.index >= options.length) {
+          add(`${base}.index`, `索引 ${selection.index} 没有对应候选选项`);
+        } else if (options[selection.index].value !== selection.value) {
+          add(`${base}.value`, '所选值与索引对应的候选选项不一致');
+        }
+        if (selection.type === 'noblePhantasmCardType'
+          && options.some((option) => typeof option.value === 'string')) {
+          add(`${base}.options`, '旧字符串卡色值不再受支持，请重新选择宝具变体');
         }
       });
     });

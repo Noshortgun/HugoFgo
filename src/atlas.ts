@@ -3,6 +3,7 @@ import { fetchResourceJson, resourceRegion, resourceUrl, type Region } from './r
 import type { MysticCode, SkillSecondarySelection, SkillTarget } from './types';
 
 export interface AtlasSkill {
+  id?: number;
   num: number;
   name: string;
   icon: string | null;
@@ -73,7 +74,17 @@ function mapServant(servant: AtlasServant): AtlasServant {
           ]),
         )
       : undefined,
-    skills: servant.skills.map((skill) => ({ ...skill, icon: mapUrl(skill.icon) })),
+    skills: servant.skills.map((skill) => ({
+      ...skill,
+      icon: mapUrl(skill.icon),
+      secondarySelection: skill.secondarySelection ? {
+        ...skill.secondarySelection,
+        options: skill.secondarySelection.options.map((option) => ({
+          ...option,
+          ...(option.imageUrl ? { imageUrl: mapUrl(option.imageUrl) ?? undefined } : {}),
+        })),
+      } : undefined,
+    })),
   };
 }
 

@@ -4,15 +4,21 @@ export interface SkillSecondaryOption {
   value: string | number;
   label: string;
   imageUrl?: string;
+  npId?: number;
+  conditions?: { cond: string; value?: number }[];
 }
 
 export interface SkillSecondarySelection {
   type: string;
   label: string;
+  shape?: 'buttons2' | 'buttons3';
+  optionCount?: number;
+  followUpTarget?: 'ally' | null;
   options: SkillSecondaryOption[];
 }
 
 export interface SkillDefinition {
+  id?: number;
   name?: string;
   icon: string;
   /** 本地图库中的技能图标地址；缺省时使用 icon 对应的内置图片。 */

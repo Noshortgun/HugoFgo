@@ -45,8 +45,12 @@
               "secondarySelection": {
                 "type": "noblePhantasmCardType",
                 "index": 0,
-                "value": "arts",
-                "label": "蓝卡宝具"
+                "value": 1,
+                "label": "蓝卡宝具",
+                "options": [
+                  { "value": 1, "label": "蓝卡宝具" },
+                  { "value": 2, "label": "红卡宝具" }
+                ]
               }
             },
             {

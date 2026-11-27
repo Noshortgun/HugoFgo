@@ -262,6 +262,10 @@ class Runner:
         self.job_target_slot: int | None = None
         self.target_selection_since: float | None = None
         self.optional_target = False
+        self.secondary_action: ActionPlan | None = None
+        self.secondary_since: float | None = None
+        self.secondary_frame_hash: str | None = None
+        self.secondary_stage: str | None = None
         self.master_action: ActionPlan | None = None
         self.pending_master_action = False
         self.order_action: ActionPlan | None = None
@@ -812,6 +816,60 @@ class Runner:
                       reserve_slots=tuple(reserves))
         return False
 
+    def handle_secondary_selection(self, observation: Observation, now: float) -> tuple[bool, RunResult | None]:
+        action = self.secondary_action
+        if action is None:
+            return False, None
+        if self.secondary_since is not None and now - self.secondary_since >= self.options.action_timeout:
+            self.emit('failed', now, reason='secondary_selection_timeout',
+                      wave=self.progress.wave, turn=self.progress.turn,
+                      action_index=self.progress.action_index)
+            return True, self.result(RunStatus.STOPPED, 'secondary_selection_timeout')
+        if observation.frame_hash == self.secondary_frame_hash:
+            return True, None
+        if Variant.SECONDARY_SELECTION not in observation.variants:
+            if self.battle_ready(observation) or Variant.SKILL_TARGET in observation.variants:
+                self.emit('failed', now, reason='secondary_selection_missing',
+                          wave=self.progress.wave, turn=self.progress.turn,
+                          action_index=self.progress.action_index)
+                return True, self.result(RunStatus.STOPPED, 'secondary_selection_missing')
+            return True, None
+
+        selection = action.secondary_selection or {}
+        options = selection.get('options') or []
+        controls = [control for control in observation.controls if control.name.startswith('追加选项')]
+        index = selection.get('index')
+        if not isinstance(index, int) or index < 0 or index >= len(options) or len(controls) != len(options):
+            self.emit('failed', now, reason='secondary_selection_mismatch',
+                      expected_options=len(options), actual_options=len(controls),
+                      wave=self.progress.wave, turn=self.progress.turn,
+                      action_index=self.progress.action_index)
+            return True, self.result(RunStatus.STOPPED, 'secondary_selection_mismatch')
+        control = observation.control(f'追加选项{index + 1}')
+        if control is None or not control.actionable:
+            self.emit('failed', now, reason='secondary_option_unavailable', option_index=index,
+                      wave=self.progress.wave, turn=self.progress.turn,
+                      action_index=self.progress.action_index)
+            return True, self.result(RunStatus.STOPPED, 'secondary_option_unavailable')
+        if not self.tap_action(observation, control.name, now):
+            return True, None
+
+        self.secondary_action = None
+        self.secondary_stage = 'confirm'
+        if action.player_target_slot is not None:
+            self.job_target_slot = action.player_target_slot
+            self.target_selection_since = now
+            self.optional_target = False
+            self.confirming_job_action = False
+            self.pending_pages = frozenset({BasePage.BATTLE})
+            self.pending_since = now
+            self.pending_variant = Variant.SKILL_TARGET
+            self.pending_overlay = None
+            self.pending_stage = 'skill_target'
+        else:
+            self.wait_for_job_action(now, skill=True)
+        return True, None
+
     def handle_battle(self, observation: Observation, now: float) -> RunResult | None:
         if self.fallback_mode:
             if self.tap_action(observation, '攻击', now):
@@ -873,7 +931,15 @@ class Runner:
             self.skill_cooldown_since = None
             if self.tap_action(observation, name, now):
                 self.skill_animation_skipped = False
-                if action.player_target_slot is not None:
+                if action.secondary_selection:
+                    self.secondary_action = action
+                    self.secondary_since = now
+                    self.secondary_frame_hash = observation.frame_hash
+                    self.secondary_stage = 'menu'
+                    self.pending_pages = None
+                    self.pending_since = None
+                    self.pending_recovery_control = None
+                elif action.player_target_slot is not None:
                     self.job_target_slot = action.player_target_slot
                     self.target_selection_since = now
                     self.optional_target = action.member_slot == action.player_target_slot
@@ -1275,8 +1341,6 @@ class Runner:
     def unsupported_job(self) -> tuple[int, int, str] | None:
         for wave in self.plan.waves:
             for turn_number, turn in enumerate(wave.turns, start=1):
-                if any(action.secondary_selection for action in turn.actions):
-                    return wave.number, turn_number, '二次选择的画面证据尚未接入执行器'
                 if turn.attack is None or turn.attack.mode != 'verify':
                     continue
                 if len(card_requests(turn)) != 3:
@@ -1456,6 +1520,13 @@ class Runner:
                 time.sleep(self.options.poll_interval)
                 continue
 
+            secondary_active, result = self.handle_secondary_selection(observation, now)
+            if result is not None:
+                return result
+            if secondary_active:
+                time.sleep(self.options.poll_interval)
+                continue
+
             if (self.job_target_slot is not None and self.target_selection_since is not None
                     and now - self.target_selection_since >= self.options.action_timeout):
                 self.emit('failed', now, reason='target_selection_timeout', slot=self.job_target_slot,
@@ -1529,7 +1600,7 @@ class Runner:
                         continue
                 if (self.pending_skill_skip and self.pending_stage == 'battle_ready'
                         and page is BasePage.BATTLE and not observation.overlays
-                        and Variant.SKILL_TARGET not in observation.variants
+                        and not observation.variants & {Variant.SKILL_TARGET, Variant.SECONDARY_SELECTION}
                         and observation.frame_hash != self.pending_frame_hash
                         and not (self.optional_target and self.battle_controls_ready(observation))):
                     x, y = BATTLE_SKIP_POINT
@@ -1632,6 +1703,10 @@ class Runner:
                     self.pending_recovery_used = False
                     self.pending_variant = None
                     self.pending_overlay = None
+                    self.secondary_action = None
+                    self.secondary_since = None
+                    self.secondary_frame_hash = None
+                    self.secondary_stage = None
                     self.awaiting_attack_end = False
                     self.last_attack_skip_at = None
                     self.card_recovery_used = False
@@ -1683,10 +1758,12 @@ class Runner:
                                                      if self.pending_stage == 'attack_end'
                                                      and page is BasePage.BATTLE
                                                      else self.options.action_timeout)):
-                    self.emit('failed', now, reason='action_confirmation_timeout', stage=self.pending_stage,
+                    reason = ('secondary_selection_confirmation_timeout'
+                              if self.secondary_stage == 'confirm' else 'action_confirmation_timeout')
+                    self.emit('failed', now, reason=reason, stage=self.pending_stage,
                               wait_ms=(now - self.pending_since) * 1000,
                               expected=sorted(item.value for item in self.pending_pages), actual=page.value)
-                    return self.result(RunStatus.STOPPED, 'action_confirmation_timeout')
+                    return self.result(RunStatus.STOPPED, reason)
                 else:
                     self.pending_frame_hash = observation.frame_hash
                     time.sleep(self.options.poll_interval)

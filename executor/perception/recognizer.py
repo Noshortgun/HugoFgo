@@ -28,6 +28,7 @@ from executor.perception.observation import (
 )
 from executor.perception.digits import IMAGE_FIELDS, DigitReader
 from executor.perception.regions import cn
+from executor.perception.secondary_selection import detect_secondary_options
 
 __all__ = ['Perception', 'StaleFrameError']
 
@@ -333,19 +334,26 @@ class Perception:
         if page is BasePage.BATTLE and Variant.BATTLE_ANIMATION not in variants:
             cooldowns = evidence.measure_skill_cooldowns(gray, self._emblems.get('skill_cooldown'))
             frame_evidence = replace(frame_evidence, skill_cooldowns=cooldowns)
+        secondary_controls: tuple[Control, ...] = ()
+        if (page is BasePage.BATTLE and not overlays
+                and not variants & {Variant.BATTLE_ANIMATION, Variant.SKILL_TARGET}):
+            secondary_controls = detect_secondary_options(image)
+            if secondary_controls:
+                variants = variants | {Variant.SECONDARY_SELECTION}
         fields = _fields(page)
         if page is BasePage.SUPPORT:
             fields['support_class'] = _support_class(image)
             fields['support_at_bottom'] = _support_at_bottom(image)
         if page is BasePage.TEAM:
             fields.update(self._identities.team(image))
-        if page is BasePage.BATTLE and not overlays and Variant.BATTLE_ANIMATION not in variants:
+        if (page is BasePage.BATTLE and not overlays
+                and not variants & {Variant.BATTLE_ANIMATION, Variant.SECONDARY_SELECTION}):
             fields['battle_servants'] = self._identities.battle(image)
         return Observation(
             base_page=page,
             variants=variants,
             overlays=overlays,
-            controls=_controls(page, variants, overlays, frame_evidence, gray, image, self._identities),
+            controls=secondary_controls or _controls(page, variants, overlays, frame_evidence, gray, image, self._identities),
             fields=fields,
             frame_hash=digest,
             confidence=round(min(max(confidence, 0.0), 1.0), 3),

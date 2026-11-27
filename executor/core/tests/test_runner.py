@@ -703,6 +703,149 @@ class RunnerTest(unittest.TestCase):
                          [event.data['control'] for event in actions])
         self.assertEqual(1, sum(event.data.get('reason') == 'skill_animation_skip' for event in actions))
 
+    @staticmethod
+    def secondary_observation(*actionable: bool) -> Observation:
+        return Observation(
+            base_page=BasePage.BATTLE,
+            variants=frozenset({Variant.SECONDARY_SELECTION}),
+            controls=tuple(
+                Control(f'追加选项{index}', ControlKind.BUTTON,
+                        (300 + index * 250, 250, 450 + index * 250, 390), enabled,
+                        'secondary_option_geometry' if enabled else 'secondary_option_disabled')
+                for index, enabled in enumerate(actionable, start=1)
+            ),
+            frame_hash='secondary-selection',
+        )
+
+    def test_secondary_selection_uses_configured_index_before_battle_ready(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 1, 'value': 1, 'label': '第二项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, True), animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['从者1技能1', '追加选项2', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, result.progress.action_index)
+
+    def test_secondary_selection_then_target_uses_existing_target_flow(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择后选目标', detail='', icon='', member_slot=0, skill=0,
+                           player_target_slot=1,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 0, 'value': 0, 'label': '第一项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        target = Observation(
+            base_page=BasePage.BATTLE,
+            variants=frozenset({Variant.SKILL_TARGET}),
+            controls=tuple(Control(f'目标从者{index}', ControlKind.TARGET,
+                                   (index * 300, 269, index * 300 + 200, 499), True)
+                           for index in range(1, 4)),
+        )
+        animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, True), target, animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['从者1技能1', '追加选项1', '目标从者2', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+        self.assertEqual(1, result.progress.action_index)
+
+    def test_secondary_selection_count_mismatch_stops_without_option_click(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 1, 'value': 1, 'label': '第二项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, True, True)],
+            [0.0, 0.1],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('secondary_selection_mismatch', result.reason)
+        self.assertEqual(['从者1技能1'], [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_secondary_selection_disabled_option_stops(self) -> None:
+        skill = ActionPlan(kind='skill', title='耗星', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 1, 'value': 1, 'label': '消耗10个',
+                               'options': [{'value': 0, 'label': '不消耗'}, {'value': 1, 'label': '消耗10个'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, False)],
+            [0.0, 0.1],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('secondary_option_unavailable', result.reason)
+        self.assertEqual(['从者1技能1'], [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_secondary_selection_confirmation_timeout_has_independent_reason(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 0, 'value': 0, 'label': '第一项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, True), self.secondary_observation(True, True)],
+            [0.0, 0.1, 30.2],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('secondary_selection_confirmation_timeout', result.reason)
+        self.assertEqual(['从者1技能1', '追加选项1'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_secondary_selection_missing_menu_stops_instead_of_skipping_skill(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 0, 'value': 0, 'label': '第一项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        ready = replace(battle, frame_hash='battle-ready')
+        device, perception = scripted([battle, ready], [0.0, 0.1])
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('secondary_selection_missing', result.reason)
+        self.assertEqual(['从者1技能1'], [event.data['control'] for event in events.events if event.type == 'action'])
+
     def test_targeted_skill_confirms_target_panel_open_and_close(self) -> None:
         skill = ActionPlan(kind='skill', title='单体技能', detail='', icon='',
                            member_slot=0, skill=0, player_target_slot=1)

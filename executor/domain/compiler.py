@@ -101,6 +101,30 @@ def _compile_action(action: dict[str, Any], action_path: str, wave: int, turn_no
         _check_slot(action, key, action_path, wave, turn_no, formation, diagnostics)
     if action['kind'] == 'orderChange' and action['swapOutSlot'] == action['swapInSlot']:
         _diagnostic(diagnostics, f'{action_path}.swapInSlot', '换人动作的上下场槽位不能相同', wave, turn_no)
+    selection = action.get('secondarySelection')
+    if selection:
+        if action['kind'] != 'skill':
+            _diagnostic(diagnostics, f'{action_path}.secondarySelection',
+                        '技能追加选择只能挂在从者技能上', wave, turn_no)
+        if selection['type'] == 'criticalStarConsumption':
+            _diagnostic(diagnostics, f'{action_path}.secondarySelection.type',
+                        '没有对应真实技能的追加选择类型', wave, turn_no)
+        options = selection.get('options') or []
+        if not options:
+            _diagnostic(diagnostics, f'{action_path}.secondarySelection.options',
+                        '技能追加选择缺少候选选项，请重新导入或编辑该技能', wave, turn_no)
+        else:
+            index = selection['index']
+            if index >= len(options):
+                _diagnostic(diagnostics, f'{action_path}.secondarySelection.index',
+                            f'索引 {index} 没有对应候选选项', wave, turn_no)
+            elif options[index]['value'] != selection['value']:
+                _diagnostic(diagnostics, f'{action_path}.secondarySelection.value',
+                            '所选值与索引对应的候选选项不一致', wave, turn_no)
+            if selection['type'] == 'noblePhantasmCardType' and any(
+                    isinstance(option['value'], str) for option in options):
+                _diagnostic(diagnostics, f'{action_path}.secondarySelection.options',
+                            '旧字符串卡色值不再受支持，请重新选择宝具变体', wave, turn_no)
     return ActionPlan(
         kind=action['kind'],
         title=action['title'],
