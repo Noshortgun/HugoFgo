@@ -2716,19 +2716,27 @@ def check_storm_pod_insufficient():
 def check_secondary_selection_capture():
     from executor.perception import Perception, Variant
 
-    path = ROOT / 'captures/2026-11-28/key/kukulkan-s1-menu.png'
-    with TemporaryDirectory() as directory:
-        observation = Perception(identity_root=Path(directory)).read(
-            Frame(path.read_bytes(), 1280, 720, 0.0))
-    controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
-    actual = [(control.name, control.actionable) for control in controls]
-    expected = [('追加按钮1', True), ('追加按钮2', True), ('追加按钮3', False)]
-    ok = (observation.base_page.value == 'battle'
-          and Variant.SECONDARY_SELECTION in observation.variants
-          and actual == expected)
-    add_report('perception:real-cn-kukulkan-s1-menu', path,
-               f'battle/secondary_selection/{expected}', f'{observation.base_page.value}; {actual}',
-               'continue', '取消不计入选项；消耗10个灰显不可点', ok)
+    cases = (
+        ('real-cn-kukulkan-s1-menu', 'captures/2026-11-28/key/kukulkan-s1-menu.png',
+         [('追加按钮1', True), ('追加按钮2', True), ('追加按钮3', False)],
+         '取消不计入选项；消耗10个灰显不可点'),
+        ('real-cn-archer-s3-menu', 'captures/2026-11-28/key/archer-s3-menu.png',
+         [('追加按钮1', True), ('追加按钮2', True)],
+         '宝具变体菜单没有系统取消，两项都按索引可选'),
+    )
+    for name, relative, expected, note in cases:
+        path = ROOT / relative
+        with TemporaryDirectory() as directory:
+            observation = Perception(identity_root=Path(directory)).read(
+                Frame(path.read_bytes(), 1280, 720, 0.0))
+        controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
+        actual = [(control.name, control.actionable) for control in controls]
+        ok = (observation.base_page.value == 'battle'
+              and Variant.SECONDARY_SELECTION in observation.variants
+              and actual == expected)
+        add_report(f'perception:{name}', path,
+                   f'battle/secondary_selection/{expected}', f'{observation.base_page.value}; {actual}',
+                   'continue', note, ok)
 
 
 def check_secondary_selection_catalog():

@@ -32,6 +32,29 @@
         ]
       },
       "match": true
+    },
+    {
+      "file": "key/archer-s3-menu.png",
+      "state": "国服卫宫 3 技能：请选择要将卫宫的宝具卡变更为何种类型；Arts、Buster 两张宝具卡",
+      "expectedObservation": {
+        "basePage": "battle",
+        "variant": "secondary_selection",
+        "buttons": [
+          {"name": "追加按钮1", "actionable": true},
+          {"name": "追加按钮2", "actionable": true}
+        ],
+        "selectedIndex": 1,
+        "optionOffset": 0
+      },
+      "observedObservation": {
+        "basePage": "battle",
+        "variant": "secondary_selection",
+        "buttons": [
+          {"name": "追加按钮1", "actionable": true},
+          {"name": "追加按钮2", "actionable": true}
+        ]
+      },
+      "match": true
     }
   ]
 }
