@@ -1,16 +1,15 @@
-import type { FallbackStrategy, HugoFgoJob, JobAction, JobCard, JobFormationSlot, JobTurn, JobWave, NpPosition, SelectedSkillOption } from './types';
+import type { FallbackStrategy, HugoFgoJob, JobAction, JobCard, JobFormationSlot, JobTurn, JobWave, NpPosition, SelectedSkillOption, SkillSecondarySelection } from './types';
 import type { EquipInfo } from './equips';
 import { fetchResourceJson, resourceRegion, type Region } from './resources';
 
 interface SecondarySkill {
   num: number;
-  script?: { SelectAddInfo?: { title?: string; btn?: { name?: string; imageUrl?: string }[] }[] };
-  functions?: { buffs?: { type?: string }[] }[];
+  priority?: number;
+  secondarySelection?: SkillSecondarySelection;
 }
 interface SecondaryServant {
   id: number;
   skills: SecondarySkill[];
-  noblePhantasms?: { card: string }[];
 }
 export type SecondaryCatalog = Record<number, SecondaryServant>;
 
@@ -144,8 +143,8 @@ export function loadSecondaryCatalog(): Promise<SecondaryCatalog> {
   const region = resourceRegion.value;
   if (!secondaryCatalogPromise || secondaryCatalogRegion !== region) {
     secondaryCatalogRegion = region;
-    secondaryCatalogPromise = fetchResourceJson<SecondaryServant[]>('atlas-nice-cn.json')
-      .then((servants) => Object.fromEntries(servants.map((servant) => [servant.id, servant])))
+    secondaryCatalogPromise = fetchResourceJson<{ servants: SecondaryServant[] }>('assets/atlas/index.json')
+      .then((data) => Object.fromEntries(data.servants.map((servant) => [servant.id, servant])))
       .catch(() => ({}));
   }
   return secondaryCatalogPromise;
@@ -285,12 +284,21 @@ export function convertChaldeaTeam(
   const skillActions = turnEntries.flatMap((entry) => entry.turn.actions).filter((action) => action.kind === 'skill');
   const skillDefinition = (action: JobAction) => {
     const svtId = action.memberSlot === undefined ? undefined : formation[action.memberSlot]?.svtId;
-    return svtId === undefined ? undefined : secondaryCatalog[svtId]?.skills.filter((skill) => skill.num === (action.skill ?? 0) + 1).at(-1);
+    return svtId === undefined ? undefined : secondaryCatalog[svtId]?.skills
+      .filter((skill) => skill.num === (action.skill ?? 0) + 1)
+      .reduce<SecondarySkill | undefined>((selected, skill) => (
+        !selected || (skill.priority ?? 0) > (selected.priority ?? 0) ? skill : selected
+      ), undefined);
   };
   const setSecondary = (action: JobAction, selection: SelectedSkillOption) => {
     action.secondarySelection = selection;
     action.detail += ` · ${selection.label}`;
   };
+  const optionsFor = (skill: SecondarySkill) => (skill.secondarySelection?.options ?? []).map((option) => ({
+    value: option.value,
+    label: option.label,
+    ...(option.imageUrl ? { imageUrl: option.imageUrl } : {}),
+  }));
 
   let selectionActionIndex = 0;
   (data.delegate?.skillActSelectSelections ?? []).forEach((selected) => {
@@ -298,26 +306,26 @@ export function convertChaldeaTeam(
     let definition: SecondarySkill | undefined;
     for (let index = selectionActionIndex; index < skillActions.length; index++) {
       const candidate = skillDefinition(skillActions[index]);
-      if (candidate?.script?.SelectAddInfo?.length) {
+      if (candidate?.secondarySelection?.type === 'selectAddInfo') {
         actionIndex = index;
         definition = candidate;
         break;
       }
     }
-    if (actionIndex < 0) {
-      actionIndex = Math.min(selectionActionIndex, skillActions.length - 1);
-      warnings.push(`${skillActions[actionIndex]?.title ?? '技能'}：Chaldea 未提供选项文本，请核对技能追加选择`);
-    }
     const action = skillActions[actionIndex];
-    if (!action) return;
+    if (actionIndex < 0 || !action || !definition) {
+      throw new Error('Chaldea 追加选择找不到对应的技能动作，请核对分享数据');
+    }
     selectionActionIndex = actionIndex + 1;
-    const select = definition?.script?.SelectAddInfo?.[0];
-    const options = select?.btn?.length
-      ? select.btn.map((button, index) => ({ value: index, label: button.name || `选项 ${index + 1}`, ...(button.imageUrl ? { imageUrl: button.imageUrl } : {}) }))
-      : Array.from({ length: Math.max(2, (selected ?? 0) + 1) }, (_, index) => ({ value: index, label: `选项 ${index + 1}（待核对）` }));
-    const optionIndex = selected !== null && options[selected] ? selected : 0;
+    if (selected === null || !Number.isInteger(selected)) {
+      throw new Error(`${action.title}：缺少有效的技能追加选择`);
+    }
+    const options = optionsFor(definition);
+    if (!options.length) throw new Error(`${action.title}：图库缺少真实技能追加选项`);
+    const optionIndex = options[selected] ? selected : -1;
+    if (optionIndex < 0) throw new Error(`${action.title}：技能追加选择索引 ${selected} 超出范围`);
     setSecondary(action, {
-      type: 'selectAddInfo',
+      type: definition.secondarySelection!.type,
       index: optionIndex,
       value: options[optionIndex].value,
       label: options[optionIndex].label,
@@ -330,30 +338,28 @@ export function convertChaldeaTeam(
     let actionIndex = -1;
     for (let index = tdActionIndex; index < skillActions.length; index++) {
       const definition = skillDefinition(skillActions[index]);
-      if (definition?.functions?.some((func) => func.buffs?.some((buff) => buff.type === 'tdTypeChange'))) {
+      if (definition?.secondarySelection?.type === 'noblePhantasmCardType') {
         actionIndex = index;
         break;
       }
     }
-    if (actionIndex < 0) {
-      actionIndex = Math.min(tdActionIndex, skillActions.length - 1);
-      warnings.push(`${skillActions[actionIndex]?.title ?? '技能'}：宝具卡色变更技能需要人工核对`);
-    }
     const action = skillActions[actionIndex];
-    if (!action) return;
-    tdActionIndex = actionIndex + 1;
-    const type = cardTypes[selected];
-    if (!type) {
-      warnings.push(`${action.title}：无法识别宝具卡色 ${selected}`);
-      return;
+    if (actionIndex < 0 || !action) {
+      throw new Error('Chaldea 宝具变体选择找不到对应的技能动作，请核对分享数据');
     }
-    const options: { value: JobCard['type']; label: string }[] = [
-      { value: 'arts', label: '蓝卡宝具' },
-      { value: 'buster', label: '红卡宝具' },
-      { value: 'quick', label: '绿卡宝具' },
-    ];
-    const optionIndex = options.findIndex((option) => option.value === type);
-    setSecondary(action, { type: 'noblePhantasmCardType', index: optionIndex, value: type, label: options[optionIndex].label, options });
+    tdActionIndex = actionIndex + 1;
+    const definition = skillDefinition(action);
+    if (!definition) throw new Error(`${action.title}：缺少宝具变体菜单数据`);
+    const options = optionsFor(definition);
+    const optionIndex = options.findIndex((option) => option.value === selected);
+    if (optionIndex < 0) throw new Error(`${action.title}：宝具变体选择 ${selected} 不在真实菜单中`);
+    setSecondary(action, {
+      type: definition.secondarySelection!.type,
+      index: optionIndex,
+      value: options[optionIndex].value,
+      label: options[optionIndex].label,
+      options,
+    });
   });
 
   // Chaldea 不记录分面：第 1/2/3 个回合分别放到第 1/2/3 面，超出的留在第 3 面。

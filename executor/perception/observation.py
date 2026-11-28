@@ -36,6 +36,7 @@ class Variant(str, Enum):
     RESULT_EXP = 'exp'
     DROPS_LOOT = 'loot'
     SKILL_TARGET = 'skill_target'
+    SECONDARY_SELECTION = 'secondary_selection'
     BATTLE_ANIMATION = 'animation'
 
 

@@ -46,6 +46,7 @@ npm run data:query -- counts
 | `extraAssets.commands.costume` | 灵衣指令卡原图 | `data/<区服>/assets/atlas/commands/<从者ID>/costume-<灵衣ID>.png` |
 | `extraAssets.charaGraph.ascension` | 卡面立绘 | `data/<区服>/assets/atlas/cards/<从者ID>-<再临>.png` |
 | `extraAssets.equipFace.equip` | 概念礼装图标 | `data/<区服>/assets/atlas/ce/<礼装ID>.png` |
+| `skills[].script.SelectAddInfo[].btn[].imageUrl` | 追加选择图片按钮 | `data/<区服>/assets/atlas/secondary/<图片名>.png` |
 | `extraAssets.item` / `masterFigure` | 御主礼装道具与人物图 | `data/<区服>/assets/atlas/mystic/` |
 | `skills[].icon` | 技能图标 | `data/<区服>/assets/atlas/skills/<文件名>` |
 

@@ -11,6 +11,7 @@ import { ASCENSION_CARD_IDS, servantAssetJobs } from './asset-jobs.mjs';
 import { resourcePaths } from './resource-paths.mjs';
 import { loadRemoteUnavailable, metadataSource } from './resource-utils.mjs';
 import { servantSkillTarget } from './skill-target.mjs';
+import { buildSecondarySelection, secondarySelectionAssetJobs } from './secondary-selection.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = resourcePaths(root);
@@ -37,6 +38,11 @@ for (const servant of raw) {
   if (!info) continue;
   for (const job of servantAssetJobs(servant)) {
     jobs.push({ ...job, file: paths.absolute(job.file) });
+  }
+  for (const skill of servant.skills ?? []) {
+    for (const job of secondarySelectionAssetJobs(skill, region)) {
+      jobs.push({ ...job, file: paths.absolute(job.file) });
+    }
   }
 }
 
@@ -73,23 +79,22 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 
-function secondarySelection(skill) {
-  const select = skill.script?.SelectAddInfo?.[0];
-  if (select) {
-    return {
-      type: 'selectAddInfo',
-      label: select.title || '技能追加选择',
-      options: (select.btn ?? []).map((button, index) => ({ value: index, label: button.name || `选项 ${index + 1}`, ...(button.imageUrl ? { imageUrl: button.imageUrl } : {}) })),
-    };
-  }
-  if (skill.functions?.some((func) => func.buffs?.some((buff) => buff.type === 'tdTypeChange'))) {
-    return {
-      type: 'noblePhantasmCardType',
-      label: '选择宝具卡色',
-      options: [{ value: 'arts', label: '蓝卡宝具' }, { value: 'buster', label: '红卡宝具' }, { value: 'quick', label: '绿卡宝具' }],
-    };
-  }
-  return undefined;
+function skillSecondarySelection(skill, noblePhantasms) {
+  const selection = buildSecondarySelection(skill, noblePhantasms);
+  if (!selection) return undefined;
+  const options = selection.options.map((option) => {
+    if (!option.imageUrl) return option;
+    const name = path.basename(new URL(option.imageUrl).pathname);
+    const local = paths.absolute(`data/${region}/assets/atlas/secondary/${name}`);
+    return fs.existsSync(local)
+      ? { ...option, imageUrl: paths.webPath(`assets/atlas/secondary/${name}`) }
+      : option;
+  });
+  return {
+    ...selection,
+    options,
+    followUpTarget: servantSkillTarget(skill) === 'ally' ? 'ally' : null,
+  };
 }
 
 const index = raw.map((servant) => {
@@ -124,11 +129,12 @@ const index = raw.map((servant) => {
     card: cardUrl && fs.existsSync(path.join(outRoot, 'cards', `${servant.id}.png`)) ? cardFile : null,
     noblePhantasms: (servant.noblePhantasms ?? []).map((np) => ({ id: np.id, name: np.name, card: np.card, priority: np.priority, condLimitCount: np.condLimitCount })),
     skills: (servant.skills ?? []).map((skill) => ({
+      id: skill.id,
       num: skill.num,
       name: skill.name,
       icon: skill.icon ? paths.webPath(`assets/atlas/skills/${path.basename(new URL(skill.icon).pathname)}`) : null,
       target: servantSkillTarget(skill),
-      secondarySelection: secondarySelection(skill),
+      secondarySelection: skillSecondarySelection(skill, servant.noblePhantasms),
       condLimitCount: skill.condLimitCount,
       condQuestId: skill.condQuestId,
       condQuestPhase: skill.condQuestPhase,

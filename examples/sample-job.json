@@ -33,7 +33,16 @@
               "skill": 2,
               "memberSlot": 0,
               "playerTargetSlot": 1,
-              "secondarySelection": { "type": "criticalStarConsumption", "index": 1, "value": 10, "label": "消耗 10 暴击星" }
+              "secondarySelection": {
+                "type": "selectAddInfo",
+                "index": 1,
+                "value": 1,
+                "label": "消耗10个",
+                "options": [
+                  { "value": 0, "label": "不消耗" },
+                  { "value": 1, "label": "消耗10个" }
+                ]
+              }
             },
             {
               "kind": "orderChange",
