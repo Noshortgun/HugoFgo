@@ -728,8 +728,9 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, True), animation, battle, battle, wrong_cards],
-            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            [battle, self.secondary_observation(True, True, True), self.secondary_observation(True, True, True),
+             animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
         )
 
         events = MemoryEventSink()
@@ -751,8 +752,9 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, True, True), animation, battle, battle, wrong_cards],
-            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            [battle, self.secondary_observation(True, True, True), self.secondary_observation(True, True, True),
+             animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
         )
 
         events = MemoryEventSink()
@@ -781,8 +783,9 @@ class RunnerTest(unittest.TestCase):
         animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
         wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, True), target, animation, battle, battle, wrong_cards],
-            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            [battle, self.secondary_observation(True, True, True), self.secondary_observation(True, True, True),
+             target, animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
         )
 
         events = MemoryEventSink()
@@ -821,7 +824,7 @@ class RunnerTest(unittest.TestCase):
         battle = observe(BasePage.BATTLE, button('攻击'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, False)],
+            [battle, self.secondary_observation(True, True, False)],
             [0.0, 0.1],
         )
 
@@ -840,8 +843,9 @@ class RunnerTest(unittest.TestCase):
         battle = observe(BasePage.BATTLE, button('攻击'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, True), self.secondary_observation(True, True)],
-            [0.0, 0.1, 30.2],
+            [battle, self.secondary_observation(True, True, True), self.secondary_observation(True, True, True),
+             self.secondary_observation(True, True, True)],
+            [0.0, 0.1, 0.2, 30.3],
         )
 
         events = MemoryEventSink()
@@ -849,6 +853,29 @@ class RunnerTest(unittest.TestCase):
 
         self.assertEqual('secondary_selection_confirmation_timeout', result.reason)
         self.assertEqual(['从者1技能1', '追加选项1'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
+
+    def test_secondary_selection_waits_through_stale_battle_frame(self) -> None:
+        skill = ActionPlan(kind='skill', title='追加选择', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 0, 'value': 0, 'label': '第一项',
+                               'options': [{'value': 0, 'label': '第一项'}, {'value': 1, 'label': '第二项'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, battle, self.secondary_observation(True, True, True), self.secondary_observation(True, True, True),
+             animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['从者1技能1', '追加选项1', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_secondary_selection_missing_menu_stops_instead_of_skipping_skill(self) -> None:
@@ -860,7 +887,7 @@ class RunnerTest(unittest.TestCase):
         battle = observe(BasePage.BATTLE, button('攻击'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
         ready = replace(battle, frame_hash='battle-ready')
-        device, perception = scripted([battle, ready], [0.0, 0.1])
+        device, perception = scripted([battle, ready], [0.0, 2.2])
 
         events = MemoryEventSink()
         result = run(single_wave_plan((skill,)), device, perception, events)

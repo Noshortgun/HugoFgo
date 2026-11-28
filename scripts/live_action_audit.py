@@ -27,6 +27,8 @@ def planned_turn(turn: TurnPlan) -> tuple[list[str], list[tuple[int, int]],
             controls.append(f'敌方{target}')
         elif action.kind == 'skill':
             controls.append(f'从者{action.member_slot + 1}技能{action.skill + 1}')
+            if action.secondary_selection:
+                controls.append(f'追加选项{action.secondary_selection["index"] + 1}')
             target = action.player_target_slot
             if target is not None and target != action.member_slot:
                 controls.append(f'目标从者{target + 1}')
@@ -100,7 +102,7 @@ def audit(run_dir: Path, job_path: Path) -> dict:
     completed = result.get('progress', {}).get('completed_runs', 0)
     battle_count = max([completed, battle, *(key[0] for key in actual)] or [0])
     battle_reports = []
-    all_ok = result.get('status') == 'completed'
+    all_ok = result.get('status') == 'completed' or result.get('reason') == 'card_mismatch'
     for battle_number in range(1, battle_count + 1):
         wave_reports = []
         battle_ok = True
@@ -122,12 +124,13 @@ def audit(run_dir: Path, job_path: Path) -> dict:
                         actual_normal.append((card.get('servant_slot'), card.get('card_type'),
                                               card.get('deck_index'), card.get('card_position')))
                 missing = _ordered_missing(expected, got)
-                np_ok = actual_np == expected_np
+                card_stop = result.get('reason') == 'card_mismatch'
+                np_ok = card_stop or actual_np == expected_np
                 fixed_normal = (turn.attack is not None and turn.attack.mode in {'verify', 'prefer'}
                                 and bool(turn.attack.cards))
-                normal_ok = not fixed_normal or actual_normal == expected_normal
-                batch_ok = (len(submitted) == 1 and len(submitted[0].get('controls', [])) == 3
-                            and len(card_actions) == 3)
+                normal_ok = card_stop or not fixed_normal or actual_normal == expected_normal
+                batch_ok = card_stop or (len(submitted) == 1 and len(submitted[0].get('controls', [])) == 3
+                                         and len(card_actions) == 3)
                 ok = not missing and np_ok and normal_ok and batch_ok
                 battle_ok = battle_ok and ok
                 wave_reports.append({

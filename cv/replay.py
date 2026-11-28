@@ -1715,10 +1715,10 @@ def check_executor_safety():
                                  member_slot=0, skill=0, secondary_selection=selection)
     secondary = Observation(base_page=BasePage.BATTLE,
                             variants=frozenset({Variant.SECONDARY_SELECTION}),
-                            controls=(secondary_option(1), secondary_option(2)))
+                            controls=(secondary_option(1), secondary_option(2), secondary_option(3)))
     result, _, events = run_core_scenario(
-        [ready, secondary, animation, ready, ready, wrong],
-        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], make_plan((secondary_skill,)))
+        [ready, secondary, secondary, animation, ready, ready, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6], make_plan((secondary_skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '追加选项2', '战斗跳过', '攻击']
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
@@ -1734,8 +1734,8 @@ def check_executor_safety():
                        for index in range(1, 4)),
     )
     result, _, events = run_core_scenario(
-        [ready, secondary, target_panel, animation, ready, ready, wrong],
-        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6], make_plan((targeted_secondary,)))
+        [ready, secondary, secondary, target_panel, animation, ready, ready, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], make_plan((targeted_secondary,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     expected = ['从者1技能1', '追加选项2', '目标从者2', '战斗跳过', '攻击']
     ok = result.reason == 'card_mismatch' and result.progress.action_index == 1 and controls == expected
@@ -1752,7 +1752,7 @@ def check_executor_safety():
                'secondary_selection_mismatch; no option click', f'{result.reason}; {controls}',
                'stop', '菜单数量与作业候选不一致时不得点击', ok, simulated_ocr=True)
 
-    disabled = replace(secondary, controls=(secondary_option(1), secondary_option(2, False)))
+    disabled = replace(secondary, controls=(secondary_option(1), secondary_option(2), secondary_option(3, False)))
     result, _, events = run_core_scenario([ready, disabled], [0.0, 0.1], make_plan((secondary_skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = result.reason == 'secondary_option_unavailable' and controls == ['从者1技能1']
@@ -1761,7 +1761,7 @@ def check_executor_safety():
                'stop', '配置项灰显时不得改点其他选项', ok, simulated_ocr=True)
 
     result, _, events = run_core_scenario(
-        [ready, secondary, secondary], [0.0, 0.1, 30.2], make_plan((secondary_skill,)))
+        [ready, secondary, secondary, secondary], [0.0, 0.1, 0.2, 30.3], make_plan((secondary_skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = (result.reason == 'secondary_selection_confirmation_timeout'
           and controls == ['从者1技能1', '追加选项2'])
@@ -1769,7 +1769,16 @@ def check_executor_safety():
                'secondary_selection_confirmation_timeout; no retry', f'{result.reason}; {controls}',
                'stop', '选项点击后菜单未离开时使用独立停止原因', ok, simulated_ocr=True)
 
-    result, _, events = run_core_scenario([ready, ready], [0.0, 0.1], make_plan((secondary_skill,)))
+    result, _, events = run_core_scenario(
+        [ready, ready, secondary, secondary, animation, ready, ready, wrong],
+        [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], make_plan((secondary_skill,)))
+    controls = [event.data['control'] for event in events.events if event.type == 'action']
+    expected = ['从者1技能1', '追加选项2', '战斗跳过', '攻击']
+    ok = result.reason == 'card_mismatch' and controls == expected
+    add_report('executor:secondary-selection-stale-battle-frame', LOADING_IMAGE, expected, controls,
+               'stop', '点击后旧战斗帧不得让菜单提前判缺失', ok, simulated_ocr=True)
+
+    result, _, events = run_core_scenario([ready, ready], [0.0, 2.2], make_plan((secondary_skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = result.reason == 'secondary_selection_missing' and controls == ['从者1技能1']
     add_report('executor:secondary-selection-missing', LOADING_IMAGE,
@@ -2770,13 +2779,16 @@ def check_secondary_selection_catalog():
             Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True),
             Control('战斗菜单', ControlKind.BUTTON, (1141, 162, 1245, 250), True),
         ))
+        option_controls = list(range(1, len(options) + 1))
+        if expected['type'] == 'selectAddInfo':
+            option_controls.insert(0, 0)
         secondary = Observation(
             base_page=BasePage.BATTLE,
             variants=frozenset({Variant.SECONDARY_SELECTION}),
             controls=tuple(
                 Control(f'追加按钮{offset}', ControlKind.BUTTON,
                         (300 + (offset - 1) * 200, 250, 450 + (offset - 1) * 200, 390), True)
-                for offset in range(1, len(options) + 1)
+                for offset in option_controls
             ),
         )
         cards = tuple(AttackCardPlan(slot=slot, type='arts') for slot in range(3))
@@ -2787,8 +2799,8 @@ def check_secondary_selection_catalog():
             formation=tuple(FormationSlotPlan(slot=slot, name=str(slot)) for slot in range(3)),
         )
         result, _, events = run_core_scenario(
-            [ready, secondary, animation, ready, ready, wrong],
-            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], plan)
+            [ready, secondary, secondary, secondary, animation, ready, ready, wrong],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], plan)
         controls = [event.data['control'] for event in events.events if event.type == 'action']
         expected_controls = ['从者1技能1', f'追加选项{index + 1}', '战斗跳过', '攻击']
         ok = result.reason == 'card_mismatch' and controls == expected_controls

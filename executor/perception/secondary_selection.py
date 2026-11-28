@@ -79,13 +79,18 @@ def _controls(group: list[tuple[int, int, int, int]], gray: np.ndarray) -> tuple
 
 def detect_secondary_options(image: np.ndarray) -> tuple[Control, ...]:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    region = gray[100:560, 150:1130]
+    region = gray[100:560, 150:1110]
     masks = (
         cv2.Canny(region, 40, 120),
+        cv2.morphologyEx((region > 90).astype(np.uint8) * 255, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)),
         cv2.morphologyEx((region > 100).astype(np.uint8) * 255, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)),
+        cv2.morphologyEx((region > 110).astype(np.uint8) * 255, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)),
     )
+    groups = []
     for mask in masks:
         group = _aligned_group(_candidates(mask))
         if group is not None and _has_menu_title(gray, group):
-            return _controls(group, gray)
-    return ()
+            groups.append(group)
+    if not groups:
+        return ()
+    return _controls(max(groups, key=len), gray)

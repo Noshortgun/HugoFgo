@@ -266,6 +266,7 @@ class Runner:
         self.secondary_since: float | None = None
         self.secondary_frame_hash: str | None = None
         self.secondary_stage: str | None = None
+        self.secondary_menu_signature: tuple | None = None
         self.master_action: ActionPlan | None = None
         self.pending_master_action = False
         self.order_action: ActionPlan | None = None
@@ -829,7 +830,10 @@ class Runner:
         if observation.frame_hash == self.secondary_frame_hash:
             return True, None
         if Variant.SECONDARY_SELECTION not in observation.variants:
-            if self.battle_ready(observation) or Variant.SKILL_TARGET in observation.variants:
+            missing = Variant.SKILL_TARGET in observation.variants or (
+                self.battle_ready(observation) and self.secondary_since is not None
+                and now - self.secondary_since >= ACTION_RECOVERY_SECONDS)
+            if missing:
                 self.emit('failed', now, reason='secondary_selection_missing',
                           wave=self.progress.wave, turn=self.progress.turn,
                           action_index=self.progress.action_index)
@@ -840,7 +844,7 @@ class Runner:
         options = selection.get('options') or []
         controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
         index = selection.get('index')
-        offset = 1 if selection.get('type') == 'selectAddInfo' and len(controls) == len(options) + 1 else 0
+        offset = 1 if selection.get('type') == 'selectAddInfo' else 0
         if (not isinstance(index, int) or index < 0 or index >= len(options)
                 or len(controls) != len(options) + offset):
             self.emit('failed', now, reason='secondary_selection_mismatch',
@@ -854,6 +858,10 @@ class Runner:
                       wave=self.progress.wave, turn=self.progress.turn,
                       action_index=self.progress.action_index)
             return True, self.result(RunStatus.STOPPED, 'secondary_option_unavailable')
+        signature = tuple((item.name, item.box, item.actionable) for item in controls)
+        if signature != self.secondary_menu_signature:
+            self.secondary_menu_signature = signature
+            return True, None
         if not self.tap_action(observation, control.name, now,
                                control_name=f'追加选项{index + 1}'):
             return True, None
@@ -940,6 +948,7 @@ class Runner:
                     self.secondary_since = now
                     self.secondary_frame_hash = observation.frame_hash
                     self.secondary_stage = 'menu'
+                    self.secondary_menu_signature = None
                     self.pending_pages = None
                     self.pending_since = None
                     self.pending_recovery_control = None
@@ -1711,6 +1720,7 @@ class Runner:
                     self.secondary_since = None
                     self.secondary_frame_hash = None
                     self.secondary_stage = None
+                    self.secondary_menu_signature = None
                     self.awaiting_attack_end = False
                     self.last_attack_skip_at = None
                     self.card_recovery_used = False

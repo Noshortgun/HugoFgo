@@ -20,7 +20,10 @@ def make_job() -> dict:
             'actions': [
                 {'kind': 'target', 'title': '目标', 'detail': '', 'icon': '', 'toTarget': 2},
                 {'kind': 'skill', 'title': '技能', 'detail': '', 'icon': '',
-                 'memberSlot': 1, 'skill': 2, 'playerTargetSlot': 1},
+                 'memberSlot': 1, 'skill': 2, 'playerTargetSlot': 1,
+                 'secondarySelection': {'type': 'selectAddInfo', 'index': 1, 'value': 1, 'label': '第二项',
+                                        'options': [{'value': 0, 'label': '第一项'},
+                                                    {'value': 1, 'label': '第二项'}]}},
                 {'kind': 'attack', 'title': '宝具', 'detail': '', 'icon': '', 'memberSlot': 1},
             ],
             'npPositions': {'1': 2},
@@ -48,6 +51,7 @@ def planned_events() -> list[dict]:
     return [
         action('敌方2'),
         action('从者2技能3'),
+        action('追加选项2'),
         action('攻击'),
         card('卡1', 1, 0, 'arts', 384),
         card('宝具卡2', 2, 1, 'unknown', 635),
@@ -58,12 +62,13 @@ def planned_events() -> list[dict]:
     ]
 
 
-def write_run(root: Path, events: list[dict], completed: int) -> None:
+def write_run(root: Path, events: list[dict], completed: int, *,
+              status: str = 'completed', reason: str | None = None) -> None:
     (root / 'job.json').write_text(json.dumps(make_job()), encoding='utf-8')
     (root / 'events.jsonl').write_text(
         ''.join(json.dumps(item) + '\n' for item in events), encoding='utf-8')
     (root / 'result.json').write_text(json.dumps({
-        'status': 'completed', 'progress': {'completed_runs': completed},
+        'status': status, 'reason': reason, 'progress': {'completed_runs': completed},
     }), encoding='utf-8')
 
 
@@ -90,7 +95,9 @@ class LiveActionAuditTest(unittest.TestCase):
 
     def test_normal_card_order_is_checked(self) -> None:
         events = planned_events()
-        events[3], events[5] = events[5], events[3]
+        first = next(index for index, event in enumerate(events) if event['data']['control'] == '卡1')
+        last = next(index for index, event in enumerate(events) if event['data']['control'] == '卡3')
+        events[first], events[last] = events[last], events[first]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_run(root, events, 1)
@@ -102,9 +109,19 @@ class LiveActionAuditTest(unittest.TestCase):
             self.assertFalse(turn['normal_ok'])
             self.assertTrue(turn['np_ok'])
 
+    def test_intentional_card_stop_does_not_fail_control_audit(self) -> None:
+        events = [action('敌方2'), action('从者2技能3'), action('追加选项2'), action('攻击')]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_run(root, events, 0, status='stopped', reason='card_mismatch')
+
+            report = audit(root, root / 'job.json')
+
+            self.assertTrue(report['ok'], report)
+
     def test_np_order_is_checked(self) -> None:
         events = planned_events()
-        events[4]['data']['card_position'] = 3
+        next(event for event in events if event['data']['control'] == '宝具卡2')['data']['card_position'] = 3
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_run(root, events, 1)
