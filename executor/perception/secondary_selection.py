@@ -11,9 +11,9 @@ def _candidates(mask: np.ndarray) -> list[tuple[int, int, int, int]]:
     candidates = []
     for contour in contours:
         x, y, width, height = cv2.boundingRect(contour)
-        if not 120 <= width <= 500 or not 60 <= height <= 300:
+        if not 120 <= width <= 500 or not 35 <= height <= 300:
             continue
-        if not 0.4 <= width / height <= 4.0:
+        if not 0.3 <= width / height <= 5.0:
             continue
         if cv2.contourArea(contour) < 0.55 * width * height:
             continue
@@ -35,15 +35,16 @@ def _aligned_group(candidates: list[tuple[int, int, int, int]]) -> list[tuple[in
         groups.append([box])
 
     for group in groups:
-        if len(group) not in (2, 3):
+        if len(group) not in (2, 3, 4):
             continue
         widths = [box[2] - box[0] + 1 for box in group]
         heights = [box[3] - box[1] + 1 for box in group]
         if max(widths) > min(widths) * 1.8 or max(heights) > min(heights) * 1.8:
             continue
-        center_x = sum((box[0] + box[2]) / 2 for box in group) / len(group)
-        if group[0][0] < 260 or group[-1][2] > 1020:
+        gaps = [right[0] - left[2] for left, right in zip(group, group[1:])]
+        if max(gaps) > max(widths) * 1.2:
             continue
+        center_x = sum((box[0] + box[2]) / 2 for box in group) / len(group)
         if abs(center_x - 640) <= 220:
             return group
     return None
@@ -68,11 +69,11 @@ def _controls(group: list[tuple[int, int, int, int]], gray: np.ndarray) -> tuple
     brightest = max(brightness)
     return tuple(
         Control(
-            f'追加选项{index}', ControlKind.BUTTON, box, not disabled,
+            f'追加按钮{index}', ControlKind.BUTTON, box, not disabled,
             'secondary_option_disabled' if disabled else 'secondary_option_geometry',
         )
         for index, (box, value) in enumerate(zip(group, brightness), start=1)
-        for disabled in [brightest >= 120 and value < brightest * 0.45]
+        for disabled in [brightest >= 120 and value < brightest * 0.6]
     )
 
 

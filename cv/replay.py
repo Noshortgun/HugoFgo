@@ -1705,7 +1705,7 @@ def check_executor_safety():
                simulated_ocr=True)
 
     def secondary_option(index, enabled=True):
-        return Control(f'追加选项{index}', ControlKind.BUTTON,
+        return Control(f'追加按钮{index}', ControlKind.BUTTON,
                        (300 + (index - 1) * 250, 250, 450 + (index - 1) * 250, 390), enabled,
                        'secondary_option_geometry' if enabled else 'secondary_option_disabled')
 
@@ -1742,7 +1742,8 @@ def check_executor_safety():
     add_report('executor:secondary-selection-then-target', LOADING_IMAGE, expected, controls,
                'stop', f'reason={result.reason}', ok, simulated_ocr=True)
 
-    extra = replace(secondary, controls=(secondary_option(1), secondary_option(2), secondary_option(3)))
+    extra = replace(secondary, controls=(secondary_option(1), secondary_option(2), secondary_option(3),
+                                          secondary_option(4)))
     result, _, events = run_core_scenario([ready, extra], [0.0, 0.1], make_plan((secondary_skill,)))
     controls = [event.data['control'] for event in events.events if event.type == 'action']
     ok = (result.reason == 'secondary_selection_mismatch'
@@ -2712,6 +2713,24 @@ def check_storm_pod_insufficient():
                '结算后弹窗只关闭一次并立即安全停止，不读取关闭后的页面', ok)
 
 
+def check_secondary_selection_capture():
+    from executor.perception import Perception, Variant
+
+    path = ROOT / 'captures/2026-11-28/key/kukulkan-s1-menu.png'
+    with TemporaryDirectory() as directory:
+        observation = Perception(identity_root=Path(directory)).read(
+            Frame(path.read_bytes(), 1280, 720, 0.0))
+    controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
+    actual = [(control.name, control.actionable) for control in controls]
+    expected = [('追加按钮1', True), ('追加按钮2', True), ('追加按钮3', False)]
+    ok = (observation.base_page.value == 'battle'
+          and Variant.SECONDARY_SELECTION in observation.variants
+          and actual == expected)
+    add_report('perception:real-cn-kukulkan-s1-menu', path,
+               f'battle/secondary_selection/{expected}', f'{observation.base_page.value}; {actual}',
+               'continue', '取消不计入选项；消耗10个灰显不可点', ok)
+
+
 def check_secondary_selection_catalog():
     from executor.domain import (ActionPlan, AttackCardPlan, AttackPlan, ExecutionPlan, FormationSlotPlan,
                                  TurnPlan, WavePlan)
@@ -2747,7 +2766,7 @@ def check_secondary_selection_catalog():
             base_page=BasePage.BATTLE,
             variants=frozenset({Variant.SECONDARY_SELECTION}),
             controls=tuple(
-                Control(f'追加选项{offset}', ControlKind.BUTTON,
+                Control(f'追加按钮{offset}', ControlKind.BUTTON,
                         (300 + (offset - 1) * 200, 250, 450 + (offset - 1) * 200, 390), True)
                 for offset in range(1, len(options) + 1)
             ),
@@ -2797,6 +2816,7 @@ def run(output: Path, name_filter: str | None = None):
     check_executor_recovery()
     check_executor_process()
     check_executor_safety()
+    check_secondary_selection_capture()
     check_secondary_selection_catalog()
     check_storm_pod_insufficient()
     check_result_action("action:drops-fallback", [("获得战利品", 640, 60)], "next", (1130, 660))

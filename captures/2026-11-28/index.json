@@ -1,0 +1,37 @@
+{
+  "device": {
+    "serial": "emulator-5554",
+    "width": 1280,
+    "height": 720,
+    "density": 240
+  },
+  "capturedAt": "2026-11-28",
+  "source": "adb exec-out screencap；用户将模拟器停在国服库库尔坎 1 技能追加选择菜单后截图，未发送任何游戏输入",
+  "keyFrames": [
+    {
+      "file": "key/kukulkan-s1-menu.png",
+      "state": "国服库库尔坎 1 技能：请选择是否要消耗暴击星获得追加效果；取消、不消耗、消耗10个三个按钮，消耗10个灰显",
+      "expectedObservation": {
+        "basePage": "battle",
+        "variant": "secondary_selection",
+        "buttons": [
+          {"name": "追加按钮1", "actionable": true},
+          {"name": "追加按钮2", "actionable": true},
+          {"name": "追加按钮3", "actionable": false}
+        ],
+        "selectedIndex": 1,
+        "optionOffset": 1
+      },
+      "observedObservation": {
+        "basePage": "battle",
+        "variant": "secondary_selection",
+        "buttons": [
+          {"name": "追加按钮1", "actionable": true},
+          {"name": "追加按钮2", "actionable": true},
+          {"name": "追加按钮3", "actionable": false}
+        ]
+      },
+      "match": true
+    }
+  ]
+}

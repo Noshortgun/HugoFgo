@@ -10,6 +10,7 @@ import numpy as np
 from executor.device.base import Frame, FrameFormat
 from executor.perception import BasePage, Perception, Variant
 from executor.perception.evidence import Template
+from executor.perception.tests.fixtures import load_frame
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -55,8 +56,8 @@ class SecondarySelectionPerceptionTest(unittest.TestCase):
 
         self.assertEqual(BasePage.BATTLE, observation.base_page)
         self.assertIn(Variant.SECONDARY_SELECTION, observation.variants)
-        controls = [control for control in observation.controls if control.name.startswith('追加选项')]
-        self.assertEqual(['追加选项1', '追加选项2'], [control.name for control in controls])
+        controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
+        self.assertEqual(['追加按钮1', '追加按钮2'], [control.name for control in controls])
         self.assertEqual([(470, 320), (810, 320)], [control.center for control in controls])
         self.assertTrue(all(control.actionable for control in controls))
 
@@ -68,7 +69,7 @@ class SecondarySelectionPerceptionTest(unittest.TestCase):
 
         self.assertIn(Variant.SECONDARY_SELECTION, observation.variants)
         self.assertEqual([(360, 450), (640, 450), (920, 450)],
-                         [control.center for control in observation.controls if control.name.startswith('追加选项')])
+                         [control.center for control in observation.controls if control.name.startswith('追加按钮')])
 
     def test_disabled_option_is_not_actionable(self) -> None:
         boxes = [(380, 250, 560, 390), (720, 250, 900, 390)]
@@ -78,7 +79,7 @@ class SecondarySelectionPerceptionTest(unittest.TestCase):
 
         observation = read(image, templates)
 
-        controls = [control for control in observation.controls if control.name.startswith('追加选项')]
+        controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
         self.assertTrue(controls[0].actionable)
         self.assertFalse(controls[1].actionable)
         self.assertEqual('secondary_option_disabled', controls[1].reason)
@@ -96,7 +97,18 @@ class SecondarySelectionPerceptionTest(unittest.TestCase):
         observation = read(image, templates)
 
         self.assertNotIn(Variant.SECONDARY_SELECTION, observation.variants)
-        self.assertFalse(any(control.name.startswith('追加选项') for control in observation.controls))
+        self.assertFalse(any(control.name.startswith('追加按钮') for control in observation.controls))
+
+    def test_real_cn_kukulkan_menu_has_cancel_and_disabled_star_option(self) -> None:
+        with TemporaryDirectory() as directory:
+            observation = Perception(identity_root=Path(directory)).read(
+                load_frame('captures/2026-11-28/key/kukulkan-s1-menu.png'))
+
+        self.assertIn(Variant.SECONDARY_SELECTION, observation.variants)
+        controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
+        self.assertEqual(['追加按钮1', '追加按钮2', '追加按钮3'], [control.name for control in controls])
+        self.assertEqual([True, True, False], [control.actionable for control in controls])
+        self.assertEqual('secondary_option_disabled', controls[2].reason)
 
     def test_real_cn_battle_hud_is_not_a_secondary_menu(self) -> None:
         path = ROOT / 'captures/2026-11-19-ember/key/04-battle-wave1.png'
@@ -108,7 +120,7 @@ class SecondarySelectionPerceptionTest(unittest.TestCase):
             observation = Perception(identity_root=Path(directory)).read(frame)
 
         self.assertNotIn(Variant.SECONDARY_SELECTION, observation.variants)
-        self.assertFalse(any(control.name.startswith('追加选项') for control in observation.controls))
+        self.assertFalse(any(control.name.startswith('追加按钮') for control in observation.controls))
 
 
 if __name__ == '__main__':

@@ -709,7 +709,7 @@ class RunnerTest(unittest.TestCase):
             base_page=BasePage.BATTLE,
             variants=frozenset({Variant.SECONDARY_SELECTION}),
             controls=tuple(
-                Control(f'追加选项{index}', ControlKind.BUTTON,
+                Control(f'追加按钮{index}', ControlKind.BUTTON,
                         (300 + index * 250, 250, 450 + index * 250, 390), enabled,
                         'secondary_option_geometry' if enabled else 'secondary_option_disabled')
                 for index, enabled in enumerate(actionable, start=1)
@@ -739,6 +739,28 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(['从者1技能1', '追加选项2', '战斗跳过', '攻击'],
                          [event.data['control'] for event in events.events if event.type == 'action'])
         self.assertEqual(1, result.progress.action_index)
+
+    def test_select_add_info_skips_the_system_cancel_button(self) -> None:
+        skill = ActionPlan(kind='skill', title='耗星', detail='', icon='', member_slot=0, skill=0,
+                           secondary_selection={
+                               'type': 'selectAddInfo', 'index': 1, 'value': 1, 'label': '消耗10个',
+                               'options': [{'value': 0, 'label': '不消耗'}, {'value': 1, 'label': '消耗10个'}],
+                           })
+        battle = observe(BasePage.BATTLE, button('攻击'),
+                         Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
+        animation = Observation(base_page=BasePage.BATTLE, variants=frozenset({Variant.BATTLE_ANIMATION}))
+        wrong_cards = observe(BasePage.CARD, *(command_card(index, 4) for index in range(1, 6)))
+        device, perception = scripted(
+            [battle, self.secondary_observation(True, True, True), animation, battle, battle, wrong_cards],
+            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+        )
+
+        events = MemoryEventSink()
+        result = run(single_wave_plan((skill,)), device, perception, events)
+
+        self.assertEqual('card_mismatch', result.reason)
+        self.assertEqual(['从者1技能1', '追加选项2', '战斗跳过', '攻击'],
+                         [event.data['control'] for event in events.events if event.type == 'action'])
 
     def test_secondary_selection_then_target_uses_existing_target_flow(self) -> None:
         skill = ActionPlan(kind='skill', title='追加选择后选目标', detail='', icon='', member_slot=0, skill=0,
@@ -780,7 +802,7 @@ class RunnerTest(unittest.TestCase):
         battle = observe(BasePage.BATTLE, button('攻击'),
                          Control('从者1技能1', ControlKind.SKILL, (43, 548, 104, 610), True))
         device, perception = scripted(
-            [battle, self.secondary_observation(True, True, True)],
+            [battle, self.secondary_observation(True, True, True, True)],
             [0.0, 0.1],
         )
 

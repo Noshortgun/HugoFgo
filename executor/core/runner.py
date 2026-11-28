@@ -417,7 +417,8 @@ class Runner:
         self.reset_stability()
         return True
 
-    def tap_action(self, observation: Observation, name: str, now: float) -> bool:
+    def tap_action(self, observation: Observation, name: str, now: float,
+                   *, control_name: str | None = None) -> bool:
         control = observation.control(name)
         if control is None or not control.actionable:
             return False
@@ -427,7 +428,7 @@ class Runner:
             if remaining > 0:
                 time.sleep(remaining)
         self.last_job_action_finished_at = self.tap_point(
-            observation, now, name, x, y, 'battle_action')
+            observation, now, control_name or name, x, y, 'battle_action')
         self.reset_stability()
         return True
 
@@ -837,21 +838,24 @@ class Runner:
 
         selection = action.secondary_selection or {}
         options = selection.get('options') or []
-        controls = [control for control in observation.controls if control.name.startswith('追加选项')]
+        controls = [control for control in observation.controls if control.name.startswith('追加按钮')]
         index = selection.get('index')
-        if not isinstance(index, int) or index < 0 or index >= len(options) or len(controls) != len(options):
+        offset = 1 if selection.get('type') == 'selectAddInfo' and len(controls) == len(options) + 1 else 0
+        if (not isinstance(index, int) or index < 0 or index >= len(options)
+                or len(controls) != len(options) + offset):
             self.emit('failed', now, reason='secondary_selection_mismatch',
-                      expected_options=len(options), actual_options=len(controls),
+                      expected_options=len(options), actual_buttons=len(controls),
                       wave=self.progress.wave, turn=self.progress.turn,
                       action_index=self.progress.action_index)
             return True, self.result(RunStatus.STOPPED, 'secondary_selection_mismatch')
-        control = observation.control(f'追加选项{index + 1}')
-        if control is None or not control.actionable:
+        control = controls[index + offset]
+        if not control.actionable:
             self.emit('failed', now, reason='secondary_option_unavailable', option_index=index,
                       wave=self.progress.wave, turn=self.progress.turn,
                       action_index=self.progress.action_index)
             return True, self.result(RunStatus.STOPPED, 'secondary_option_unavailable')
-        if not self.tap_action(observation, control.name, now):
+        if not self.tap_action(observation, control.name, now,
+                               control_name=f'追加选项{index + 1}'):
             return True, None
 
         self.secondary_action = None
