@@ -7,6 +7,7 @@ import { emptyServant, mysticCodes, standardSkills, team } from './data';
 import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, assertSupportedWaveCount, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, normalizeSupportMember, parseJobFile, remapPlanMember } from './job';
 import { convertChaldeaTeam, fetchChaldeaTeam, loadChaldeaCatalog, loadSecondaryCatalog, parseChaldeaRef } from './chaldea';
 import { deleteJobFromLibrary, jobLibraryReadOnly, jobNameForMembers, listSavedJobs, readJobFromLibrary, saveJobToLibrary, type SavedJobEntry } from './jobLibrary';
+import defaultJobSource from '../jobs/娄希、娄希、奥伯龙.json';
 import { resourceRegion } from './resources';
 import { browserRunDisabledReason, fakeRunRequested, runApi } from './run';
 import { applyRunEvent, emptyRunState, type RunEvent } from './runState';
@@ -161,7 +162,9 @@ onMounted(async () => {
     runState.value = { ...runState.value, phase: 'failed', error: error instanceof Error ? error.message : String(error) };
   }
   await Promise.all([loadAtlas(), loadEquips()]);
-  members.value = members.value.map((member) => resolveMemberAssets(member, member.limitCount ?? 4));
+  currentJobPath.value = isTauri ? 'jobs/娄希、娄希、奥伯龙.json' : '';
+  loadJob(parseJobFile(JSON.stringify(defaultJobSource)));
+  planOpen.value = false;
 });
 onUnmounted(() => {
   unsubscribeRun?.();
@@ -284,6 +287,13 @@ const visibleJobDiagnostics = computed(() => dedupeJobDiagnostics([
   ...jobDiagnostics.value,
   ...localJobDiagnostics.value,
 ]));
+const jobDiagnosticsKey = computed(() => JSON.stringify(visibleJobDiagnostics.value));
+const dismissedJobDiagnosticsKey = ref('');
+const showJobDiagnostics = computed(() => visibleJobDiagnostics.value.length > 0
+  && dismissedJobDiagnosticsKey.value !== jobDiagnosticsKey.value);
+function dismissJobDiagnostics() {
+  dismissedJobDiagnosticsKey.value = jobDiagnosticsKey.value;
+}
 async function refreshJobLibrary() {
   jobLibraryLoading.value = true;
   jobLibraryError.value = jobLibraryReadOnly
@@ -621,10 +631,11 @@ async function stopRun() {
       <main class="workspace-body">
         <div v-if="renderError" class="workspace-render-error" role="alert"><AppIcon name="help" :size="16" /><div><strong>界面渲染失败</strong><p>{{ renderError }}</p></div><button @click="renderError = ''">关闭</button></div>
         <div v-if="activeWorkspace === 'jobs'" class="workspace-jobs">
-          <div v-if="visibleJobDiagnostics.length" class="app-job-diagnostics" role="alert">
+          <div v-if="showJobDiagnostics" class="app-job-diagnostics" role="alert">
             <AppIcon name="help" :size="15" />
             <div><strong>当前作业启动前检查未通过</strong><p v-for="diagnostic in visibleJobDiagnostics.slice(0, 3)" :key="`${diagnostic.path}-${diagnostic.message}`">{{ describeJobDiagnostic(diagnostic) }}</p><small>打开操作序列修改后重新保存，或前往运行页查看完整检查结果。</small></div>
             <button @click="activeWorkspace = 'run'">查看详情</button>
+            <button class="app-job-diagnostics-close" title="关闭提示" aria-label="关闭作业检查提示" @click="dismissJobDiagnostics"><AppIcon name="close" :size="13" /></button>
           </div>
           <FormationHome :members="members" :mystic="currentMystic" :fallback="fallback" :gender="gender" :settings="runSettings" :job-name="jobName" :gallery-empty="!atlasServants.length" :resource-region="resourceRegion" @gender="gender = $event" @picker="openPicker" @plan="planOpen = true" @fallback="fallbackOpen = true" @support="supportSlot = $event" @reorder="reorderMembers" @remove="removeMember" @ascension="changeAscension" @update-settings="updateSharedSettings"
             @start="startRun" @library="openUtility('jobs')" @prepare="activeWorkspace = 'prepare'" :start-disabled="Boolean(runDisabledReason)" :start-disabled-reason="runDisabledReason" :start-label="runStartLabel" />
