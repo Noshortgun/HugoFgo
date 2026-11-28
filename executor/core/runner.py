@@ -7,12 +7,14 @@ from pathlib import Path
 from typing import Protocol
 
 from executor.core.ap_policy import CONTROL_NAMES, RecoveryItem, select_recovery
+from executor.core.deck import DeckTracker, hand_cards
 from executor.core.model import RunOptions, RunProgress, RunResult, RunStatus
 from executor.core.strategy import select_cards, strategy_servant_ranks
 from executor.device.base import Device, DeviceError, Frame
 from executor.domain import ActionPlan, ExecutionPlan, FormationSlotPlan, TurnPlan
 from executor.perception import (BasePage, CommandCardIdentity, Control, ControlKind, Observation, Overlay,
                                  SupportCandidate, Variant)
+from executor.perception.skill_effects import lock_card_skills
 from executor.session import EventSink, RunControl, RunEvent
 from executor.session.evidence import RunEvidence
 
@@ -207,13 +209,19 @@ def complete_normal_hand(observation: Observation) -> bool:
                     for control in controls))
 
 
-def support_matches(requirement: FormationSlotPlan, candidate: SupportCandidate) -> bool:
-    if requirement.svt_id is not None and candidate.svt_id != requirement.svt_id:
-        return False
-    if requirement.name and candidate.name != requirement.name:
-        return False
-    if requirement.role and candidate.role != requirement.role:
-        return False
+def support_requirement(formation: tuple[FormationSlotPlan, ...]) -> FormationSlotPlan | None:
+    return next((member for member in formation if member.support), None)
+
+
+def support_matches(requirement: FormationSlotPlan, candidate: SupportCandidate, *,
+                    identity: bool = True) -> bool:
+    if identity:
+        if requirement.svt_id is not None and candidate.svt_id != requirement.svt_id:
+            return False
+        if requirement.name and candidate.name != requirement.name:
+            return False
+        if requirement.role and candidate.role != requirement.role:
+            return False
     if requirement.ce_id is not None and candidate.ce_id != requirement.ce_id:
         return False
     if requirement.ce_id is None and requirement.ce and candidate.ce != requirement.ce:
@@ -261,6 +269,7 @@ class Runner:
         self.pending_overlay: Overlay | None = None
         self.job_target_slot: int | None = None
         self.target_selection_since: float | None = None
+        self.target_wait_warned_at: float | None = None
         self.optional_target = False
         self.secondary_action: ActionPlan | None = None
         self.secondary_since: float | None = None
@@ -326,12 +335,18 @@ class Runner:
         self.support_search_signature: tuple | None = None
         self.support_search_rows: tuple | None = None
         self.support_search_since: float | None = None
+        self.support_unstable_since: float | None = None
+        self.support_ce_name_warned = False
         self.support_previous_rows: tuple | None = None
         self.fallback_signature: tuple | None = None
         self.fallback_since: float | None = None
         self.skill_confirmation: tuple[str, int, int] | None = None
         self.skill_cooldown_since: float | None = None
         self.skill_available_since: float | None = None
+        self.deck = DeckTracker(plan.formation, lock_card_skills())
+        self.deck_recorded: tuple[int, int] | None = None
+        self.deck_aligned = False
+        self.pending_lock_slot: int | None = None
 
     def skill_retry_allowed(self, observation: Observation, now: float) -> bool:
         if self.skill_confirmation is None:
@@ -509,6 +524,7 @@ class Runner:
         self.support_search_signature = None
         self.support_search_rows = None
         self.support_search_since = None
+        self.support_unstable_since = None
 
     def support_search_stable(self, observation: Observation, rows: tuple, now: float) -> bool:
         signature = (observation.base_page, observation.variants, observation.overlays)
@@ -517,7 +533,10 @@ class Runner:
             self.support_search_signature = signature
             self.support_search_rows = rows
             self.support_search_since = now
+            if self.support_unstable_since is None:
+                self.support_unstable_since = now
             return False
+        self.support_unstable_since = None
         return (self.support_search_since is not None
                 and now - self.support_search_since + 1e-9 >= self.options.stable_seconds)
 
@@ -532,6 +551,17 @@ class Runner:
         self.support_stage = 'scroll' if down else 'top'
         self.reset_support_search()
         self.wait_for_page(BasePage.SUPPORT, now)
+
+    def support_candidate_matches(self, item: Control, requirement: FormationSlotPlan | None) -> bool:
+        if item.kind is not ControlKind.ROW:
+            return False
+        if requirement is None:
+            return True
+        if item.support is None:
+            return not (requirement.identity_required or requirement.ce_required
+                        or requirement.grand_required)
+        return support_matches(requirement, item.support,
+                               identity=requirement.identity_required)
 
     def handle_support(self, observation: Observation, now: float) -> RunResult | None:
         if self.support_stage == 'cooldown':
@@ -560,16 +590,17 @@ class Runner:
             self.support_previous_rows = None
             self.reset_support_search()
             self.wait_for_page(BasePage.SUPPORT, now)
-        requirement = next((slot for slot in self.plan.formation if slot.support_required), None)
+        requirement = support_requirement(self.plan.formation)
+        identity_required = requirement is not None and requirement.identity_required
         if not self.support_class_selected:
             role = (requirement.role or '').strip().lower().replace(' ', '').replace('-', '') \
-                if requirement is not None else ''
+                if identity_required else ''
             point = SUPPORT_CLASS_TAB_POINTS.get(role)
             current_class = observation.field('support_class')
             if current_class is not None and current_class.usable and current_class.value == role:
                 self.support_class_selected = True
                 self.support_stage = 'top'
-            elif requirement is None:
+            elif not identity_required:
                 self.support_class_selected = True
             elif point is None:
                 self.emit('failed', now, reason='support_role_unavailable', role=requirement.role)
@@ -583,8 +614,7 @@ class Runner:
                 self.reset_support_search()
                 return None
         control = next((item for item in observation.controls
-                        if item.support is not None and item.actionable
-                        and (requirement is None or support_matches(requirement, item.support))), None)
+                        if item.actionable and self.support_candidate_matches(item, requirement)), None)
         if control is not None:
             tapped = (self.tap_action(observation, control.name, now) if self.support_class_filter_pending
                       else self.tap_stable(observation, control.name, now))
@@ -639,6 +669,14 @@ class Runner:
                 self.support_previous_rows = rows
                 self.support_scrolls += 1
                 self.support_swipe(observation, now, down=True)
+        # 候选行或画面持续不稳定时安全停止，而不是无限等待。
+        if self.support_stage in {'idle', 'top', 'scroll'}:
+            if self.support_unstable_since is None:
+                self.support_unstable_since = now
+            elif now - self.support_unstable_since >= self.options.page_timeout:
+                self.emit('failed', now, reason='support_candidates_unstable',
+                          scrolls=self.support_scrolls, refreshes=self.support_refreshes)
+                return self.result(RunStatus.STOPPED, 'support_candidates_unstable')
         return None
 
     def handle_team(self, observation: Observation, now: float) -> RunResult | None:
@@ -653,7 +691,12 @@ class Runner:
                 return False
             return all(field.value[slot % 3] == members[slot].svt_id for slot in required)
 
-        support = next((member for member in self.plan.formation if member.support), None)
+        support = support_requirement(self.plan.formation)
+        if (support is not None and support.ce_id is None and support.ce
+                and not self.support_ce_name_warned):
+            self.support_ce_name_warned = True
+            self.emit('warning', now, reason='support_ce_unverifiable',
+                      message='助战概念礼装只有名称没有数据 ID，无法按画面核对；请重新选择该礼装。')
         support_ce = observation.field('team_support_ce')
         mystic = observation.field('team_mystic')
         support_valid = (support is None or support.ce_id is None
@@ -750,6 +793,39 @@ class Runner:
             self.wait_for_job_action(now)
         return None
 
+    def formation_member(self, slot: int) -> FormationSlotPlan | None:
+        return next((member for member in self.plan.formation if member.slot == slot), None)
+
+    def any_servant_slot(self, slot: int) -> bool:
+        member = self.formation_member(slot)
+        return member is None or not member.name.strip()
+
+    def target_slot_occupied(self, observation: Observation, slot: int) -> bool:
+        """任意从者只按槽位选择目标；技能图标存在表示该位置画面确认有从者。"""
+        if slot not in self.active_slots:
+            return False
+        position = self.active_slots.index(slot) + 1
+        return observation.control(f'从者{position}技能1') is not None
+
+    def frontline_confirms(self, observation: Observation, expected: list[int]) -> bool:
+        field = observation.field('battle_servants')
+        values = (field.value if field is not None and field.usable
+                  and isinstance(field.value, tuple) and len(field.value) == len(expected) else None)
+        if values is None:
+            # 空槽位的实际从者身份未知时，前排字段无法给出完整身份；
+            # 此时只按技能图标确认三个位置都实际有人。
+            if not any(self.any_servant_slot(slot) for slot in expected):
+                return False
+            return all(observation.control(f'从者{position}技能1') is not None
+                       for position in range(1, len(expected) + 1))
+        for position, (slot, seen) in enumerate(zip(expected, values), start=1):
+            if self.any_servant_slot(slot):
+                if observation.control(f'从者{position}技能1') is None:
+                    return False
+            elif seen != slot:
+                return False
+        return True
+
     def current_servant_order(self, wave: int) -> tuple[int, ...]:
         effective = self.plan.strategy_by_wave.get(wave) or self.plan.strategy
         members = {member.slot: member for member in self.plan.formation}
@@ -811,6 +887,7 @@ class Runner:
         self.active_slots = active
         self.reserve_slots = reserves
         self.priority_anchors = anchors
+        self.deck.reset()
         for out_slot, in_slot, position in changes:
             self.emit('auto_fill_confirmed', now, out_slot=out_slot, in_slot=in_slot,
                       frontline_position=position, active_slots=tuple(active),
@@ -921,6 +998,22 @@ class Runner:
                 return self.result(RunStatus.STOPPED, 'unsupported_action')
             position = self.active_slots.index(action.member_slot) + 1
             name = f'从者{position}技能{action.skill + 1}'
+            target_slot = action.player_target_slot
+            if target_slot is not None and self.any_servant_slot(target_slot):
+                # 任意从者只按槽位选目标：施放技能前先由画面确认该位置实际有人，否则不盲点。
+                if self.target_selection_since is None:
+                    self.target_selection_since = now
+                if not self.target_slot_occupied(observation, target_slot):
+                    if self.target_wait_warned_at != self.progress.action_index:
+                        self.target_wait_warned_at = self.progress.action_index
+                        self.emit('warning', now, reason='target_waiting_occupied', slot=target_slot,
+                                  wave=self.progress.wave, turn=self.progress.turn)
+                    if now - self.target_selection_since >= self.options.action_timeout:
+                        self.emit('failed', now, reason='target_unavailable', slot=target_slot,
+                                  message='无法确认技能目标位置实际有人')
+                        return self.result(RunStatus.STOPPED, 'target_unavailable')
+                    return None
+                self.target_selection_since = None
             control = observation.control(name)
             if control is not None and control.on_cooldown is True:
                 if self.skill_cooldown_since is None:
@@ -935,6 +1028,8 @@ class Runner:
             self.skill_cooldown_since = None
             if self.tap_action(observation, name, now):
                 self.skill_animation_skipped = False
+                if self.deck.lock_turns(action.member_slot, action.skill) is not None:
+                    self.pending_lock_slot = action.member_slot
                 if action.secondary_selection:
                     self.secondary_action = action
                     self.secondary_since = now
@@ -1090,6 +1185,27 @@ class Runner:
         return replace(observation, controls=tuple(replacements.get(control.name, control)
                                                     for control in observation.controls))
 
+    def record_deck_hand(self, observation: Observation, now: float) -> None:
+        key = (self.progress.wave, self.progress.turn)
+        if self.deck_recorded == key:
+            return
+        # 只有从新牌组起点开始观察的牌组周期才足以告警；中途接续的位置未知。
+        if not self.deck_aligned:
+            return
+        cards = [control.card for control in observation.controls
+                 if control.card is not None and not control.card.noble_phantasm]
+        if len(cards) != 5:
+            return
+        self.deck_recorded = key
+        warnings = self.deck.record_hand(self.progress.wave, self.progress.turn,
+                                         tuple(self.active_slots), hand_cards(cards))
+        if self.deck.lock_checked:
+            self.emit('lock_hand_checked', now, wave=self.progress.wave,
+                      turn=self.progress.turn, cards=[card.svt_id for card in hand_cards(cards)])
+        for warning in warnings:
+            self.emit('warning', now, reason=warning.reason, message=warning.message,
+                      wave=self.progress.wave, turn=self.progress.turn, **warning.data)
+
     def handle_card(self, observation: Observation, now: float) -> RunResult | None:
         observation = self.stable_np_cards(observation)
         observation, np_mapping_diagnostic = positioned_np_cards(
@@ -1136,6 +1252,7 @@ class Runner:
             self.emit('failed', now, reason=reason, message='五张普通指令卡尚未完整确认')
             return self.result(RunStatus.STOPPED, reason)
         self.card_confirmation_since = None
+        self.record_deck_hand(observation, now)
         use_strategy = self.fallback_mode or turn is None or turn.attack is None or turn.attack.mode == 'strategy'
         if turn is not None and turn.attack is not None and turn.attack.mode == 'prefer':
             preferred = card_requests(turn)
@@ -1336,9 +1453,12 @@ class Runner:
             self.last_observed_turn = observed_turn
             self.progress.action_index = 0
             self.fallback_mode = not first_turn
+            self.deck_aligned = first_turn
         elif page not in {BasePage.SUPPORT, BasePage.TEAM, BasePage.RESULT, BasePage.DROPS}:
             self.emit('failed', now, reason='unsupported_start', actual=page.value)
             return observation, self.result(RunStatus.STOPPED, 'unsupported_start')
+        else:
+            self.deck_aligned = True
         self.startup = False
         return observation, None
 
@@ -1352,6 +1472,11 @@ class Runner:
         return None
 
     def run(self) -> RunResult:
+        supports = [member for member in self.plan.formation if member.support]
+        if len(supports) > 1:
+            self.emit('failed', time.time(), reason='multiple_support_slots',
+                      slots=[member.slot for member in supports])
+            return self.result(RunStatus.FAILED, 'multiple_support_slots')
         unsupported = self.unsupported_job()
         if unsupported is not None:
             wave, turn, message = unsupported
@@ -1681,15 +1806,15 @@ class Runner:
                                 self.progress.turn = 1
                                 self.progress.action_index = 0
                                 self.fallback_mode = False
+                                self.deck.reset()
+                                self.deck_aligned = True
                                 self.emit('wave_started', now, wave=wave, turn=1)
                                 self.emit('turn_started', now, wave=wave, turn=1)
                 if confirmed and self.pending_swap is not None:
                     swap_out, swap_in = self.pending_swap
                     expected = list(self.active_slots)
                     expected[expected.index(swap_out)] = swap_in
-                    frontline = observation.field('battle_servants')
-                    confirmed = (frontline is not None and frontline.usable
-                                 and frontline.value == tuple(expected))
+                    confirmed = self.frontline_confirms(observation, expected)
                 if confirmed:
                     self.emit('action_confirmed', now, stage=self.pending_stage,
                               wait_ms=((now - self.pending_since) * 1000
@@ -1734,6 +1859,10 @@ class Runner:
                         self.run_settled = False
                         self.starting_next_run = False
                         self.result_seen = False
+                        self.deck.reset()
+                        self.deck_recorded = None
+                        self.deck_aligned = True
+                        self.pending_lock_slot = None
                     if self.job_target_slot is not None and self.optional_target:
                         if Variant.SKILL_TARGET in observation.variants:
                             self.confirming_job_action = False
@@ -1748,10 +1877,14 @@ class Runner:
                         self.active_slots[active_position] = swap_in
                         self.reserve_slots[reserve_position] = swap_out
                         self.pending_swap = None
+                        self.deck.reset()
                         self.emit('order_change_confirmed', now, out_slot=swap_out, in_slot=swap_in,
                                   active_slots=tuple(self.active_slots),
                                   reserve_slots=tuple(self.reserve_slots))
                     if self.confirming_job_action:
+                        if self.pending_lock_slot is not None:
+                            self.deck.begin_lock(self.pending_lock_slot)
+                            self.pending_lock_slot = None
                         self.progress.action_index += 1
                         self.confirming_job_action = False
                         self.pending_master_action = False

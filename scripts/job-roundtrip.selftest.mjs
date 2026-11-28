@@ -136,8 +136,9 @@ assert.deepEqual(
 );
 assert.deepEqual(jobSchema['x-slot-reference-rules'], {
   actionReferenceKeys: ['memberSlot', 'playerTargetSlot', 'swapOutSlot', 'swapInSlot'],
+  anyServantReferenceKeys: ['playerTargetSlot', 'swapOutSlot', 'swapInSlot'],
   memberSlotRequiredActions: ['skill', 'attack'],
-}, '前后端必须共用动作槽位引用与 memberSlot 规则入口');
+}, '前后端必须共用动作槽位引用、任意从者引用与 memberSlot 规则入口');
 
 const slotRuleJob = structuredClone(job);
 slotRuleJob.formation = [slotRuleJob.formation[0]];
@@ -149,10 +150,7 @@ const slotRuleDiagnostics = jobModule.inspectUnsupportedJob(slotRuleJob);
 assert.deepEqual(slotRuleDiagnostics.map((diagnostic) => diagnostic.path)
   .filter((path) => path.startsWith('$.waves[0].turns[0].actions')), [
   '$.waves[0].turns[0].actions[0].memberSlot',
-  '$.waves[0].turns[0].actions[0].playerTargetSlot',
-  '$.waves[0].turns[0].actions[1].swapOutSlot',
-  '$.waves[0].turns[0].actions[1].swapInSlot',
-], '前端必须对契约中的每个动作槽位字段报告空槽引用');
+], '前端只对固定技能/宝具的 memberSlot 报告空槽引用；换人与己方目标允许任意从者');
 
 const missingMemberJob = structuredClone(slotRuleJob);
 missingMemberJob.waves[0].turns[0].actions = [
@@ -169,7 +167,7 @@ const sparseJob = structuredClone(job);
 sparseJob.formation = [
   { slot: 0, name: '娄希', svtId: 705000, role: 'Berserker', support: true, ceId: 9403520 },
   { slot: 2, name: '奥伯龙', svtId: 2800100, role: 'Pretender' },
-  { slot: 4, name: '   ', support: true, ce: '不应保留', ceId: 123 },
+  { slot: 4, name: '   ', ce: '不应保留', ceId: 123 },
 ];
 sparseJob.strategy.servantOrder = ['娄希', '奥伯龙', '旧空槽引用'];
 sparseJob.strategy.servantOrderSlots = [0, 2, 4];
@@ -192,9 +190,9 @@ const sparseApplied = jobModule.applyFormation(
 );
 assert.deepEqual(sparseApplied.members.map((member) => Boolean(member.empty)), [false, true, false, true, true, true],
   '省略槽位和纯空白名称必须归一为空槽，且不得继承编辑器从者');
-assert.equal(sparseApplied.members[4].support, false, '空槽不得保留助战要求');
-assert.equal(sparseApplied.members[4].ce, '', '空槽不得保留概念礼装');
-assert.equal(sparseApplied.members[4].ceId, undefined, '空槽不得保留概念礼装 ID');
+assert.equal(sparseApplied.members[4].support, false, '普通空槽不得保留助战标记');
+assert.equal(sparseApplied.members[4].ce, '', '普通空槽不得保留概念礼装');
+assert.equal(sparseApplied.members[4].ceId, undefined, '普通空槽不得保留概念礼装 ID');
 const sparseConverted = jobModule.jobToSnapshot(sparseJob, sparseApplied.members, jobModule.mysticCodes[0]);
 const sparsePlan = sparseConverted.snapshot;
 assert.equal(sparsePlan.actionsBySlot['1-1'].length, 2, '空槽动作与换人都必须保留');
@@ -217,24 +215,39 @@ const sparseSaved = jobModule.buildJobFile({
 });
 assert.deepEqual(sparseSaved.formation.map((entry) => entry.slot), [0, 1, 2, 3, 4, 5], '导出必须写全六槽');
 assert.deepEqual(sparseSaved.formation.map((entry) => entry.name.trim()), ['娄希', '', '奥伯龙', '', '', '']);
-assert.equal(sparseSaved.formation[4].support, undefined, '导出空槽不得带助战字段');
-assert.equal(sparseSaved.formation[4].ce, undefined, '导出空槽不得带概念礼装');
+assert.deepEqual(sparseSaved.formation[4], { slot: 4, name: '', role: '' },
+  '普通空槽只导出空名，不携带隐形条件');
+assert.deepEqual(jobModule.inspectUnsupportedJob(sparseSaved).filter((item) => item.path.startsWith('$.formation')), [],
+  '单助战槽不得误报');
 assert.deepEqual(sparseSaved.waves[0].turns[0].actions, [sparseAction, sparseSwap],
   '空槽动作、目标和换人必须原样往返');
 assert.deepEqual(sparseSaved.waves[0].turns[0].npPositions, { 4: 2 }, '空槽宝具卡序必须原样往返');
 assert.deepEqual(sparseSaved.strategy.servantOrderSlots, [0, 2, 4], '空槽从者优先级必须原样往返');
 const emptyDiagnostics = jobModule.inspectUnsupportedJob(sparseSaved);
 const emptyDiagnosticPaths = emptyDiagnostics.map((diagnostic) => diagnostic.path);
-assert.ok(emptyDiagnosticPaths.some((path) => path.endsWith('.memberSlot')), '启动前诊断必须定位空槽动作');
-assert.ok(emptyDiagnosticPaths.some((path) => path.endsWith('.playerTargetSlot')), '启动前诊断必须定位空槽目标');
-assert.ok(emptyDiagnosticPaths.some((path) => path.endsWith('.swapInSlot')), '启动前诊断必须定位空槽换人');
+assert.ok(emptyDiagnosticPaths.some((path) => path.endsWith('.memberSlot')), '启动前诊断必须定位空槽固定技能');
+assert.ok(!emptyDiagnosticPaths.some((path) => path.endsWith('.playerTargetSlot')), '空槽己方目标不得再报错');
+assert.ok(!emptyDiagnosticPaths.some((path) => path.endsWith('.swapInSlot')), '空槽换人不得再报错');
 assert.ok(emptyDiagnosticPaths.some((path) => path.includes('.npPositions')), '启动前诊断必须定位空槽宝具卡序');
 assert.ok(emptyDiagnosticPaths.includes('$.strategy.servantOrderSlots[2]'), '启动前诊断必须定位空槽从者优先级');
+assert.deepEqual(jobModule.inspectUnsupportedJob(sparseSaved).filter((item) => item.path.startsWith('$.formation')), [],
+  '任意助战不是第二个助战槽，不得误判');
+assert.equal(sparseApplied.members[0].support, true, '指定助战导入后必须仍标记助战');
+assert.equal(sparseApplied.members[0].supportRequired, true, '指定助战导入后必须保持指定身份');
+assert.equal(sparseApplied.members[0].name, '娄希', '指定助战导入后必须保留从者名');
+const staleSpecified = jobModule.normalizeSupportMember({
+  ...sparseApplied.members[0], supportRequired: false, svtId: 705000, npId: 705001, role: 'Berserker',
+  name: '娄希', empty: false, ce: '午茶', ceId: 9403520, ceImage: '/ce.png',
+});
+assert.equal(staleSpecified.empty, true, '切换为任意助战时必须移除指定从者身份');
+assert.equal(staleSpecified.svtId, undefined, '切换为任意助战时不得残留从者 ID');
+assert.equal(staleSpecified.support, true, '切换为任意助战必须保留助战标记');
+assert.equal(staleSpecified.supportRequired, false, '切换为任意助战必须显式标记任意');
+assert.equal(staleSpecified.ceId, 9403520, '切换为任意助战必须保留独立礼装条件');
 assert.deepEqual(jobModule.frontlineEntries(sparseApplied.members).map((entry) => entry.slot), [0, 2],
   '前排候选必须使用物理 0–2 槽，不得压缩后排或过滤后重排');
 
 const clearedMember = jobModule.emptyServant();
-clearedMember.support = true;
 clearedMember.ce = '不可见礼装';
 clearedMember.ceId = 999;
 const clearedMembers = sparseApplied.members.map((member) => ({ ...member }));
@@ -252,8 +265,67 @@ const clearedSaved = jobModule.buildJobFile({
 });
 assert.deepEqual(clearedSaved.waves[0].turns[0].actions, [sparseAction, sparseSwap],
   '清空从者后，旧动作必须改挂到新的空槽运行态而不是丢失槽位');
-assert.equal(clearedSaved.formation[4].support, undefined, '即使运行态残留，导出空槽也必须清除助战字段');
-assert.equal(clearedSaved.formation[4].ceId, undefined, '即使运行态残留，导出空槽也必须清除礼装字段');
+assert.equal(clearedSaved.formation[4].support, undefined, '即使运行态残留，普通空槽导出也必须清除助战字段');
+assert.equal(clearedSaved.formation[4].ceId, undefined, '即使运行态残留，普通空槽导出也必须清除礼装字段');
+
+const staleIdentity = {
+  ...jobModule.emptyServant(true),
+  support: true,
+  supportRequired: false,
+  name: '娄希',
+  svtId: 705000,
+  role: 'Berserker',
+  npId: 705001,
+  empty: false,
+  ce: '午茶',
+  ceId: 9403520,
+};
+const anyMembers = clearedMembers.map((member) => ({ ...member }));
+anyMembers[0] = { ...anyMembers[0], support: false, supportRequired: false };
+anyMembers[4] = staleIdentity;
+const anySaved = jobModule.buildJobFile({
+  members: anyMembers,
+  mystic: jobModule.mysticCodes[0],
+  fallback: sparseNormalized,
+  fallbackByWave: { 1: null, 2: null, 3: null },
+  snapshot: clearedPlan,
+  name: sparseJob.name,
+  base: sparseJob,
+});
+assert.deepEqual(anySaved.formation[4], {
+  slot: 4, name: '', support: true, supportRequired: false, ce: '午茶', ceId: 9403520,
+}, '切换为任意助战必须清除旧从者身份字段，并保留独立礼装条件');
+let anyNextId = 200;
+const anyApplied = jobModule.applyFormation(
+  anySaved,
+  jobModule.team.map((member) => ({ ...member })),
+  jobModule.team,
+  () => `any-member-${anyNextId++}`,
+);
+assert.equal(anyApplied.members[4].support, true, '任意助战导入后仍必须标记助战');
+assert.equal(anyApplied.members[4].supportRequired, false, '任意助战导入后不得恢复指定身份');
+assert.equal(anyApplied.members[4].svtId, undefined, '任意助战导入后不得恢复实际从者 ID');
+assert.equal(anyApplied.members[4].ceId, 9403520, '任意助战导入后必须保留礼装条件');
+const anyReSaved = jobModule.buildJobFile({
+  members: anyApplied.members,
+  mystic: jobModule.mysticCodes[0],
+  fallback: sparseNormalized,
+  fallbackByWave: { 1: null, 2: null, 3: null },
+  snapshot: clearedPlan,
+  name: sparseJob.name,
+  base: anySaved,
+});
+assert.deepEqual(anyReSaved.formation[4], anySaved.formation[4], '任意助战保存、导入、再次导出后语义不变');
+
+const multiSupportJob = structuredClone(job);
+multiSupportJob.formation = [
+  { slot: 0, name: '娄希', support: true, supportRequired: true },
+  { slot: 1, name: '', support: true, supportRequired: false, ceId: 9403520 },
+];
+const multiSupportDiagnostics = jobModule.inspectUnsupportedJob(multiSupportJob)
+  .filter((diagnostic) => diagnostic.path.startsWith('$.formation'));
+assert.deepEqual(multiSupportDiagnostics.map((diagnostic) => diagnostic.path), ['$.formation[1].support'],
+  '导入出现两个助战槽时必须启动前拒绝并指出第二个槽位');
 
 const importTdSelection = (svtId, selected, options) => {
   const converted = jobModule.convertChaldeaTeam({

@@ -294,6 +294,19 @@ def render_summary(directory: str | Path, *, job_path: str | Path | None = None,
         '',
     ]
     unexecuted = []
+    quality = [(battle, row) for battle, row in positioned
+               if row.get('type') == 'warning'
+               and str(row['data'].get('reason', '')).startswith(('deck_', 'lock_'))
+               and isinstance(row['data'].get('message'), str)]
+    if quality:
+        lines.extend(['## 牌组与锁卡告警', ''])
+        for battle, row in quality:
+            data = row['data']
+            wave, turn = data.get('wave'), data.get('turn')
+            position = (f'第 {battle} 场 / ' if battle else '') + (
+                f'第 {wave} 面 / 第 {turn} 回合 / ' if isinstance(wave, int) and isinstance(turn, int) else '')
+            lines.append(f'- {position}{_relative(_timestamp(row), started)}：{data["message"]}')
+        lines.append('')
     if job:
         for battle in range(1, battle_count + 1):
             lines.extend([f'## 第 {battle} 场', ''])

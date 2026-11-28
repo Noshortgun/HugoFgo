@@ -19,12 +19,19 @@ from executor.domain.model import (
     TurnPlan,
     WavePlan,
 )
-from executor.domain.schema import ACTION_SLOT_REFERENCE_KEYS, MEMBER_SLOT_REQUIRED_ACTIONS, validate_job
+from executor.domain.schema import (ACTION_SLOT_REFERENCE_KEYS, ANY_SERVANT_REFERENCE_KEYS,
+                                    MEMBER_SLOT_REQUIRED_ACTIONS, validate_job)
 
 
 def _diagnostic(diagnostics: list[Diagnostic], path: str, message: str,
                 wave: int | None = None, turn: int | None = None) -> None:
     diagnostics.append(Diagnostic(path=path, message=message, wave=wave, turn=turn))
+
+
+def any_support(entry: dict[str, Any]) -> bool:
+    """任意助战：只约束选择阶段，从者身份不限；礼装条件独立保留。"""
+    return bool(entry.get('support')) and (
+        not entry['name'].strip() or entry.get('supportRequired') is False)
 
 
 def _formation_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> dict[int, str]:
@@ -34,8 +41,17 @@ def _formation_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> dict
         if slot in slots:
             _diagnostic(diagnostics, f'$.formation[{index}].slot', f'编队槽位重复：{slot}')
             continue
-        slots[slot] = entry['name'].strip()
+        slots[slot] = '' if any_support(entry) else entry['name'].strip()
     return slots
+
+
+def _check_support_slots(raw: dict[str, Any], diagnostics: list[Diagnostic]) -> None:
+    supports = [(index, entry['slot']) for index, entry in enumerate(raw['formation'])
+                if entry.get('support')]
+    if len(supports) > 1:
+        _diagnostic(diagnostics, f'$.formation[{supports[1][0]}].support',
+                    f'编队只能有一个助战槽；出现 {len(supports)} 个（槽位 '
+                    f'{", ".join(str(slot) for _index, slot in supports)}）')
 
 
 def _compile_strategy(raw: dict[str, Any]) -> FallbackStrategy:
@@ -56,6 +72,19 @@ def _compile_formation(raw: dict[str, Any]) -> tuple[FormationSlotPlan, ...]:
     for slot in range(6):
         entry = entries.get(slot, {'slot': slot, 'name': ''})
         name = entry['name'].strip()
+        if any_support(entry):
+            members.append(FormationSlotPlan(
+                slot=slot,
+                name='',
+                support=True,
+                support_required=False,
+                grand_required=entry.get('grandRequired', False),
+                ce=entry.get('ce'),
+                ce_id=entry.get('ceId'),
+                grand_ce=entry.get('grandCe'),
+                grand_ce_ids=entry.get('grandCeIds'),
+            ))
+            continue
         if not name:
             members.append(FormationSlotPlan(slot=slot, name=''))
             continue
@@ -87,6 +116,8 @@ def _check_strategy_slots(strategy: dict[str, Any], path: str, formation: dict[i
 
 def _check_slot(action: dict[str, Any], key: str, action_path: str, wave: int, turn: int,
                 formation: dict[int, str], diagnostics: list[Diagnostic]) -> None:
+    if key in ANY_SERVANT_REFERENCE_KEYS:
+        return
     value = action.get(key)
     if value is not None and not formation.get(value):
         _diagnostic(diagnostics, f'{action_path}.{key}', f'引用了空槽位：{value} 号位没有从者', wave, turn)
@@ -219,6 +250,7 @@ def compile_job(text: str) -> CompileResult:
         return CompileResult(None, diagnostics)
 
     formation = _formation_slots(raw, diagnostics)
+    _check_support_slots(raw, diagnostics)
     _check_strategy_slots(raw['strategy'], '$.strategy', formation, diagnostics)
     for wave_text, strategy in (raw.get('strategyByWave') or {}).items():
         if strategy is not None:

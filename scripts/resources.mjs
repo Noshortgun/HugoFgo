@@ -25,6 +25,7 @@ const rawDefinitions = [
 ];
 const generatedFiles = [
   `data/${region}/servants-by-id.json`,
+  `data/${region}/skill-effects-by-svt.json`,
   `data/${region}/equips.json`,
   `data/${region}/equips-by-id.json`,
   `data/${region}/assets/atlas/index.json`,

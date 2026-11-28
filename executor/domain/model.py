@@ -73,6 +73,15 @@ class FormationSlotPlan:
     grand_ce: dict[str, Any] | None = None
     grand_ce_ids: dict[str, Any] | None = None
 
+    @property
+    def identity_required(self) -> bool:
+        """作业是否显式限定了从者身份（任意从者与任意助战都为 False）。"""
+        return bool(self.name.strip() or self.svt_id is not None or (self.role or '').strip())
+
+    @property
+    def ce_required(self) -> bool:
+        return self.ce_id is not None or bool(self.ce)
+
 
 @dataclass(frozen=True)
 class FallbackStrategy:

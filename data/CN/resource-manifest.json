@@ -11,7 +11,7 @@
     "servants": 461,
     "equips": 2508,
     "mysticCodes": 26,
-    "files": 7077,
+    "files": 7078,
     "remoteUnavailable": 6
   },
   "assetCategories": {
@@ -35418,6 +35418,10 @@
     "data/CN/servants-by-id.json": {
       "size": 514408,
       "sha256": "948bc22dc4cf2bee3115b4d41553c5a3719250450c24ac62605fadf68a46a9eb"
+    },
+    "data/CN/skill-effects-by-svt.json": {
+      "size": 138,
+      "sha256": "7cd95ec4d9ae0eb8bc8180789440f47770d237cbfeda8d70fe3dcb87641119c4"
     },
     "data/CN/equips.json": {
       "size": 255031,

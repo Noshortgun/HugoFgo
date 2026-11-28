@@ -8,6 +8,7 @@ import EquipPicker from './EquipPicker.vue';
 const props = defineProps<{ member: Servant; slot: number; equips: EquipInfo[]; members: Servant[] }>();
 const emit = defineEmits<{ close: []; save: [index: number, member: Servant]; relocate: [] }>();
 const canRelocate = computed(() => props.members.some((member, index) => index !== props.slot && !member.empty));
+const canSpecify = computed(() => !props.member.empty && Boolean(props.member.name.trim()));
 const draft = ref<Servant>({ ...props.member });
 const ceEnabled = ref(Boolean(props.member.ceImage));
 const picking = ref<'ce' | 'grandCeTop' | 'grandCeMiddle' | 'grandCeBottom' | null>(null);
@@ -24,6 +25,9 @@ const grandRows = [
   { key: 'grandCeBottom' as const, title: '下方礼装', detail: '仅限增加牵绊的礼装，可不指定' },
 ];
 
+function toggleSpecify() {
+  if (canSpecify.value) draft.value.supportRequired = !draft.value.supportRequired;
+}
 function chooseEquip(equip: EquipInfo) {
   const target = picking.value;
   if (target === 'ce') {
@@ -54,7 +58,7 @@ function clearEquip() {
     <section class="support-dialog">
       <header><div><span class="picker-kicker">SUPPORT RULES</span><h2>助战与礼装要求</h2></div><button title="关闭" @click="emit('close')"><AppIcon name="close" /></button></header>
       <div class="support-dialog-content">
-        <div class="support-toggle-row"><div><strong>指定助战从者</strong><p>关闭后不指定名称，系统选择任意可用助战。</p></div><button class="switch-control" :class="{ active: draft.supportRequired }" @click="draft.supportRequired = !draft.supportRequired"><i></i><span>{{ draft.supportRequired ? '指定' : '任意' }}</span></button></div>
+        <div class="support-toggle-row"><div><strong>指定助战从者</strong><p>{{ canSpecify ? '关闭后不指定名称，系统选择任意可用助战。' : '当前为任意助战：从者身份不限，只保留下方概念礼装条件。先选择从者才能指定身份。' }}</p></div><button class="switch-control" :class="{ active: draft.supportRequired && canSpecify }" :disabled="!canSpecify" @click="toggleSpecify"><i></i><span>{{ draft.supportRequired && canSpecify ? '指定' : '任意' }}</span></button></div>
         <div class="support-toggle-row grand-toggle"><div><strong>必须为冠位从者</strong><p>开启后使用游戏中的蓝色冠位边框，并按冠位助战区域查找。</p></div><button class="switch-control" :class="{ active: draft.grandRequired }" @click="draft.grandRequired = !draft.grandRequired"><i></i><span>{{ draft.grandRequired ? '冠位' : '普通' }}</span></button></div>
 
         <div v-if="!draft.grandRequired" class="ordinary-support-ce"><div class="support-section-heading"><div><strong>概念礼装</strong><p>礼装也可以不指定，默认不进行礼装筛选。</p></div><button class="switch-control" :class="{ active: ceEnabled }" @click="ceEnabled = !ceEnabled; if (!ceEnabled) { draft.ce = ''; draft.ceImage = ''; draft.ceId = undefined; }"><i></i><span>{{ ceEnabled ? '指定' : '不限' }}</span></button></div><button v-if="ceEnabled" class="support-ce-choice" @click="picking = 'ce'"><img v-if="draft.ceImage" :src="draft.ceImage" :alt="draft.ce" /><span><strong>{{ draft.ce || '选择概念礼装' }}</strong><small>点击选择礼装</small></span><AppIcon name="chevron" :size="15" /></button></div>

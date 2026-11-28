@@ -11,6 +11,12 @@ const incomingId = ref<string | null>(null);
 const outgoing = computed(() => props.frontline.find((member) => member.memberInstanceId === outgoingId.value) ?? null);
 const incoming = computed(() => props.backline.find((member) => member.memberInstanceId === incomingId.value) ?? null);
 const ready = computed(() => Boolean(outgoing.value && incoming.value));
+function memberLabel(member: Servant) {
+  return member.empty ? '不限制（任意从者）' : servantLabel(member);
+}
+function memberInitial(member: Servant) {
+  return member.empty ? '任' : member.name.slice(0, 1);
+}
 
 function chooseOutgoing(member: Servant) {
   outgoingId.value = member.memberInstanceId;
@@ -29,7 +35,7 @@ function confirm() {
         <div class="order-change-step">
           <div class="order-change-step-title"><span>STEP 1</span><strong>选择下场的从者</strong><small>当前前排 {{ frontline.length }} 人</small></div>
           <div class="order-change-grid">
-            <button v-for="member in frontline" :key="member.memberInstanceId" :class="{ selected: outgoingId === member.memberInstanceId }" @click="chooseOutgoing(member)"><img v-if="member.image" :src="member.image" :alt="member.name" /><span v-else class="order-change-avatar-placeholder">{{ member.name.slice(0, 1) }}</span><strong>{{ servantLabel(member) }}</strong><small>{{ member.role }}</small><em v-if="outgoingId === member.memberInstanceId">下场</em></button>
+            <button v-for="member in frontline" :key="member.memberInstanceId" :class="{ selected: outgoingId === member.memberInstanceId }" @click="chooseOutgoing(member)"><img v-if="member.image" :src="member.image" :alt="member.name" /><span v-else class="order-change-avatar-placeholder">{{ memberInitial(member) }}</span><strong>{{ memberLabel(member) }}</strong><small>{{ member.role }}</small><em v-if="outgoingId === member.memberInstanceId">下场</em></button>
             <p v-if="!frontline.length" class="order-change-empty">当前没有可下场的从者。</p>
           </div>
         </div>
@@ -37,7 +43,7 @@ function confirm() {
         <div class="order-change-step">
           <div class="order-change-step-title"><span>STEP 2</span><strong>选择上场的候补从者</strong><small>候补席 {{ backline.length }} 人</small></div>
           <div class="order-change-grid">
-            <button v-for="member in backline" :key="member.memberInstanceId" :class="{ selected: incomingId === member.memberInstanceId }" @click="incomingId = member.memberInstanceId"><img v-if="member.image" :src="member.image" :alt="member.name" /><span v-else class="order-change-avatar-placeholder">{{ member.name.slice(0, 1) }}</span><strong>{{ servantLabel(member) }}</strong><small>{{ member.role }}</small><em v-if="incomingId === member.memberInstanceId">上场</em></button>
+            <button v-for="member in backline" :key="member.memberInstanceId" :class="{ selected: incomingId === member.memberInstanceId }" @click="incomingId = member.memberInstanceId"><img v-if="member.image" :src="member.image" :alt="member.name" /><span v-else class="order-change-avatar-placeholder">{{ memberInitial(member) }}</span><strong>{{ memberLabel(member) }}</strong><small>{{ member.role }}</small><em v-if="incomingId === member.memberInstanceId">上场</em></button>
             <p v-if="!backline.length" class="order-change-empty">没有可上场的候补从者。</p>
           </div>
         </div>
