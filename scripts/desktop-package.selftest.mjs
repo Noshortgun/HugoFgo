@@ -10,6 +10,8 @@ const config = JSON.parse(fs.readFileSync(path.join(root, 'src-tauri/tauri.conf.
 const resources = validateDesktopConfig(config, root);
 const destinations = resources.map(([, destination]) => destination);
 
+assert.equal(config.build.beforeDevCommand, 'npm run dev', 'Tauri 开发预览必须先启动 Vite 前端');
+
 for (const required of [
   'scripts/resources.mjs',
   'scripts/download-servant-assets.mjs',

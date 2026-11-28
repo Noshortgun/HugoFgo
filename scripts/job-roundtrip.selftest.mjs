@@ -23,6 +23,8 @@ globalThis.localStorage = { getItem: () => null, setItem: () => {} };
 const jobModule = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const source = fs.readFileSync(new URL('../jobs/娄希、娄希、奥伯龙.json', import.meta.url), 'utf8');
 const job = jobModule.parseJobFile(source);
+assert.equal(job.name, '娄希、娄希、奥伯龙');
+assert.deepEqual(jobModule.inspectUnsupportedJob(job), [], '默认作业必须通过启动前检查');
 job.extraField = { preserved: true };
 job.strategyByWave = { 1: job.strategy };
 let nextId = 1;

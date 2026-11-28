@@ -1001,6 +1001,7 @@ svg { flex: 0 0 auto; }
 .app-job-diagnostics p { margin-top: 3px; font-size: 9px; }
 .app-job-diagnostics small { display: block; margin-top: 4px; color: #8b744a; font-size: 8px; }
 .app-job-diagnostics button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #d6b979; border-radius: 4px; color: #755925; background: #fffaf0; font-size: 8px; }
+.app-job-diagnostics .app-job-diagnostics-close { display: inline-flex; align-items: center; justify-content: center; padding: 5px; }
 .formation-library-button { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border: 1px solid rgba(255,255,255,.32); border-radius: 4px; color: #e1ecee; background: rgba(23,50,62,.54); font-size: 8px; }
 .formation-library-button:hover { background: rgba(40,82,95,.8); }
 .apple-none { color: #6e858f; font-size: 8px; }
