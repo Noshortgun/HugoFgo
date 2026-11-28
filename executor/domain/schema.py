@@ -12,6 +12,7 @@ _SCHEMA_PATH = Path(__file__).resolve().parents[2] / 'schemas' / 'job-v1.schema.
 JOB_SCHEMA = json.loads(_SCHEMA_PATH.read_text(encoding='utf-8'))
 SLOT_REFERENCE_RULES = JOB_SCHEMA['x-slot-reference-rules']
 ACTION_SLOT_REFERENCE_KEYS = tuple(SLOT_REFERENCE_RULES['actionReferenceKeys'])
+ANY_SERVANT_REFERENCE_KEYS = frozenset(SLOT_REFERENCE_RULES['anyServantReferenceKeys'])
 MEMBER_SLOT_REQUIRED_ACTIONS = frozenset(SLOT_REFERENCE_RULES['memberSlotRequiredActions'])
 
 

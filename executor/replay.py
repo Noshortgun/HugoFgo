@@ -42,6 +42,7 @@ class ReplayCase:
     states: tuple[str, ...] = ()
     event_types: tuple[str, ...] = ()
     excluded_event_types: tuple[str, ...] = ()
+    excluded_reasons: tuple[str, ...] = ()
     times: tuple[float, ...] | None = None
     plan_factory: Callable[[], ExecutionPlan] = field(default=lambda: replay_plan(), repr=False)
     options: RunOptions = field(default_factory=lambda: RunOptions(write_evidence=False))
@@ -223,6 +224,10 @@ def check_report(report: ReplayReport) -> None:
     for event_type in case.excluded_event_types:
         if event_type in actual_events:
             raise ReplayFailure(f'{case.name}: 不应出现事件 {event_type}')
+    for reason in case.excluded_reasons:
+        if any(event.type == 'warning' and event.data.get('reason') == reason
+               for event in report.events.events):
+            raise ReplayFailure(f'{case.name}: 不应出现告警 {reason}')
     require_equal(case, case.completed_runs, report.result.progress.completed_runs, '完成场数')
 
     action_positions = [index for index, item in enumerate(report.trace)
@@ -301,6 +306,62 @@ def costume_team_plan() -> ExecutionPlan:
                           support=True, support_required=True),
     )
     return replace(plan, mystic_id='atlas-40', formation=formation)
+
+
+def any_support_plan(ce_id: int | None = None) -> ExecutionPlan:
+    plan = replay_plan()
+    support = FormationSlotPlan(slot=0, name='', support=True, support_required=False, ce_id=ce_id)
+    return replace(plan, formation=(support, *plan.formation[1:]))
+
+
+def any_order_change_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    change = ActionPlan(kind='orderChange', title='换人', detail='', icon='',
+                        swap_out_slot=0, swap_in_slot=3)
+    turn = TurnPlan(actions=(change,), attack=AttackPlan(mode='strategy', cards=()))
+    formation = (FormationSlotPlan(slot=0, name='梅林', svt_id=500800, support=True),
+                 *plan.formation[1:], FormationSlotPlan(slot=3, name=''))
+    strategy = FallbackStrategy(servant_order=('奥伯龙', '梅林', '娄希'),
+                                servant_order_slots=(2, 0, 1))
+    return replace(plan, waves=(replace(plan.waves[0], turns=(turn,)),),
+                   formation=formation, strategy=strategy)
+
+
+def blank_frontline_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    turn = TurnPlan(attack=AttackPlan(mode='strategy', cards=()))
+    formation = tuple(FormationSlotPlan(slot=slot, name='') for slot in range(6))
+    return replace(plan, formation=formation,
+                   waves=(replace(plan.waves[0], turns=(turn,)),))
+
+
+def deck_warning_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    turn = TurnPlan(attack=AttackPlan(mode='strategy', cards=()))
+    formation = (FormationSlotPlan(slot=0, name='希耶尔', svt_id=2300900),
+                 FormationSlotPlan(slot=1, name=''), FormationSlotPlan(slot=2, name=''))
+    return replace(plan, formation=formation,
+                   waves=(replace(plan.waves[0], turns=(turn, turn, turn)),))
+
+
+def any_servant_target_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    skill = ActionPlan(kind='skill', title='指定从者技能', detail='', icon='',
+                       member_slot=0, skill=0, player_target_slot=1)
+    turn = TurnPlan(actions=(skill,), attack=AttackPlan(mode='strategy', cards=()))
+    formation = (plan.formation[0], FormationSlotPlan(slot=1, name=''), plan.formation[2])
+    return replace(plan, formation=formation,
+                   waves=(replace(plan.waves[0], turns=(turn,)),))
+
+
+def lock_card_plan() -> ExecutionPlan:
+    plan = replay_plan()
+    skill = ActionPlan(kind='skill', title='原理血戒', detail='', icon='', member_slot=0, skill=2)
+    turn = TurnPlan(actions=(skill,), attack=AttackPlan(mode='strategy', cards=()))
+    formation = (FormationSlotPlan(slot=0, name='希耶尔', svt_id=2300900),
+                 FormationSlotPlan(slot=1, name=''), FormationSlotPlan(slot=2, name=''))
+    return replace(plan, formation=formation,
+                   waves=(replace(plan.waves[0], turns=(turn,)),))
 
 
 CASES = (
@@ -872,6 +933,216 @@ CASES = (
             replace(manual_job_plan().formation[0], ce_id=9400480), *manual_job_plan().formation[1:])),
         actions=(), status=RunStatus.STOPPED, reason='team_mismatch', states=('team',),
         event_types=('state_changed', 'failed'), completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-support-first-candidate',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 34.0),
+        plan_factory=any_support_plan,
+        actions=('助战卡片第1行', '开始任务'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'team', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-support-ce-filter',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 34.0),
+        plan_factory=lambda: any_support_plan(ce_id=9403060),
+        actions=('助战卡片第3行',),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'unknown'),
+        event_types=('action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-support-team-ce-check',
+        frames=(
+            FULL_LOOP + 'support-select-correct-ce.png', FULL_LOOP + 'support-select-correct-ce.png',
+            FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 34.0),
+        plan_factory=lambda: any_support_plan(ce_id=9403520),
+        actions=('助战卡片第1行', '开始任务'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('support', 'team', 'unknown'),
+        event_types=('action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-support-team-ce-mismatch',
+        frames=(FULL_LOOP + 'team-confirm.png', FULL_LOOP + 'team-confirm.png'),
+        times=(0.0, 30.0),
+        plan_factory=lambda: any_support_plan(ce_id=9400480),
+        actions=(),
+        status=RunStatus.STOPPED,
+        reason='team_mismatch',
+        states=('team',),
+        event_types=('state_changed', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-servant-order-change',
+        frames=(
+            'captures/2026-11-19-mystic/key/03-battle-combat.png',
+            'captures/2026-11-19-mystic/key/04-master-skills.png',
+            'captures/2026-11-19-mystic/key/05-order-change-select.png',
+            'captures/2026-11-19-mystic/key/06-swap-out-selected.png',
+            'captures/2026-11-19-mystic/key/07-swap-in-selected.png',
+            'captures/2026-11-19-mystic/key/08-swap-result.png',
+            'captures/2026-11-19-mystic/key/09-target-switched.png',
+            'captures/2026-11-19-mystic/key/09-target-switched.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 34.0),
+        actions=('御主技能', '御主技能3', '先发第1位', '候补第1位', '进行更替', '战斗跳过', '攻击'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'unknown'),
+        event_types=('order_change_confirmed', 'failed'),
+        plan_factory=any_order_change_plan,
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='any-servant-skill-target',
+        frames=(
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            'captures/2026-11-19-ember/key/09-skill-target.png',
+            'captures/2026-11-19-ember/key/09-skill-target.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-23/key/skill1-cooldown.png',
+            'captures/2026-11-23/key/skill1-cooldown.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 0.6, 1.0, 1.1, 1.2, 1.7, 2.0, 34.0),
+        plan_factory=any_servant_target_plan,
+        actions=('从者1技能1', '目标从者2', '战斗跳过', '攻击'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'unknown'),
+        event_types=('action', 'action', 'action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='unknown-card-auto-selection',
+        frames=(
+            FULL_LOOP + 'battle-wave1.png', FULL_LOOP + 'battle-wave1.png',
+            'captures/2026-11-25/key/card-flying-servants-unidentified.png',
+            'captures/2026-11-25/key/card-flying-servants-unidentified.png',
+            'captures/2026-11-25/key/card-flying-servants-unidentified.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.1, 1.2, 1.6, 2.0, 34.0),
+        plan_factory=blank_frontline_plan,
+        actions=('攻击', '卡2', '卡3', '卡4', '战斗跳过'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'card', 'unknown'),
+        event_types=('action', 'warning', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='deck-cycle-count-warning',
+        frames=(
+            'captures/2026-11-19-ember/key/04-battle-wave1.png',
+            'captures/2026-11-19-ember/key/04-battle-wave1.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-19-ember/11-wave1-turn2.png',
+            'captures/2026-11-19-ember/11-wave1-turn2.png',
+            'captures/2026-11-25/key/card-ciel-right-edge.png',
+            'captures/2026-11-25/key/card-ciel-right-edge.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-19/23-turn4.png',
+            'captures/2026-11-19/23-turn4.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.1, 1.6, 2.0, 2.5, 3.0, 3.1, 3.6, 4.0, 4.5, 5.0, 5.1, 5.6, 6.0, 40.0),
+        plan_factory=deck_warning_plan,
+        actions=('攻击', '卡2', '卡3', '卡4', '战斗跳过',
+                 '攻击', '卡3', '卡5', '卡1', '战斗跳过',
+                 '攻击', '卡2', '卡3', '卡4', '战斗跳过'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'card', 'unknown'),
+        event_types=('warning', 'failed'),
+        completed_runs=0,
+        evidence=True,
+        summary_contains=('牌组周期',),
+    ),
+    ReplayCase(
+        name='lock-card-next-hand-pass',
+        frames=(
+            'captures/2026-11-23/key/manual-w1-t1-start-05.png',
+            'captures/2026-11-23/key/manual-w1-t1-start-05.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-23/key/skill-cooldowns.png',
+            'captures/2026-11-23/key/skill-cooldowns.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-25/key/card-ciel-type-text.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 2.6, 3.2, 4.0, 40.0),
+        plan_factory=lock_card_plan,
+        actions=('从者1技能3', '战斗跳过', '攻击', '卡2', '卡3', '卡4', '战斗跳过'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'card', 'unknown'),
+        excluded_reasons=('lock_cards_unknown', 'lock_state_mismatch'),
+        event_types=('lock_hand_checked', 'failed'),
+        completed_runs=0,
+    ),
+    ReplayCase(
+        name='lock-card-next-hand-unknown',
+        frames=(
+            'captures/2026-11-23/key/manual-w1-t1-start-05.png',
+            'captures/2026-11-23/key/manual-w1-t1-start-05.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-23/key/skill-cooldowns.png',
+            'captures/2026-11-23/key/skill-cooldowns.png',
+            'captures/2026-11-23/key/manual-w1-t1-cards-09.png',
+            'captures/2026-11-23/key/manual-w1-t1-cards-09.png',
+            'captures/2026-11-23/key/manual-w1-t1-cards-09.png',
+            'captures/2026-11-19-ember/36-attack-animation.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+            'captures/2026-11-21/key/repeat-over-support.png',
+        ),
+        times=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 2.6, 2.7, 3.2, 4.0, 40.0),
+        plan_factory=lock_card_plan,
+        actions=('从者1技能3', '战斗跳过', '攻击', '卡2', '卡4', '卡1', '战斗跳过'),
+        status=RunStatus.STOPPED,
+        reason='unknown_timeout',
+        states=('battle', 'card', 'unknown'),
+        event_types=('warning', 'failed'),
+        completed_runs=0,
+        evidence=True,
+        summary_contains=('锁卡校验',),
     ),
 )
 

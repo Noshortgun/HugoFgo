@@ -23,6 +23,20 @@ const legacyLabels = new Map(fs.existsSync(labelsPath) ? JSON.parse(fs.readFileS
 const standardLabels = { saber: 'Saber', archer: 'Archer', lancer: 'Lancer', rider: 'Rider', caster: 'Caster', assassin: 'Assassin', berserker: 'Berserker', ruler: 'Ruler', avenger: 'Avenger', moonCancer: 'Moon Cancer', alterEgo: 'Alter Ego', foreigner: 'Foreigner', pretender: 'Pretender', shielder: 'Shielder' };
 const slim = Object.fromEntries(basic.map((info) => [info.id, { ...info, classLabel: /beast/i.test(info.className) ? 'Beast' : legacyLabels.get(info.id) ?? standardLabels[info.className] ?? info.className }]));
 fs.writeFileSync(paths.absolute(`data/${region}/servants-by-id.json`), JSON.stringify(slim));
+// 锁卡技能按 Atlas 技能效果识别：donotSelectCommandcard + cardReset，不按从者名称或技能编号硬编码。
+const lockCards = {};
+for (const servant of raw) {
+  const entries = (servant.skills ?? []).flatMap((skill) => {
+    const functions = skill.functions ?? [];
+    const lockFunction = functions.find((fn) => (fn.buffs ?? []).some((buff) => buff.type === 'donotSelectCommandcard'));
+    if (!lockFunction || !functions.some((fn) => fn.funcType === 'cardReset')) return [];
+    const turns = (lockFunction.svals ?? []).map((sval) => sval.Turn)
+      .filter((turn) => typeof turn === 'number' && turn > 0);
+    return [{ num: skill.num, turns: turns.length ? Math.min(...turns) : 1 }];
+  });
+  if (entries.length) lockCards[servant.id] = { lockCards: entries };
+}
+fs.writeFileSync(paths.absolute(`data/${region}/skill-effects-by-svt.json`), JSON.stringify(lockCards));
 const overridesPath = metadataSource(root, region, 'name-overrides.json');
 const overrides = fs.existsSync(overridesPath)
   ? JSON.parse(fs.readFileSync(overridesPath, 'utf8'))

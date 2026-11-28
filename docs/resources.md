@@ -49,6 +49,7 @@ npm run data:query -- counts
 | `skills[].script.SelectAddInfo[].btn[].imageUrl` | 追加选择图片按钮 | `data/<区服>/assets/atlas/secondary/<图片名>.png` |
 | `extraAssets.item` / `masterFigure` | 御主礼装道具与人物图 | `data/<区服>/assets/atlas/mystic/` |
 | `skills[].icon` | 技能图标 | `data/<区服>/assets/atlas/skills/<文件名>` |
+| `skills[].functions[].buffs[].type` = `donotSelectCommandcard` + `functions[].funcType` = `cardReset` | 锁卡技能表（技能序号与持续手数） | `data/<区服>/skill-effects-by-svt.json` |
 
 新增识别能力时先查是否已有原生素材族；普通指令卡使用 `commands`，不要从游戏截图手工裁切长期模板。
 

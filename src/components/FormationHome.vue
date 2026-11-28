@@ -78,8 +78,9 @@ function toggleDrain() {
   emit('updateSettings', { ...props.settings, recovery: { ...props.settings.recovery, drain_after_turns: !props.settings.recovery.drain_after_turns } });
 }
 function displayName(member: Servant) {
+  if (member.support && !member.supportRequired) return '任意助战';
   if (member.empty) return '不限制';
-  return member.support && !member.supportRequired ? '任意助战' : member.name;
+  return member.name;
 }
 function ascensionLabel(member: Servant) {
   if (member.svtId === 800100) return ({ 1: '基础', 3: '奥特瑙斯', 4: '帕拉丁' })[member.limitCount ?? 4] ?? '基础';
@@ -103,18 +104,18 @@ function dropMember(index: number) {
           <button class="member-art-button" @click="emit('picker', 'servant', index)" :title="`更换第 ${index + 1} 位从者`">
             <img v-if="!member.empty && member.art && (!member.support || member.supportRequired)" class="member-full-art" :src="member.art" :alt="member.name" />
             <span v-else-if="member.placeholder" class="placeholder-member-art"><AppIcon name="cards" :size="24" /><strong>{{ member.name }}</strong><small>无本地卡面</small></span>
-            <span v-else class="empty-member-art" :class="{ 'support-empty-card': member.support && !member.empty }"><AppIcon :name="member.support && !member.empty ? 'shield' : 'plus'" :size="27" /><small>{{ member.support && !member.empty ? '任意助战' : '选择从者' }}</small></span>
+            <span v-else class="empty-member-art" :class="{ 'support-empty-card': member.support }"><AppIcon :name="member.support ? 'shield' : 'plus'" :size="27" /><small>{{ member.support ? '任意助战' : '选择从者' }}</small></span>
             <span class="card-frame"></span><span class="member-slot">0{{ index + 1 }}</span>
             <span v-if="member.support" class="game-support-badge" role="button" tabindex="0" @click.stop="emit('support', index)" @keydown.enter.stop="emit('support', index)">{{ member.grandRequired ? '冠位助战' : '助战' }}</span>
             <span v-if="!member.empty && (!member.support || member.supportRequired)" class="member-class">{{ member.role }}</span>
             <span v-if="!member.empty" class="change-member">更换从者</span>
           </button>
-          <button v-if="member.support && !member.empty" class="member-ce-button" :class="{ 'grand-ce-list': member.grandRequired }" @click="emit('support', index)" title="设置助战与概念礼装">
+          <button v-if="member.support" class="member-ce-button" :class="{ 'grand-ce-list': member.grandRequired }" @click="emit('support', index)" title="设置助战与概念礼装">
             <template v-if="member.grandRequired"><span v-for="(slot, slotIndex) in [member.grandCeTop, member.grandCeMiddle, member.grandCeBottom]" :key="slotIndex" class="grand-ce-row"><img v-if="slot?.image" :src="slot.image" :alt="slot.name" /><i v-else></i><small>{{ ['任意概念礼装', '牵绊 / NP50%', '仅限加羁绊'][slotIndex] }}</small><strong>{{ slot?.name || '不限' }}</strong></span></template>
             <template v-else-if="member.ceImage"><img :src="member.ceImage" :alt="member.ce" /><span><strong>{{ member.ce }}</strong></span></template>
             <template v-else><span class="support-ce-empty"><AppIcon name="plus" :size="13" /> 概念礼装不限</span></template>
           </button>
-          <button class="member-name-button" @click="emit('picker', 'servant', index)"><span><strong>{{ displayName(member) }}</strong><small v-if="member.support && !member.empty">{{ member.supportRequired ? '指定助战' : '不指定时随机选择' }}</small><small v-else-if="!member.empty">拖动卡片可调整顺序</small></span><AppIcon name="search" :size="15" /></button>
+          <button class="member-name-button" @click="emit('picker', 'servant', index)"><span><strong>{{ displayName(member) }}</strong><small v-if="member.support">{{ member.supportRequired ? '指定助战' : '不指定身份，礼装可单独筛选' }}</small><small v-else-if="!member.empty">拖动卡片可调整顺序</small></span><AppIcon name="search" :size="15" /></button>
           <label v-if="!member.empty && member.svtId !== undefined && ascensionServantIds.has(member.svtId)" class="member-ascension" title="切换灵基阶段，仅编队阶段生效">{{ ascensionLabel(member) }} <select :value="member.limitCount ?? 4" @change.stop="emit('ascension', index, Number(($event.target as HTMLSelectElement).value))"><option v-for="stage in ascensionOptionsFor(member)" :key="stage" :value="stage">{{ stage }}</option></select></label>
 
         </article>

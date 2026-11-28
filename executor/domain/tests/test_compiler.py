@@ -165,26 +165,96 @@ class CompileJobTest(unittest.TestCase):
         self.assertIn('memberSlot', result.diagnostics[0].path)
         self.assertIn('空槽位', result.diagnostics[0].message)
 
-    def test_all_action_slot_reference_keys_reject_empty_slots(self):
+    def one_turn_job(self, actions: list[dict], formation: list[dict] | None = None) -> dict:
         job = self.valid_job()
-        job['formation'] = [job['formation'][0]]
-        job['waves'][0]['turns'][0]['actions'] = [
+        if formation is not None:
+            job['formation'] = formation
+        job['strategy']['servantOrder'] = [entry['name'] for entry in job['formation']
+                                           if entry['name'].strip()]
+        job['strategy'].pop('servantOrderSlots', None)
+        job['strategyByWave'] = {}
+        job['waves'] = [{'turnCount': 1, 'target': 1, 'turns': [{'actions': actions}]}]
+        return job
+
+    def test_fixed_identity_references_reject_empty_slots(self):
+        job = self.valid_job()
+        job = self.one_turn_job([
             {'kind': 'skill', 'title': '', 'detail': '', 'icon': '', 'skill': 0,
              'memberSlot': 4, 'playerTargetSlot': 4},
             {'kind': 'orderChange', 'title': '', 'detail': '', 'icon': '',
-             'swapOutSlot': 4, 'swapInSlot': 4},
-        ]
+             'swapOutSlot': 4, 'swapInSlot': 5},
+        ], job['formation'])
 
         result = compile_job(json.dumps(job))
 
         self.assertIsNone(result.plan)
         self.assertEqual({
             '$.waves[0].turns[0].actions[0].memberSlot',
-            '$.waves[0].turns[0].actions[0].playerTargetSlot',
-            '$.waves[0].turns[0].actions[1].swapOutSlot',
-            '$.waves[0].turns[0].actions[1].swapInSlot',
         }, {diagnostic.path for diagnostic in result.diagnostics
             if diagnostic.path.startswith('$.waves[0].turns[0].actions')})
+
+    def test_empty_slot_targets_and_swaps_are_allowed(self):
+        job = self.valid_job()
+        job = self.one_turn_job([
+            {'kind': 'skill', 'title': '指定从者技能', 'detail': '', 'icon': '', 'skill': 0,
+             'memberSlot': 0, 'playerTargetSlot': 5},
+            {'kind': 'orderChange', 'title': '任意从者换人', 'detail': '', 'icon': '',
+             'swapOutSlot': 0, 'swapInSlot': 5},
+        ], job['formation'])
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        self.assertIsNotNone(result.plan)
+        actions = result.plan.waves[0].turns[0].actions
+        self.assertEqual(5, actions[0].player_target_slot)
+        self.assertEqual((0, 5), (actions[1].swap_out_slot, actions[1].swap_in_slot))
+
+    def test_any_support_compiles_without_identity_and_keeps_ce(self):
+        job = self.valid_job()
+        job = self.one_turn_job([], [
+            *job['formation'][:5],
+            {'slot': 5, 'name': '', 'support': True, 'supportRequired': False,
+             'ce': '午茶', 'ceId': 9403520, 'svtId': 705000, 'role': 'Berserker'},
+        ])
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        support = result.plan.formation[5]
+        self.assertEqual(('', True, False, '午茶', 9403520),
+                         (support.name, support.support, support.support_required,
+                          support.ce, support.ce_id))
+        self.assertEqual((None, None), (support.svt_id, support.role))
+
+    def test_legacy_any_support_without_flag_is_recognized(self):
+        job = self.valid_job()
+        job = self.one_turn_job([], [
+            *job['formation'][:5],
+            {'slot': 5, 'name': '  ', 'support': True, 'ceId': 9403520},
+        ])
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertEqual([], result.diagnostics)
+        support = result.plan.formation[5]
+        self.assertTrue(support.support)
+        self.assertFalse(support.support_required)
+        self.assertEqual(9403520, support.ce_id)
+
+    def test_multiple_support_slots_are_rejected(self):
+        job = self.valid_job()
+        job['formation'][0]['support'] = True
+        job['formation'][1]['support'] = True
+        job['formation'][1]['supportRequired'] = True
+
+        result = compile_job(json.dumps(job, ensure_ascii=False))
+
+        self.assertIsNone(result.plan)
+        self.assertEqual(['$.formation[1].support'],
+                         [diagnostic.path for diagnostic in result.diagnostics
+                          if diagnostic.path.startswith('$.formation')])
+        self.assertIn('只能有一个助战槽', result.diagnostics[0].message)
 
     def test_servant_skill_and_np_attack_require_member_slot(self):
         job = self.valid_job()

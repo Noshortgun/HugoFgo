@@ -19,6 +19,7 @@ type ActionSlotReferenceKey = 'memberSlot' | 'playerTargetSlot' | 'swapOutSlot' 
 
 const slotReferenceRules = jobSchema['x-slot-reference-rules'];
 const actionSlotReferenceKeys = slotReferenceRules.actionReferenceKeys as ActionSlotReferenceKey[];
+const anyServantReferenceKeys = new Set<string>(slotReferenceRules.anyServantReferenceKeys as string[]);
 const memberSlotRequiredActions = new Set<string>(slotReferenceRules.memberSlotRequiredActions);
 
 function locationLabel(diagnostic: JobDiagnostic) {
@@ -47,6 +48,14 @@ function inspectSlotReferences(job: HugoFgoJob): JobDiagnostic[] {
   const checkSlot = (slot: number | undefined, path: string, label: string, wave?: number, turn?: number) => {
     if (slot !== undefined && !specified(slot)) add(path, `${label}引用了空槽位：${slot} 号位没有指定从者`, wave, turn);
   };
+  const supports = job.formation
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.support);
+  if (supports.length > 1) {
+    const second = supports[1];
+    add(`$.formation[${second.index}].support`,
+      `编队只能有一个助战槽；出现 ${supports.length} 个（槽位 ${supports.map(({ entry }) => entry.slot).join('、')}）`);
+  }
   const checkStrategy = (strategy: HugoFgoJob['strategy'], path: string, wave?: number) => {
     (strategy.servantOrderSlots ?? []).forEach((slot, index) => {
       checkSlot(slot, `${path}.servantOrderSlots[${index}]`, '补刀策略', wave);
@@ -66,6 +75,7 @@ function inspectSlotReferences(job: HugoFgoJob): JobDiagnostic[] {
           add(`${actionPath}.memberSlot`, action.kind === 'skill' ? '从者技能必须指定 memberSlot' : '宝具攻击必须指定 memberSlot', waveIndex + 1, turnIndex + 1);
         }
         actionSlotReferenceKeys.forEach((key) => {
+          if (anyServantReferenceKeys.has(key)) return;
           checkSlot(action[key], `${actionPath}.${key}`, '动作', waveIndex + 1, turnIndex + 1);
         });
       });

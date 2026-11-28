@@ -140,8 +140,31 @@ function toJobAction(members: Servant[], action: PlanAction): JobAction {
   return jobAction;
 }
 
+function grandCeFields(member: Servant, entry: JobFormationSlot): void {
+  if (!member.grandCeTop && !member.grandCeMiddle && !member.grandCeBottom) return;
+  entry.grandCe = {
+    top: member.grandCeTop?.name ?? null,
+    middle: member.grandCeMiddle?.name ?? null,
+    bottom: member.grandCeBottom?.name ?? null,
+  };
+  entry.grandCeIds = {
+    top: member.grandCeTop?.id ?? null,
+    middle: member.grandCeMiddle?.id ?? null,
+    bottom: member.grandCeBottom?.id ?? null,
+  };
+}
+
 function toJobFormation(members: Servant[]): JobFormationSlot[] {
   return members.map((member, slot) => {
+    if (member.support && (!member.supportRequired || member.empty || !member.name.trim())) {
+      // 任意助战只约束选择阶段；从者身份字段一律不导出。
+      const entry: JobFormationSlot = { slot, name: '', support: true, supportRequired: false };
+      if (member.ce) entry.ce = member.ce;
+      if (member.ceId !== undefined) entry.ceId = member.ceId;
+      if (member.grandRequired) entry.grandRequired = true;
+      grandCeFields(member, entry);
+      return entry;
+    }
     if (member.empty) return { slot, name: '', role: '' };
     const entry: JobFormationSlot = { slot, name: member.name, role: member.role };
     if (member.svtId !== undefined) entry.svtId = member.svtId;
@@ -152,18 +175,7 @@ function toJobFormation(members: Servant[]): JobFormationSlot[] {
     if (member.grandRequired) entry.grandRequired = true;
     if (member.ce) entry.ce = member.ce;
     if (member.ceId !== undefined) entry.ceId = member.ceId;
-    if (member.grandCeTop || member.grandCeMiddle || member.grandCeBottom) {
-      entry.grandCe = {
-        top: member.grandCeTop?.name ?? null,
-        middle: member.grandCeMiddle?.name ?? null,
-        bottom: member.grandCeBottom?.name ?? null,
-      };
-      entry.grandCeIds = {
-        top: member.grandCeTop?.id ?? null,
-        middle: member.grandCeMiddle?.id ?? null,
-        bottom: member.grandCeBottom?.id ?? null,
-      };
-    }
+    grandCeFields(member, entry);
     return entry;
   });
 }
@@ -183,6 +195,25 @@ export function remapPlanMember(snapshot: PlanSnapshot, previousId: string, next
     );
   });
   return remapped;
+}
+
+/** 任意助战保留独立礼装条件，但不保存任何从者身份字段。 */
+export function normalizeSupportMember(member: Servant): Servant {
+  if (!member.support) return { ...member, supportRequired: false };
+  if (member.supportRequired && !member.empty && member.name.trim()) return { ...member };
+  const blank = emptyServant(true);
+  return {
+    ...blank,
+    support: true,
+    supportRequired: false,
+    grandRequired: member.grandRequired ?? false,
+    ce: member.ce ?? '',
+    ceImage: member.ceImage ?? '',
+    ceId: member.ceId,
+    grandCeTop: member.grandCeTop ?? null,
+    grandCeMiddle: member.grandCeMiddle ?? null,
+    grandCeBottom: member.grandCeBottom ?? null,
+  };
 }
 
 export function buildJobFile(input: {
@@ -265,22 +296,22 @@ function fromJobAction(
   warnings: string[],
 ): Omit<PlanAction, 'id'> | null {
   const where = `第 ${waveNumber} 面 · 回合 ${turnNumber}`;
-  const memberAt = (slot: number | undefined, label: string): Servant | undefined => {
+  const memberAt = (slot: number | undefined, label: string, allowEmpty = false): Servant | undefined => {
     if (slot === undefined) return undefined;
     const member = members[slot];
     if (!member) {
       warnings.push(`${where}：${label}指向不存在的 ${slot + 1} 号位`);
       return undefined;
     }
-    if (member.empty) warnings.push(`${where}：${label}指向空槽位（${slot + 1} 号位），修复前无法战斗`);
+    if (member.empty && !allowEmpty) warnings.push(`${where}：${label}指向空槽位（${slot + 1} 号位），修复前无法战斗`);
     return member;
   };
 
   const member = memberAt(jobAction.memberSlot, '动作所属从者');
   if (jobAction.memberSlot !== undefined && !member) return null;
-  const playerTarget = memberAt(jobAction.playerTargetSlot, '技能目标');
-  const swapOut = memberAt(jobAction.swapOutSlot, '换人下场从者');
-  const swapIn = memberAt(jobAction.swapInSlot, '换人上场从者');
+  const playerTarget = memberAt(jobAction.playerTargetSlot, '技能目标', true);
+  const swapOut = memberAt(jobAction.swapOutSlot, '换人下场从者', true);
+  const swapIn = memberAt(jobAction.swapInSlot, '换人上场从者', true);
   if (jobAction.kind === 'orderChange' && (!swapOut || !swapIn)) {
     warnings.push(`${where}：换人动作的槽位不存在，请修复后再运行`);
   }
@@ -383,7 +414,14 @@ export function applyFormation(
   job.formation.forEach((entry) => {
     if (!Number.isInteger(entry.slot) || entry.slot < 0 || entry.slot >= members.length) return;
     const name = entry.name.trim();
-    if (!name) {
+    const anySupport = Boolean(entry.support) && (entry.supportRequired === false || !name);
+    if (anySupport) {
+      const member = emptyServant(true);
+      member.support = true;
+      member.supportRequired = false;
+      member.grandRequired = entry.grandRequired ?? false;
+      members[entry.slot] = member;
+    } else if (!name) {
       members[entry.slot] = emptyServant();
     } else {
       const known = catalog.find((servant) => servant.name === name && (!entry.role || servant.role === entry.role));
@@ -439,8 +477,8 @@ export function applyFormation(
     }
 
     const member = members[entry.slot];
-    if (member.empty) return;
-    if (entry.svtId !== undefined) member.svtId = entry.svtId;
+    if (member.empty && !member.support) return;
+    if (entry.svtId !== undefined && !member.empty) member.svtId = entry.svtId;
     const equip = resolveEquip(equips, entry.ceId, entry.ce);
     member.ce = equip?.name ?? entry.ce ?? '';
     member.ceImage = equip?.icon ?? '';

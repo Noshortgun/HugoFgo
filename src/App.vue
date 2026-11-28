@@ -4,7 +4,7 @@ import { atlasMysticCodes, atlasServants, loadAtlas, lookupAtlas, lookupAtlasByI
 import { equipsById, equipsList, loadEquips } from './equips';
 import type { FallbackScope, FallbackStrategy, HugoFgoJob, MysticCode, PlanSnapshot, Servant } from './types';
 import { emptyServant, mysticCodes, standardSkills, team } from './data';
-import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, assertSupportedWaveCount, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, parseJobFile, remapPlanMember } from './job';
+import { activeNoblePhantasmForLimitCount, activeSkillsForLimitCount, applyFormation, assertSupportedWaveCount, buildJobFile, createEmptyPlanSnapshot, jobToSnapshot, normalizeSupportMember, parseJobFile, remapPlanMember } from './job';
 import { convertChaldeaTeam, fetchChaldeaTeam, loadChaldeaCatalog, loadSecondaryCatalog, parseChaldeaRef } from './chaldea';
 import { deleteJobFromLibrary, jobLibraryReadOnly, jobNameForMembers, listSavedJobs, readJobFromLibrary, saveJobToLibrary, type SavedJobEntry } from './jobLibrary';
 import { resourceRegion } from './resources';
@@ -244,7 +244,7 @@ function removeMember(index: number) {
   syncFallbackOrders();
 }
 function saveSupport(index: number, member: Servant) {
-  members.value[index] = { ...member };
+  members.value[index] = normalizeSupportMember(member);
   supportSlot.value = null;
   syncFallbackOrders();
 }
@@ -457,6 +457,7 @@ function buildSupportPick(list: Servant[]) {
   };
 }
 // 选中空位表示不指定助战；此时清空所有助战标记。
+// 任意助战只在选择阶段限制从者身份，切换时必须清除旧的从者身份字段。
 function assignSupport(list: Servant[], slot: number | null): Servant[] {
   const target = slot !== null && !list[slot]?.empty ? slot : null;
   return list.map((member, index) => {
@@ -519,7 +520,8 @@ function loadJob(job: HugoFgoJob) {
   const formation = applyFormation(job, members.value, team, () => `member-${nextMemberInstanceId++}`, lookupAtlas, equipsById.value);
   const pending = { job, members: formation.members, warnings: formation.warnings };
   const pick = buildSupportPick(pending.members);
-  if (pick?.required) {
+  const anySupport = pending.members.some((member) => member.support && !member.supportRequired);
+  if (pick?.required && !anySupport) {
     const slot = pick.selected ?? pick.candidates[0] ?? null;
     let supportNote = '';
     if (slot !== null) {
@@ -527,7 +529,7 @@ function loadJob(job: HugoFgoJob) {
       supportNote = `；重复从者已默认 ${slot + 1} 号位为助战`;
     }
     commitImport(pending, supportNote);
-  } else if (pick) {
+  } else if (pick && !anySupport) {
     // 选完助战并确认后才真正导入，取消不会改动当前编队。
     pendingImport.value = pending;
     supportPick.value = pick;

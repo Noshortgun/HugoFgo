@@ -785,6 +785,35 @@ def check_strategy_np_and_short_hand():
                not empty.controls and empty.diagnostic is not None, simulated_ocr=True)
 
 
+def check_any_servant_rules():
+    """任意助战选择、编队核对、任意从者换人/目标、未知卡选卡、牌组与锁卡告警的真实截图回放。"""
+    from executor.replay import ReplayFailure, get_case, run_case
+
+    cases = (
+        'any-support-first-candidate',
+        'any-support-ce-filter',
+        'any-support-team-ce-check',
+        'any-support-team-ce-mismatch',
+        'any-servant-order-change',
+        'any-servant-skill-target',
+        'unknown-card-auto-selection',
+        'deck-cycle-count-warning',
+        'lock-card-next-hand-pass',
+        'lock-card-next-hand-unknown',
+    )
+    for name in cases:
+        try:
+            with TemporaryDirectory() as directory:
+                report = run_case(get_case(name), Path(directory))
+            actual = f'{report.result.status.value}/{report.result.reason}'
+            ok = True
+        except ReplayFailure as error:
+            actual = str(error)
+            ok = False
+        add_report(f'executor:{name}', ROOT / 'executor/replay.py', '用例通过', actual,
+                   'observe', name, ok)
+
+
 def check_empty_slot_rules():
     from executor.core.strategy import select_cards
     from executor.domain import ExecutionPlan, FallbackStrategy, FormationSlotPlan, TurnPlan, WavePlan
@@ -2815,6 +2844,7 @@ def run(output: Path, name_filter: str | None = None):
     check_strategy_affinity_and_degraded_data()
     check_strategy_np_and_short_hand()
     check_empty_slot_rules()
+    check_any_servant_rules()
     check_empty_slot_formation_once()
     check_strategy_scope_slots_and_region()
     check_strategy_executor()
